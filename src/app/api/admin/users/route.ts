@@ -22,8 +22,8 @@ export async function POST(req: Request) {
     const b = (await req.json().catch(() => ({}))) as Body;
     const username = String(b.username ?? "").trim();
     const password = String(b.password ?? "");
-    if (!/^[a-zA-Z0-9._-]{2,40}$/.test(username))
-      throw new HttpError(400, "ID는 영문/숫자/._- 2~40자");
+    if (!/^[a-zA-Z0-9._@+-]{2,80}$/.test(username))
+      throw new HttpError(400, "ID는 영문/숫자/._@+- 2~80자 (이메일 가능)");
     if (password.length < 8) throw new HttpError(400, "비밀번호는 8자 이상");
     const apiKey = String(b.apiKey ?? "").trim();
     if (apiKey && !apiKey.includes(":")) throw new HttpError(400, "API 키는 key-id:key-secret 형식");
