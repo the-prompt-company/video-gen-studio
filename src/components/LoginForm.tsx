@@ -1,11 +1,10 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Button, Field, Input } from "@/components/ui";
 
 export function LoginForm() {
-  const router = useRouter();
   const params = useSearchParams();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -16,20 +15,28 @@ export function LoginForm() {
     e.preventDefault();
     setBusy(true);
     setError(null);
-    const res = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password }),
-    });
-    const body = (await res.json().catch(() => ({}))) as { error?: string };
-    setBusy(false);
-    if (!res.ok) {
-      setError(body.error ?? "로그인 실패");
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+        cache: "no-store",
+      });
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        setError(body.error ?? "로그인 실패");
+        setBusy(false);
+        return;
+      }
+    } catch {
+      setError("서버에 연결할 수 없습니다");
+      setBusy(false);
       return;
     }
+    // Full navigation (not router.push): the client router may have cached the
+    // logged-out redirect for the target page, and the new cookie must reach proxy.ts.
     const next = params.get("next");
-    router.push(next && next.startsWith("/") ? next : "/playground");
-    router.refresh();
+    window.location.assign(next && next.startsWith("/") && !next.startsWith("//") ? next : "/playground");
   }
 
   return (
