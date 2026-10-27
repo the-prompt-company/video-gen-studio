@@ -22,7 +22,8 @@ export async function GET(_req: Request, { params }: Ctx) {
     const user = await requireUser();
     const { id } = await params;
     let row = await ownRow(id, user.id, user.role);
-    if (row.userId === user.id) {
+    const live = row.status === "queued" || row.status === "in_progress";
+    if (row.userId === user.id && live && row.requestId) {
       row = await syncStatus(row, apiKeyFor(user));
     }
     return Response.json({ item: publicGeneration(row) });

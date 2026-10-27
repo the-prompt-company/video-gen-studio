@@ -157,7 +157,7 @@ function FeedItem({ g, index, total, active, now, modelName }: { g: PublicGenera
   const took = g.completedAt ? new Date(g.completedAt).getTime() - started : now - started;
   const label = STATUS_LABEL[g.status] ?? g.status;
   return (
-    <article data-id={g.id} aria-current={active ? "true" : undefined} aria-label={`${index + 1}번째 결과: ${label}`} className="relative h-[calc(100%_-_72px)] w-full overflow-hidden bg-surface">
+    <article data-id={g.id} aria-current={active ? "true" : undefined} aria-label={`${index + 1}번째 결과: ${label}`} className="relative flex h-[calc(100%_-_72px)] w-full flex-col overflow-hidden bg-surface lg:block">
       {/* Peek strip: what shows when this item waits one snap below. */}
       <div className="scrim-top absolute inset-x-0 top-0 z-10 flex h-[72px] items-start justify-between gap-4 px-5 pt-3 text-xs text-muted">
         <span className="min-w-0 truncate">
@@ -168,9 +168,11 @@ function FeedItem({ g, index, total, active, now, modelName }: { g: PublicGenera
       </div>
 
       {g.status === "completed" && g.resultUrl ? (
-        <video src={g.resultUrl} controls={active} autoPlay={active} loop muted playsInline preload={active ? "auto" : "metadata"} className="h-full w-full object-contain" aria-label="생성된 영상" />
+        <div className="min-h-0 flex-1 pt-[72px] lg:h-full lg:pt-0">
+          <video src={g.resultUrl} controls={active} autoPlay={active} loop muted playsInline preload={active ? "auto" : "metadata"} className="h-full w-full object-contain" aria-label="생성된 영상" />
+        </div>
       ) : (
-        <div className="flex h-full w-full flex-col items-center justify-center gap-3 px-6 text-center">
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-6 pt-[72px] text-center lg:h-full lg:pt-0">
           {live ? (
             <>
               <span aria-hidden className="h-14 w-14 animate-spin rounded-full border-2 border-foreground border-t-transparent [animation-duration:1.4s]" />
@@ -187,10 +189,13 @@ function FeedItem({ g, index, total, active, now, modelName }: { g: PublicGenera
       )}
 
       {/* Caption scrim */}
-      <div className={`scrim pointer-events-none absolute inset-x-0 bottom-0 z-10 px-5 pt-24 ${g.status === "completed" && active ? "pb-16" : "pb-5"}`}>
+      <div className={`pointer-events-none shrink-0 bg-surface px-4 pb-4 pt-3 lg:scrim lg:absolute lg:inset-x-0 lg:bottom-0 lg:z-10 lg:bg-transparent lg:px-5 lg:pt-24 ${g.status === "completed" && active ? "lg:pb-16" : "lg:pb-5"}`}>
         <div className="text-xs text-muted">
           <span className="text-foreground-2">{modelName}</span>
           <span className="font-display ml-2 text-sm text-sand">{g.durationS}S · {usd(g.costUsd)}</span>
+          {typeof (g.params as Record<string, unknown>)?.aspect_ratio === "string" && (
+            <span className="font-display ml-2 text-sm text-sand">{String((g.params as Record<string, unknown>).aspect_ratio).toUpperCase()}</span>
+          )}
         </div>
         <div className="mt-1 flex items-center gap-2 text-sm text-foreground">
           <span className="font-medium">{label}</span>
@@ -198,6 +203,24 @@ function FeedItem({ g, index, total, active, now, modelName }: { g: PublicGenera
           {live && <span className="text-muted" aria-hidden>· {fmtElapsed(took)}</span>}
         </div>
         <p className="mt-1 line-clamp-2 max-w-2xl break-words text-sm leading-relaxed text-foreground-2">{g.prompt || "(프롬프트 없음)"}</p>
+        {(g.imageRefs.length > 0 || g.videoRefs.length > 0) && (
+          <ul className="mt-2 flex items-center gap-1.5" aria-label={`레퍼런스 이미지 ${g.imageRefs.length}장, 영상 ${g.videoRefs.length}개`}>
+            {g.imageRefs.slice(0, 6).map((u, i) => (
+              <li key={u} className="relative h-10 overflow-hidden rounded-sm border border-white/20 bg-background/60">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={u} alt="" className="h-full w-auto object-contain" />
+                <span aria-hidden className="font-display absolute left-0.5 top-0 text-[11px] text-foreground drop-shadow">{i + 1}</span>
+              </li>
+            ))}
+            {g.videoRefs.slice(0, 3).map((u, i) => (
+              <li key={u} className="relative h-10 overflow-hidden rounded-sm border border-white/20 bg-background/60">
+                <video src={u} muted playsInline preload="metadata" className="h-full w-auto object-contain" aria-hidden />
+                <span aria-hidden className="font-display absolute left-0.5 top-0 text-[11px] text-foreground drop-shadow">V{i + 1}</span>
+              </li>
+            ))}
+            <li className="ml-1 text-[11px] text-muted">레퍼런스 {g.imageRefs.length + g.videoRefs.length}</li>
+          </ul>
+        )}
         {live && (
           <div className="mt-3 h-0.5 w-full overflow-hidden bg-white/15" role="progressbar" aria-label="생성 진행 중" aria-valuetext="진행률을 알 수 없음">
             <div className="travel h-full w-1/4 bg-foreground" />

@@ -11,6 +11,7 @@
     "db:migrate": "dotenv -e .env.local -- drizzle-kit migrate",
     "db:push": "dotenv -e .env.local -- drizzle-kit push",
     "db:seed": "dotenv -e .env.local -- tsx scripts/seed.ts",
+    "db:mock": "dotenv -e .env.local -- tsx scripts/mock.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
