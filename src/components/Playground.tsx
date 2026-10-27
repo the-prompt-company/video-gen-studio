@@ -514,20 +514,25 @@ export function Playground({ models, hasApiKey, largeUploads, galleryCount }: { 
             </div>
             {refs.length > 0 && (
               <ul className="flex flex-wrap gap-2">
-                {refs.map((r, i) => (
-                  <li key={r.url} className="group relative aspect-video w-28 overflow-hidden rounded-md border border-border bg-surface-2">
+                {refs.map((r) => {
+                  const i = (r.kind === "image" ? images : videos).findIndex((x) => x.url === r.url);
+                  const tag = r.kind === "image" ? String(i + 1) : `V${i + 1}`;
+                  return (
+                  <li key={r.url} className="group relative aspect-video w-28 overflow-hidden rounded-md border border-border bg-background">
                     {r.kind === "image" ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={r.local ?? r.url} alt={r.name} className="h-full w-full object-cover" />
+                      <img src={r.local ?? r.url} alt={r.name} className="h-full w-full object-contain" />
                     ) : (
-                      <video src={r.local ?? r.url} className="h-full w-full object-cover" muted playsInline aria-label={r.name} />
+                      <video src={r.local ?? r.url} className="h-full w-full object-contain" muted playsInline aria-label={r.name} />
                     )}
-                    <span aria-hidden className="font-display absolute left-1.5 top-1 text-[14px] text-foreground drop-shadow">{i + 1}</span>
-                    <button type="button" aria-label={`${i + 1}번 레퍼런스 ${r.name} 제거`} onClick={() => setRefs((list) => list.filter((x) => x.url !== r.url))} className="absolute inset-x-0 bottom-0 min-h-7 bg-background/80 text-[11px] text-rose-300 opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100">
+                    <span aria-hidden className="font-display absolute left-1.5 top-1 text-[14px] text-foreground drop-shadow">{tag}</span>
+                    {r.w && r.h && <span aria-hidden className="absolute bottom-1 right-1.5 text-[10px] tabular-nums text-foreground-2 drop-shadow">{orientation(r.w, r.h)}</span>}
+                    <button type="button" aria-label={`${r.kind === "image" ? "이미지" : "영상"} 레퍼런스 ${tag} ${r.name} 제거`} onClick={() => setRefs((list) => list.filter((x) => x.url !== r.url))} className="absolute inset-x-0 bottom-0 min-h-7 bg-background/80 text-[11px] text-rose-300 opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100">
                       제거
                     </button>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             )}
           </section>
