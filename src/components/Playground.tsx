@@ -10,7 +10,33 @@ import { Button, ErrorText, Field, Input, Select, Textarea } from "@/components/
 import { StatusBadge } from "@/components/StatusBadge";
 
 type ModelWithPrice = ModelSpec & { pricePerSecUsd: number };
-type Ref = { url: string; name: string; kind: "image" | "video"; local?: string };
+type Ref = { url: string; name: string; kind: "image" | "video"; local?: string; w?: number; h?: number };
+
+const ASPECT_LABEL: Record<string, string> = {
+  "16:9": "가로 16:9",
+  "21:9": "가로 21:9",
+  "4:3": "가로 4:3",
+  "9:16": "세로 9:16",
+  "3:4": "세로 3:4",
+  "1:1": "정사각 1:1",
+  adaptive: "레퍼런스 따라감",
+};
+
+function orientation(w?: number, h?: number) {
+  if (!w || !h) return null;
+  const r = w / h;
+  return r > 1.05 ? "가로" : r < 0.95 ? "세로" : "정사각";
+}
+
+function readImageSize(file: File): Promise<{ w: number; h: number } | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => { resolve({ w: img.naturalWidth, h: img.naturalHeight }); URL.revokeObjectURL(url); };
+    img.onerror = () => { resolve(null); URL.revokeObjectURL(url); };
+    img.src = url;
+  });
+}
 
 const SMALL = 4 * 1024 * 1024;
 const MAX_IMAGES = 6;
@@ -296,7 +322,8 @@ export function Playground({ models, hasApiKey, largeUploads, galleryCount }: { 
     try {
       for (const f of picked) {
         const url = await uploadFile(f, largeUploads);
-        setRefs((r) => [...r, { url, name: f.name, kind, local: URL.createObjectURL(f) }]);
+        const size = kind === "image" ? await readImageSize(f) : null;
+        setRefs((r) => [...r, { url, name: f.name, kind, local: URL.createObjectURL(f), w: size?.w, h: size?.h }]);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -352,6 +379,15 @@ export function Playground({ models, hasApiKey, largeUploads, galleryCount }: { 
 
   if (!model) return <div className="p-8 text-center text-sm text-subtle">사용할 수 있는 모델이 없습니다. 관리자에게 문의하세요.</div>;
 
+  const aspectSpec = model.params.find((p): p is Extract<ParamSpec, { type: "enum" }> => p.key === "aspect_ratio" && p.type === "enum");
+  const firstImage = images[0];
+  const currentAspect: [number?, number?] = (() => {
+    const v = aspectSpec ? String(params[aspectSpec.key]) : "";
+    const m = /^(\d+):(\d+)$/.exec(v);
+    if (m) return [Number(m[1]), Number(m[2])];
+    if (v === "adaptive" && firstImage?.w && firstImage.h) return [firstImage.w, firstImage.h];
+    return [undefined, undefined];
+  })();
   const canGenerate = hasApiKey && !submitting && !uploading;
   const canCancel = Boolean(active && active.status === "queued");
   const activeStarted = active ? new Date(active.createdAt).getTime() : 0;
@@ -416,12 +452,12 @@ export function Playground({ models, hasApiKey, largeUploads, galleryCount }: { 
 
       {/* DRAWER: the form that puts the next item on the stage. */}
       <aside aria-label="생성 설정" className="order-2 flex w-full flex-col border-t border-border bg-background lg:order-1 lg:h-full lg:w-[480px] lg:shrink-0 lg:border-r lg:border-t-0">
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-5">
           <h1 className="text-base font-semibold">플레이그라운드</h1>
 
           {!hasApiKey && (
-            <div role="status" className="flex items-start gap-3 rounded-md border border-border bg-surface px-4 py-3 text-sm text-foreground-2">
-              <span aria-hidden className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-amber-400" />
+            <div role="status" className="flex items-start gap-2.5 rounded-md border border-border bg-surface px-3 py-2 text-xs leading-relaxed text-foreground-2">
+              <span aria-hidden className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" />
               <span>API 키가 아직 할당되지 않았습니다. 관리자가 어드민에서 키를 넣어야 생성할 수 있습니다.</span>
             </div>
           )}
@@ -486,8 +522,40 @@ export function Playground({ models, hasApiKey, largeUploads, galleryCount }: { 
                 );
               })}
             </div>
+            <div className="space-y-1">
+              <div className="flex items-baseline justify-between gap-3 text-xs font-medium text-muted">
+                <span>출력 화면비</span>
+                {aspectSpec ? (
+                  <span className="font-normal text-subtle">{orientation(...currentAspect) ?? ""}</span>
+                ) : (
+                  <span className="font-normal text-subtle">레퍼런스 이미지 비율을 따름</span>
+                )}
+              </div>
+              {aspectSpec ? (
+                <div role="group" aria-label="출력 화면비" className="flex flex-wrap gap-1.5">
+                  {aspectSpec.options.map((o) => {
+                    const on = String(params[aspectSpec.key]) === o;
+                    return (
+                      <button key={o} type="button" aria-pressed={on} onClick={() => setParams((st) => ({ ...st, [aspectSpec.key]: o }))} className={`inline-flex min-h-9 items-center rounded-full border px-3 text-xs transition focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background ${on ? "border-foreground bg-foreground text-background" : "border-border text-foreground-2 hover:border-foreground/60"}`}>
+                        {ASPECT_LABEL[o] ?? o}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="rounded-md border border-border bg-surface px-3 py-1.5 text-xs leading-relaxed text-foreground-2">
+                  {firstImage?.w && firstImage.h ? (
+                    <>
+                      1번 레퍼런스가 <span className="tabular-nums">{firstImage.w}×{firstImage.h}</span>({orientation(firstImage.w, firstImage.h)})이라 영상도 <span className="font-medium text-foreground">{orientation(firstImage.w, firstImage.h)}</span>로 나옵니다. 가로 영상이 필요하면 가로 이미지를 올리세요.
+                    </>
+                  ) : (
+                    <>화면비 옵션이 없는 모델입니다. 1번 레퍼런스 이미지의 비율을 따르니 가로 영상은 가로 이미지를 올리세요.</>
+                  )}
+                </p>
+              )}
+            </div>
             <div className="grid gap-4 sm:grid-cols-2">
-              {model.params.map((p) => (
+              {model.params.filter((p) => p.key !== "aspect_ratio").map((p) => (
                 <ParamInput key={p.key} spec={p} value={params[p.key]} onChange={(v) => setParams((s) => ({ ...s, [p.key]: v }))} />
               ))}
             </div>
