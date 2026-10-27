@@ -1,0 +1,38 @@
+import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
+import { getCurrentUser } from "@/lib/auth";
+
+/**
+ * POST /api/uploads/blob — token endpoint for direct browser → Vercel Blob
+ * uploads of large reference videos (bypasses the 4.5 MB function limit).
+ * The blob is deleted once the generation finishes (see lib/generations.ts).
+ */
+export async function POST(req: Request) {
+  if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    return Response.json(
+      { error: "대용량 업로드가 꺼져 있습니다 (Vercel Blob 스토어가 연결되지 않음). 4 MB 이하 파일만 올릴 수 있습니다." },
+      { status: 503 },
+    );
+  }
+  const user = await getCurrentUser();
+  if (!user) return Response.json({ error: "로그인이 필요합니다" }, { status: 401 });
+
+  const body = (await req.json()) as HandleUploadBody;
+  try {
+    const json = await handleUpload({
+      body,
+      request: req,
+      onBeforeGenerateToken: async (pathname) => ({
+        allowedContentTypes: ["image/jpeg", "image/png", "image/webp", "image/gif", "video/mp4"],
+        maximumSizeInBytes: 200 * 1024 * 1024,
+        addRandomSuffix: true,
+        tokenPayload: JSON.stringify({ userId: user.id, pathname }),
+      }),
+      onUploadCompleted: async () => {
+        // Nothing to persist: the browser passes the resulting URL to /api/generations.
+      },
+    });
+    return Response.json(json);
+  } catch (e) {
+    return Response.json({ error: e instanceof Error ? e.message : String(e) }, { status: 400 });
+  }
+}
