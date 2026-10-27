@@ -1,39 +1,47 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-27T18:30:00+09:00",
+  "generatedAt": "2026-10-27T21:00:00+09:00",
   "title": "Design System: Video Gen Studio",
   "extensions": {
     "colorMeta": {
-      "render-violet": { "role": "primary", "displayName": "Render Violet", "canonical": "oklch(54% 0.25 293)", "tonalRamp": ["oklch(20% 0.12 293)", "oklch(30% 0.17 293)", "oklch(40% 0.21 293)", "oklch(54% 0.25 293)", "oklch(64% 0.22 293)", "oklch(74% 0.16 293)", "oklch(84% 0.10 293)", "oklch(94% 0.04 293)"] },
-      "render-violet-lit": { "role": "primary", "displayName": "Render Violet, Lit", "canonical": "oklch(61% 0.22 293)", "tonalRamp": ["oklch(20% 0.12 293)", "oklch(30% 0.17 293)", "oklch(40% 0.21 293)", "oklch(54% 0.25 293)", "oklch(61% 0.22 293)", "oklch(74% 0.16 293)", "oklch(84% 0.10 293)", "oklch(94% 0.04 293)"] },
-      "render-violet-soft": { "role": "primary", "displayName": "Render Violet, Soft", "canonical": "oklch(80% 0.10 293)", "tonalRamp": ["oklch(20% 0.12 293)", "oklch(30% 0.17 293)", "oklch(40% 0.21 293)", "oklch(54% 0.25 293)", "oklch(64% 0.22 293)", "oklch(74% 0.16 293)", "oklch(80% 0.10 293)", "oklch(94% 0.04 293)"] },
-      "ink-black": { "role": "neutral", "displayName": "Ink Black", "canonical": "oklch(13% 0.005 286)", "tonalRamp": ["oklch(13% 0.005 286)", "oklch(18% 0.006 286)", "oklch(21% 0.006 286)", "oklch(27% 0.006 286)", "oklch(60% 0.008 286)", "oklch(70% 0.008 286)", "oklch(87% 0.005 286)", "oklch(98% 0.001 286)"] },
-      "desk-surface": { "role": "neutral", "displayName": "Desk Surface", "canonical": "oklch(18% 0.006 286)", "tonalRamp": ["oklch(13% 0.005 286)", "oklch(18% 0.006 286)", "oklch(21% 0.006 286)", "oklch(27% 0.006 286)", "oklch(60% 0.008 286)", "oklch(70% 0.008 286)", "oklch(87% 0.005 286)", "oklch(98% 0.001 286)"] },
-      "desk-surface-raised": { "role": "neutral", "displayName": "Desk Surface, Raised", "canonical": "oklch(21% 0.006 286)", "tonalRamp": ["oklch(13% 0.005 286)", "oklch(18% 0.006 286)", "oklch(21% 0.006 286)", "oklch(27% 0.006 286)", "oklch(60% 0.008 286)", "oklch(70% 0.008 286)", "oklch(87% 0.005 286)", "oklch(98% 0.001 286)"] },
-      "hairline": { "role": "neutral", "displayName": "Hairline", "canonical": "oklch(27% 0.006 286)", "tonalRamp": ["oklch(13% 0.005 286)", "oklch(18% 0.006 286)", "oklch(21% 0.006 286)", "oklch(27% 0.006 286)", "oklch(60% 0.008 286)", "oklch(70% 0.008 286)", "oklch(87% 0.005 286)", "oklch(98% 0.001 286)"] },
-      "paper-white": { "role": "neutral", "displayName": "Paper White", "canonical": "oklch(98% 0.001 286)", "tonalRamp": ["oklch(13% 0.005 286)", "oklch(18% 0.006 286)", "oklch(21% 0.006 286)", "oklch(27% 0.006 286)", "oklch(60% 0.008 286)", "oklch(70% 0.008 286)", "oklch(87% 0.005 286)", "oklch(98% 0.001 286)"] },
-      "paper-dim": { "role": "neutral", "displayName": "Paper Dim", "canonical": "oklch(87% 0.005 286)", "tonalRamp": ["oklch(13% 0.005 286)", "oklch(18% 0.006 286)", "oklch(21% 0.006 286)", "oklch(27% 0.006 286)", "oklch(60% 0.008 286)", "oklch(70% 0.008 286)", "oklch(87% 0.005 286)", "oklch(98% 0.001 286)"] },
-      "graphite": { "role": "neutral", "displayName": "Graphite", "canonical": "oklch(71% 0.008 286)", "tonalRamp": ["oklch(13% 0.005 286)", "oklch(18% 0.006 286)", "oklch(21% 0.006 286)", "oklch(27% 0.006 286)", "oklch(60% 0.008 286)", "oklch(71% 0.008 286)", "oklch(87% 0.005 286)", "oklch(98% 0.001 286)"] },
-      "graphite-faint": { "role": "neutral", "displayName": "Graphite, Faint", "canonical": "oklch(63% 0.008 286)", "tonalRamp": ["oklch(13% 0.005 286)", "oklch(18% 0.006 286)", "oklch(21% 0.006 286)", "oklch(27% 0.006 286)", "oklch(63% 0.008 286)", "oklch(71% 0.008 286)", "oklch(87% 0.005 286)", "oklch(98% 0.001 286)"] },
+      "white": { "role": "primary", "displayName": "White", "canonical": "oklch(100% 0 0)", "tonalRamp": ["oklch(15% 0 0)", "oklch(18% 0.005 265)", "oklch(24% 0.01 270)", "oklch(30% 0.018 265)", "oklch(62% 0.018 250)", "oklch(70% 0.013 240)", "oklch(87% 0.005 265)", "oklch(100% 0 0)"] },
+      "white-hover": { "role": "primary", "displayName": "White, Hover", "canonical": "oklch(91% 0.003 286)", "tonalRamp": ["oklch(15% 0 0)", "oklch(18% 0.005 265)", "oklch(24% 0.01 270)", "oklch(30% 0.018 265)", "oklch(62% 0.018 250)", "oklch(70% 0.013 240)", "oklch(91% 0.003 286)", "oklch(100% 0 0)"] },
+      "sand": { "role": "secondary", "displayName": "Sand", "canonical": "oklch(78% 0.03 75)", "tonalRamp": ["oklch(20% 0.02 75)", "oklch(30% 0.025 75)", "oklch(42% 0.03 75)", "oklch(55% 0.03 75)", "oklch(66% 0.03 75)", "oklch(78% 0.03 75)", "oklch(88% 0.02 75)", "oklch(96% 0.01 75)"] },
+      "void": { "role": "neutral", "displayName": "Void", "canonical": "oklch(15% 0 0)", "tonalRamp": ["oklch(15% 0 0)", "oklch(18% 0.005 265)", "oklch(24% 0.01 270)", "oklch(30% 0.018 265)", "oklch(62% 0.018 250)", "oklch(70% 0.013 240)", "oklch(87% 0.005 265)", "oklch(100% 0 0)"] },
+      "ink": { "role": "neutral", "displayName": "Ink", "canonical": "oklch(18% 0.005 265)", "tonalRamp": ["oklch(15% 0 0)", "oklch(18% 0.005 265)", "oklch(24% 0.01 270)", "oklch(30% 0.018 265)", "oklch(62% 0.018 250)", "oklch(70% 0.013 240)", "oklch(87% 0.005 265)", "oklch(100% 0 0)"] },
+      "slate": { "role": "neutral", "displayName": "Slate", "canonical": "oklch(24% 0.01 270)", "tonalRamp": ["oklch(15% 0 0)", "oklch(18% 0.005 265)", "oklch(24% 0.01 270)", "oklch(30% 0.018 265)", "oklch(62% 0.018 250)", "oklch(70% 0.013 240)", "oklch(87% 0.005 265)", "oklch(100% 0 0)"] },
+      "mist": { "role": "neutral", "displayName": "Mist", "canonical": "oklch(30% 0.018 265)", "tonalRamp": ["oklch(15% 0 0)", "oklch(18% 0.005 265)", "oklch(24% 0.01 270)", "oklch(30% 0.018 265)", "oklch(62% 0.018 250)", "oklch(70% 0.013 240)", "oklch(87% 0.005 265)", "oklch(100% 0 0)"] },
+      "white-dim": { "role": "neutral", "displayName": "White, Dim", "canonical": "oklch(87% 0.005 265)", "tonalRamp": ["oklch(15% 0 0)", "oklch(18% 0.005 265)", "oklch(24% 0.01 270)", "oklch(30% 0.018 265)", "oklch(62% 0.018 250)", "oklch(70% 0.013 240)", "oklch(87% 0.005 265)", "oklch(100% 0 0)"] },
+      "muted": { "role": "neutral", "displayName": "Muted", "canonical": "oklch(70% 0.013 240)", "tonalRamp": ["oklch(15% 0 0)", "oklch(18% 0.005 265)", "oklch(24% 0.01 270)", "oklch(30% 0.018 265)", "oklch(62% 0.018 250)", "oklch(70% 0.013 240)", "oklch(87% 0.005 265)", "oklch(100% 0 0)"] },
+      "subtle": { "role": "neutral", "displayName": "Subtle", "canonical": "oklch(62% 0.018 250)", "tonalRamp": ["oklch(15% 0 0)", "oklch(18% 0.005 265)", "oklch(24% 0.01 270)", "oklch(30% 0.018 265)", "oklch(62% 0.018 250)", "oklch(70% 0.013 240)", "oklch(87% 0.005 265)", "oklch(100% 0 0)"] },
       "status-running": { "role": "tertiary", "displayName": "Running Sky", "canonical": "oklch(85% 0.10 230)", "tonalRamp": ["oklch(25% 0.06 230)", "oklch(35% 0.09 230)", "oklch(45% 0.12 230)", "oklch(60% 0.14 230)", "oklch(70% 0.13 230)", "oklch(85% 0.10 230)", "oklch(92% 0.05 230)", "oklch(97% 0.02 230)"] },
       "status-done": { "role": "tertiary", "displayName": "Done Emerald", "canonical": "oklch(88% 0.12 165)", "tonalRamp": ["oklch(25% 0.06 165)", "oklch(35% 0.09 165)", "oklch(45% 0.12 165)", "oklch(60% 0.15 165)", "oklch(70% 0.15 165)", "oklch(88% 0.12 165)", "oklch(93% 0.07 165)", "oklch(97% 0.03 165)"] },
       "status-failed": { "role": "tertiary", "displayName": "Failed Rose", "canonical": "oklch(81% 0.10 10)", "tonalRamp": ["oklch(25% 0.08 10)", "oklch(35% 0.12 10)", "oklch(45% 0.16 10)", "oklch(60% 0.20 10)", "oklch(70% 0.17 10)", "oklch(81% 0.10 10)", "oklch(90% 0.05 10)", "oklch(97% 0.02 10)"] },
       "status-blocked": { "role": "tertiary", "displayName": "Blocked Amber", "canonical": "oklch(88% 0.14 85)", "tonalRamp": ["oklch(25% 0.06 85)", "oklch(35% 0.09 85)", "oklch(45% 0.12 85)", "oklch(60% 0.15 85)", "oklch(75% 0.16 85)", "oklch(88% 0.14 85)", "oklch(93% 0.09 85)", "oklch(97% 0.04 85)"] }
     },
     "typographyMeta": {
-      "display": { "displayName": "Display", "purpose": "랜딩 헤드라인에만." },
-      "headline": { "displayName": "Headline", "purpose": "앱 페이지의 h1. 아래에 graphite 14px 설명 한 줄." },
-      "title": { "displayName": "Title", "purpose": "카드 제목 h2." },
-      "body": { "displayName": "Body", "purpose": "본문, 입력, 버튼, 목록." },
-      "label": { "displayName": "Label", "purpose": "필드 라벨과 힌트." },
-      "mono": { "displayName": "Mono", "purpose": "썸네일 번호, 배지. 11px 바닥." }
+      "display": { "displayName": "Display", "purpose": "무대 가운데의 경과 시간과 실패·취소 상태 한 단어. 72px, 640px 이상 96px. 무대에만." },
+      "numeral": { "displayName": "Numeral", "purpose": "서랍 하단 바의 예상 비용. Sand." },
+      "wordmark": { "displayName": "Wordmark", "purpose": "내비·로그인·랜딩의 Video Gen Studio. 흰색." },
+      "counter": { "displayName": "Counter", "purpose": "레일 글리프 카운터 16px. 14px 변형은 피크 번호·캡션 길이·비용·썸네일 번호, 12px은 ADMIN 태그. Sand." },
+      "headline": { "displayName": "Headline", "purpose": "문서형 페이지와 로그인의 h1. 아래 muted 14px 설명 한 줄." },
+      "title": { "displayName": "Title", "purpose": "서랍의 h1, 48px 주 버튼 글자." },
+      "section": { "displayName": "Section", "purpose": "서랍의 번호 헤딩. 순서가 정보일 때만 번호." },
+      "body": { "displayName": "Body", "purpose": "본문, 입력, 버튼, 캡션, 내비 링크." },
+      "label": { "displayName": "Label", "purpose": "필드 라벨(muted)과 힌트(subtle tabular), sm 버튼." },
+      "meta": { "displayName": "Meta", "purpose": "글리프 라벨, 상태 배지, 계산식, 썸네일 제거. 11px 바닥." }
     },
     "shadows": [
-      { "name": "button-primary", "value": "inset 0 1px 0 rgba(255,255,255,.12), 0 8px 20px -10px rgba(0,0,0,.8)", "purpose": "주 행동 버튼에만. 위 하이라이트 + 짧은 검정 그림자. 보라 글로우 금지." }
+      { "name": "thumbnail-numeral", "value": "drop-shadow(0 1px 2px rgba(0,0,0,.1)) drop-shadow(0 1px 1px rgba(0,0,0,.06))", "purpose": "레퍼런스 썸네일 위 Bebas 번호에만. 면에는 그림자가 없다." },
+      { "name": "scrim-caption", "value": "linear-gradient(180deg, rgba(10,10,10,0) 0%, rgba(10,10,10,0.55) 40%, rgba(10,10,10,0.94) 100%)", "purpose": "피드 항목 아래 캡션을 받치는 검은 스크림(.scrim). 그림자 대신 쓰는 깊이." },
+      { "name": "scrim-peek", "value": "linear-gradient(180deg, rgba(10,10,10,0.9) 0%, rgba(10,10,10,0) 100%)", "purpose": "피드 항목 위 72px 피크 스트립(.scrim-top)." }
     ],
     "motion": [
-      { "name": "ease-state", "value": "150ms cubic-bezier(0.4, 0, 0.2, 1)", "purpose": "hover/focus 색 전환. reduced-motion이면 0s." },
-      { "name": "shimmer", "value": "1.6s linear infinite", "purpose": "생성 중 결과 자리. reduced-motion이면 정지된 Raised 표면." }
+      { "name": "ease-state", "value": "150ms cubic-bezier(0.4, 0, 0.2, 1)", "purpose": "hover/focus 색·테두리·투명도 전환(Tailwind transition). reduced-motion이면 0s." },
+      { "name": "travel", "value": "1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite, translateX(-100%) → translateX(400%)", "purpose": "ETA 없는 진행선. 25% 너비 흰 선이 트랙을 지나간다. reduced-motion이면 정지한 50% 투명 전체 선." },
+      { "name": "spin", "value": "1.4s linear infinite", "purpose": "무대 가운데 56px 스피너(생성 중)." },
+      { "name": "pulse", "value": "2s cubic-bezier(0.4, 0, 0.6, 1) infinite", "purpose": "queued/in_progress 배지의 점. reduced-motion이면 정지." },
+      { "name": "snap-scroll", "value": "scroll-behavior: smooth; scroll-snap-type: y mandatory; scroll-snap-stop: always", "purpose": "피드 이동과 새 생성 삽입 시 맨 위로 스냅. reduced-motion이면 auto." }
     ],
     "breakpoints": [
       { "name": "sm", "value": "640px" },
@@ -45,104 +53,120 @@
       "name": "Primary Button",
       "kind": "button",
       "refersTo": "button-primary",
-      "description": "주 행동. 생성하기, 로그인, 저장.",
-      "html": "<button class=\"ds-btn-primary\">생성하기</button>",
-      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 40px; padding: 0 16px; border: 0; border-radius: 8px; background: var(--accent, #7c3aed); color: #fff; font: 500 14px/1 Geist, system-ui, sans-serif; white-space: nowrap; box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 8px 20px -10px rgba(0,0,0,.8); transition: background-color 150ms; cursor: pointer; } .ds-btn-primary:hover { background: var(--accent-hover, #8b5cf6); } .ds-btn-primary:focus-visible { outline: 2px solid var(--accent, #7c3aed); outline-offset: 2px; } .ds-btn-primary:disabled { opacity: .5; cursor: not-allowed; }"
+      "description": "주 행동. 흰 채움에 void 글자, 알약. 생성하기(lg), 로그인(lg).",
+      "html": "<button class=\"ds-btn-primary\">생성하기</button> <button class=\"ds-btn-primary ds-btn-primary--lg\">생성하기</button> <button class=\"ds-btn-primary\" disabled>생성하기</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 40px; padding: 0 20px; border: 0; border-radius: 9999px; background: var(--accent, #ffffff); color: var(--background, #0a0a0a); font: 500 14px/1 var(--font-inter), system-ui, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; white-space: nowrap; transition: background-color 150ms cubic-bezier(.4,0,.2,1); cursor: pointer; } .ds-btn-primary--lg { height: 48px; padding: 0 28px; font-size: 16px; } .ds-btn-primary:hover { background: var(--accent-hover, #e4e4e7); } .ds-btn-primary:focus-visible { outline: 2px solid var(--accent, #ffffff); outline-offset: 2px; } .ds-btn-primary:disabled { opacity: .4; cursor: not-allowed; }"
     },
     {
       "name": "Outline Button",
       "kind": "button",
       "refersTo": "button-outline",
-      "description": "보조 행동. 갤러리 보기, 닫기.",
-      "html": "<button class=\"ds-btn-outline\">갤러리 보기</button>",
-      "css": ".ds-btn-outline { display: inline-flex; align-items: center; justify-content: center; height: 40px; padding: 0 16px; border: 1px solid var(--border, #27272a); border-radius: 8px; background: transparent; color: var(--foreground, #fafafa); font: 500 14px/1 Geist, system-ui, sans-serif; white-space: nowrap; transition: background-color 150ms; cursor: pointer; } .ds-btn-outline:hover { background: rgba(255,255,255,.05); } .ds-btn-outline:focus-visible { outline: 2px solid var(--accent, #7c3aed); outline-offset: 2px; }"
+      "description": "보조 행동. 투명 바탕에 흰색 40% 테두리 알약. 로그아웃은 Mist 테두리 변형.",
+      "html": "<button class=\"ds-btn-outline\">갤러리 보기</button> <button class=\"ds-btn-outline ds-btn-outline--sm\">생성 설정으로 이동</button>",
+      "css": ".ds-btn-outline { display: inline-flex; align-items: center; justify-content: center; height: 40px; padding: 0 20px; border: 1px solid rgba(255,255,255,.4); border-radius: 9999px; background: transparent; color: var(--foreground, #ffffff); font: 500 14px/1 var(--font-inter), system-ui, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; white-space: nowrap; transition: background-color 150ms, border-color 150ms; cursor: pointer; } .ds-btn-outline--sm { height: 36px; padding: 0 16px; font-size: 12px; } .ds-btn-outline:hover { border-color: var(--foreground, #ffffff); background: rgba(255,255,255,.05); } .ds-btn-outline:focus-visible { outline: 2px solid var(--accent, #ffffff); outline-offset: 2px; }"
     },
     {
       "name": "Ghost Button",
       "kind": "button",
       "refersTo": "button-ghost",
-      "description": "카드 제목 줄의 작은 액션. 취소, 닫기.",
+      "description": "제목 줄의 작은 액션. 투명, white-dim 글자, hover 흰색 10% 틴트.",
       "html": "<button class=\"ds-btn-ghost\">취소</button>",
-      "css": ".ds-btn-ghost { display: inline-flex; align-items: center; justify-content: center; height: 36px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; color: var(--foreground-2, #d4d4d8); font: 500 12px/1 Geist, system-ui, sans-serif; transition: background-color 150ms, color 150ms; cursor: pointer; } .ds-btn-ghost:hover { background: rgba(255,255,255,.05); color: var(--foreground, #fafafa); } .ds-btn-ghost:focus-visible { outline: 2px solid var(--accent, #7c3aed); outline-offset: 2px; }"
+      "css": ".ds-btn-ghost { display: inline-flex; align-items: center; justify-content: center; height: 40px; padding: 0 20px; border: 0; border-radius: 9999px; background: transparent; color: var(--foreground-2, #d4d6db); font: 500 14px/1 var(--font-inter), system-ui, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; white-space: nowrap; transition: background-color 150ms, color 150ms; cursor: pointer; } .ds-btn-ghost:hover { background: rgba(255,255,255,.1); color: var(--foreground, #ffffff); } .ds-btn-ghost:focus-visible { outline: 2px solid var(--accent, #ffffff); outline-offset: 2px; }"
     },
     {
       "name": "Text Field",
       "kind": "input",
       "refersTo": "input",
-      "description": "라벨이 입력을 감싸는 Field + Input.",
-      "html": "<label class=\"ds-field\"><span class=\"ds-field-label\"><span>네거티브 프롬프트</span><span class=\"ds-field-hint\">선택</span></span><input class=\"ds-input\" placeholder=\"피하고 싶은 요소\" /></label>",
-      "css": ".ds-field { display: block; } .ds-field-label { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 6px; font: 500 12px/1.33 Geist, system-ui, sans-serif; color: var(--muted, #a1a1aa); } .ds-field-hint { font-weight: 400; color: var(--subtle, #8a8a93); font-variant-numeric: tabular-nums; } .ds-input { width: 100%; height: 40px; padding: 0 12px; border: 1px solid var(--border, #27272a); border-radius: 8px; background: var(--surface-2, #19191e); color: var(--foreground, #fafafa); font: 400 14px/1.5 Geist, system-ui, sans-serif; caret-color: var(--accent, #7c3aed); transition: border-color 150ms; } .ds-input::placeholder { color: var(--subtle, #8a8a93); } .ds-input:focus { border-color: var(--accent, #7c3aed); outline: 0; } .ds-input:focus-visible { box-shadow: 0 0 0 2px rgba(124,58,237,.5); }"
+      "description": "라벨이 입력을 감싸는 Field + Input/Textarea. slate 바탕, 1px Mist, 6px. 포커스는 흰 테두리 60% + 흰색 40% 링.",
+      "html": "<label class=\"ds-field\"><span class=\"ds-field-label\"><span>프롬프트</span><span class=\"ds-field-hint\">42자</span></span><textarea class=\"ds-input ds-textarea\" rows=\"3\" placeholder=\"장면, 카메라 움직임, 분위기를 적어 주세요…\"></textarea></label><label class=\"ds-field\" style=\"margin-top:16px\"><span class=\"ds-field-label\"><span>네거티브 프롬프트</span><span class=\"ds-field-hint\">선택</span></span><input class=\"ds-input\" placeholder=\"피하고 싶은 요소\" /></label>",
+      "css": ".ds-field { display: block; font-family: var(--font-inter), system-ui, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; } .ds-field-label { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 6px; font-size: 12px; font-weight: 500; line-height: 1.33; color: var(--muted, #9aa3ad); } .ds-field-hint { font-weight: 400; color: var(--subtle, #838c98); font-variant-numeric: tabular-nums; } .ds-input { display: block; width: 100%; height: 40px; padding: 0 12px; border: 1px solid var(--border, #2a2f39); border-radius: 6px; background: var(--surface-2, #1e2026); color: var(--foreground, #ffffff); font: 400 14px/1.43 inherit; caret-color: var(--foreground, #ffffff); transition: border-color 150ms; } .ds-textarea { height: auto; padding: 8px 12px; line-height: 1.625; resize: vertical; } .ds-input::placeholder { color: var(--subtle, #838c98); } .ds-input:focus { border-color: rgba(255,255,255,.6); outline: 0; } .ds-input:focus-visible { box-shadow: 0 0 0 2px rgba(255,255,255,.4); } .ds-input:disabled { opacity: .5; cursor: not-allowed; }"
     },
     {
       "name": "Top Navigation",
       "kind": "nav",
       "refersTo": "nav-link-active",
-      "description": "Sticky 헤더. 활성 링크는 흰색 10% 틴트.",
-      "html": "<header class=\"ds-nav\"><a class=\"ds-nav-brand\" href=\"#\"><span class=\"ds-nav-dot\"></span>Video Gen Studio</a><nav><a class=\"ds-nav-link is-active\" aria-current=\"page\" href=\"#\">플레이그라운드</a><a class=\"ds-nav-link\" href=\"#\">갤러리</a><a class=\"ds-nav-link\" href=\"#\">대시보드</a></nav><span class=\"ds-nav-user\">jeongjun</span><button class=\"ds-nav-logout\">로그아웃</button></header>",
-      "css": ".ds-nav { display: flex; align-items: center; gap: 24px; height: 56px; padding: 0 16px; border-bottom: 1px solid var(--border, #27272a); background: rgba(9,9,11,.8); backdrop-filter: blur(8px); font: 400 14px/1 Geist, system-ui, sans-serif; color: var(--foreground, #fafafa); } .ds-nav-brand { display: flex; align-items: center; gap: 8px; font-weight: 600; letter-spacing: -0.01em; color: inherit; text-decoration: none; white-space: nowrap; } .ds-nav-dot { width: 10px; height: 10px; border-radius: 2px; background: var(--accent, #7c3aed); } .ds-nav nav { display: flex; gap: 4px; } .ds-nav-link { display: inline-flex; align-items: center; min-height: 40px; padding: 0 12px; border-radius: 6px; color: var(--muted, #a1a1aa); text-decoration: none; white-space: nowrap; transition: color 150ms, background-color 150ms; } .ds-nav-link:hover { color: var(--foreground, #fafafa); } .ds-nav-link.is-active { background: rgba(255,255,255,.1); color: var(--foreground, #fafafa); } .ds-nav-link:focus-visible, .ds-nav-logout:focus-visible { outline: 2px solid var(--accent, #7c3aed); outline-offset: 2px; } .ds-nav-user { margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ds-nav-logout { min-height: 44px; padding: 0 8px; border: 0; background: none; color: var(--muted, #a1a1aa); font: inherit; cursor: pointer; } .ds-nav-logout:hover { color: var(--foreground, #fafafa); }"
+      "description": "Sticky 56px, void 85% + blur. Bebas 워드마크, 알약 링크(활성 흰색 12%), ADMIN Sand 태그, outline 로그아웃.",
+      "html": "<header class=\"ds-nav\"><a class=\"ds-nav-brand\" href=\"#\">Video Gen Studio</a><nav><a class=\"ds-nav-link is-active\" aria-current=\"page\" href=\"#\">플레이그라운드</a><a class=\"ds-nav-link\" href=\"#\">갤러리</a><a class=\"ds-nav-link\" href=\"#\">대시보드</a></nav><span class=\"ds-nav-user\"><span class=\"ds-nav-name\">jeongjun</span><span class=\"ds-nav-admin\">ADMIN</span></span><button class=\"ds-nav-logout\">로그아웃</button></header>",
+      "css": ".ds-nav { display: flex; align-items: center; gap: 28px; height: 56px; padding: 0 20px; border-bottom: 1px solid var(--border, #2a2f39); background: rgba(10,10,10,.85); backdrop-filter: blur(8px); font: 400 14px/1 var(--font-inter), system-ui, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; color: var(--foreground, #ffffff); } .ds-nav-brand { font-family: var(--font-bebas), 'Arial Narrow', Impact, sans-serif; font-size: 22px; letter-spacing: .06em; color: var(--foreground, #ffffff); text-decoration: none; white-space: nowrap; } .ds-nav nav { display: flex; gap: 4px; } .ds-nav-link { display: inline-flex; align-items: center; min-height: 40px; padding: 0 12px; border-radius: 9999px; color: var(--muted, #9aa3ad); text-decoration: none; white-space: nowrap; transition: color 150ms, background-color 150ms; } .ds-nav-link:hover { color: var(--foreground, #ffffff); } .ds-nav-link.is-active { background: rgba(255,255,255,.12); color: var(--foreground, #ffffff); } .ds-nav-user { margin-left: auto; display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--muted, #9aa3ad); } .ds-nav-name { color: var(--foreground-2, #d4d6db); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ds-nav-admin { font-family: var(--font-bebas), 'Arial Narrow', Impact, sans-serif; font-size: 12px; letter-spacing: .06em; line-height: 1; padding: 2px 6px 0; border: 1px solid var(--border, #2a2f39); border-radius: 4px; color: var(--sand, #c7b9a6); } .ds-nav-logout { display: inline-flex; align-items: center; min-height: 36px; padding: 0 12px; border: 1px solid var(--border, #2a2f39); border-radius: 9999px; background: none; color: var(--foreground-2, #d4d6db); font: 400 12px/1 inherit; white-space: nowrap; transition: color 150ms, border-color 150ms; cursor: pointer; } .ds-nav-logout:hover { border-color: var(--foreground, #ffffff); color: var(--foreground, #ffffff); } .ds-nav-link:focus-visible, .ds-nav-logout:focus-visible, .ds-nav-brand:focus-visible { outline: 2px solid var(--foreground, #ffffff); outline-offset: 2px; }"
     },
     {
       "name": "Status Chip",
       "kind": "chip",
       "refersTo": "status-chip",
-      "description": "생성 상태. 틴트 15% 바탕 + 30% 링 + 밝은 글자. 진행 중이면 점이 pulse.",
-      "html": "<span class=\"ds-chip ds-chip-running\"><span class=\"ds-chip-dot\"></span>생성 중</span> <span class=\"ds-chip ds-chip-done\">완료</span> <span class=\"ds-chip ds-chip-failed\">실패</span>",
-      "css": ".ds-chip { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 9999px; font: 500 11px/1.4 Geist, system-ui, sans-serif; white-space: nowrap; box-shadow: inset 0 0 0 1px var(--chip-ring); background: var(--chip-bg); color: var(--chip-fg); } .ds-chip-dot { width: 6px; height: 6px; margin-right: 6px; border-radius: 9999px; background: currentColor; animation: ds-pulse 2s cubic-bezier(.4,0,.6,1) infinite; } @keyframes ds-pulse { 50% { opacity: .5; } } .ds-chip-running { --chip-bg: rgba(14,165,233,.15); --chip-ring: rgba(14,165,233,.3); --chip-fg: #7dd3fc; } .ds-chip-done { --chip-bg: rgba(16,185,129,.15); --chip-ring: rgba(16,185,129,.3); --chip-fg: #6ee7b7; } .ds-chip-failed { --chip-bg: rgba(244,63,94,.15); --chip-ring: rgba(244,63,94,.3); --chip-fg: #fda4af; } @media (prefers-reduced-motion: reduce) { .ds-chip-dot { animation: none; } }"
+      "description": "생성 상태. 색 15% 틴트 + 30% 인셋 링 + 300 단계 글자, 11px 알약. 진행 중이면 점이 pulse.",
+      "html": "<span class=\"ds-chip ds-chip-queued\"><span class=\"ds-chip-dot\"></span>대기</span> <span class=\"ds-chip ds-chip-running\"><span class=\"ds-chip-dot\"></span>생성 중</span> <span class=\"ds-chip ds-chip-done\">완료</span> <span class=\"ds-chip ds-chip-failed\">실패</span> <span class=\"ds-chip ds-chip-blocked\">NSFW 차단</span>",
+      "css": ".ds-chip { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 9999px; font: 500 11px/1.4 var(--font-inter), system-ui, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; white-space: nowrap; box-shadow: inset 0 0 0 1px var(--chip-ring); background: var(--chip-bg); color: var(--chip-fg); } .ds-chip-dot { width: 6px; height: 6px; margin-right: 6px; border-radius: 9999px; background: currentColor; animation: ds-pulse 2s cubic-bezier(.4,0,.6,1) infinite; } @keyframes ds-pulse { 50% { opacity: .5; } } .ds-chip-queued { --chip-bg: rgba(113,113,122,.15); --chip-ring: rgba(113,113,122,.3); --chip-fg: var(--foreground-2, #d4d6db); } .ds-chip-running { --chip-bg: rgba(14,165,233,.15); --chip-ring: rgba(14,165,233,.3); --chip-fg: #7dd3fc; } .ds-chip-done { --chip-bg: rgba(16,185,129,.15); --chip-ring: rgba(16,185,129,.3); --chip-fg: #6ee7b7; } .ds-chip-failed { --chip-bg: rgba(244,63,94,.15); --chip-ring: rgba(244,63,94,.3); --chip-fg: #fda4af; } .ds-chip-blocked { --chip-bg: rgba(245,158,11,.15); --chip-ring: rgba(245,158,11,.3); --chip-fg: #fcd34d; } @media (prefers-reduced-motion: reduce) { .ds-chip-dot { animation: none; } }"
+    },
+    {
+      "name": "Model Card",
+      "kind": "custom",
+      "refersTo": "model-card-selected",
+      "description": "aria-pressed 토글. 비선택 slate + Mist, 선택은 흰 채움 + void 글자로 뒤집힌다.",
+      "html": "<div class=\"ds-models\"><button class=\"ds-model\" aria-pressed=\"true\"><div class=\"ds-model-name\">Kling 3.0 Standard</div><div class=\"ds-model-meta\">Kling · $0.0450/s</div></button><button class=\"ds-model\" aria-pressed=\"false\"><div class=\"ds-model-name\">Seedance 2.5</div><div class=\"ds-model-meta\">ByteDance · 단가 미설정</div></button><button class=\"ds-model\" aria-pressed=\"false\"><div class=\"ds-model-name\">Wan 3.0</div><div class=\"ds-model-meta\">Alibaba · 단가 미설정</div></button></div>",
+      "css": ".ds-models { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; font-family: var(--font-inter), system-ui, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; } .ds-model { padding: 12px; border: 1px solid var(--border, #2a2f39); border-radius: 6px; background: var(--surface-2, #1e2026); color: var(--foreground, #ffffff); text-align: left; cursor: pointer; transition: border-color 150ms, background-color 150ms, color 150ms; } .ds-model:hover { border-color: rgba(255,255,255,.5); } .ds-model[aria-pressed=\"true\"] { border-color: var(--foreground, #ffffff); background: var(--foreground, #ffffff); color: var(--background, #0a0a0a); } .ds-model:focus-visible { outline: 2px solid var(--accent, #ffffff); outline-offset: 2px; } .ds-model-name { font-size: 14px; font-weight: 500; line-height: 1.43; } .ds-model-meta { margin-top: 2px; font-size: 12px; line-height: 1.33; color: var(--subtle, #838c98); font-variant-numeric: tabular-nums; } .ds-model[aria-pressed=\"true\"] .ds-model-meta { color: rgba(10,10,10,.7); }"
+    },
+    {
+      "name": "Glyph Rail",
+      "kind": "custom",
+      "refersTo": "glyph",
+      "description": "무대 오른쪽 레일. 52px 흰 선 원 + 20px 라인 아이콘, 아래 Bebas 16px Sand 카운터와 11px muted 라벨. 활성은 흰 채움.",
+      "html": "<div class=\"ds-rail\"><div class=\"ds-glyph\"><button class=\"ds-glyph-btn is-active\" aria-label=\"생성\"><svg viewBox=\"0 0 20 20\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M6.5 4.5v11l9-5.5z\"/></svg></button><span class=\"ds-glyph-counter\">$0.2250</span><span class=\"ds-glyph-label\">생성</span></div><div class=\"ds-glyph\"><button class=\"ds-glyph-btn\" aria-label=\"취소\" disabled><svg viewBox=\"0 0 20 20\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M5.5 5.5l9 9M14.5 5.5l-9 9\"/></svg></button><span class=\"ds-glyph-counter\">—</span><span class=\"ds-glyph-label\">취소</span></div><div class=\"ds-glyph\"><a class=\"ds-glyph-btn\" href=\"#\" aria-label=\"다운로드\"><svg viewBox=\"0 0 20 20\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M10 3.5v10m0 0l-4-4m4 4l4-4M4.5 16.5h11\"/></svg></a><span class=\"ds-glyph-counter\">MP4</span><span class=\"ds-glyph-label\">다운로드</span></div><div class=\"ds-glyph\"><a class=\"ds-glyph-btn\" href=\"#\" aria-label=\"갤러리\"><svg viewBox=\"0 0 20 20\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M3.5 3.5h5v5h-5zM11.5 3.5h5v5h-5zM3.5 11.5h5v5h-5zM11.5 11.5h5v5h-5z\"/></svg></a><span class=\"ds-glyph-counter\">12</span><span class=\"ds-glyph-label\">갤러리</span></div><div class=\"ds-glyph\"><button class=\"ds-glyph-btn\" aria-label=\"다시\"><svg viewBox=\"0 0 20 20\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M4.5 10a5.5 5.5 0 1 0 1.6-3.9M4.5 4.5v3.5H8\"/></svg></button><span class=\"ds-glyph-counter\">×1</span><span class=\"ds-glyph-label\">다시</span></div></div>",
+      "css": ".ds-rail { display: flex; flex-direction: column; align-items: center; gap: 16px; width: 96px; padding: 16px 8px; border-left: 1px solid var(--border, #2a2f39); background: var(--background, #0a0a0a); } .ds-glyph { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; } .ds-glyph-btn { display: grid; place-items: center; width: 52px; height: 52px; border: 1.5px solid rgba(255,255,255,.8); border-radius: 9999px; background: transparent; color: var(--foreground, #ffffff); cursor: pointer; transition: background-color 150ms, color 150ms; } .ds-glyph-btn svg { width: 20px; height: 20px; } .ds-glyph-btn:hover { background: rgba(255,255,255,.15); } .ds-glyph-btn.is-active { border-color: var(--foreground, #ffffff); background: var(--foreground, #ffffff); color: var(--background, #0a0a0a); } .ds-glyph-btn.is-active:hover { background: var(--accent-hover, #e4e4e7); } .ds-glyph-btn:disabled { opacity: .35; cursor: not-allowed; } .ds-glyph-btn:focus-visible { outline: 2px solid var(--accent, #ffffff); outline-offset: 2px; } .ds-glyph-counter { font-family: var(--font-bebas), 'Arial Narrow', Impact, sans-serif; font-size: 16px; line-height: 1; letter-spacing: .06em; color: var(--sand, #c7b9a6); } .ds-glyph-label { font: 400 11px/1 var(--font-inter), system-ui, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; color: var(--muted, #9aa3ad); } @media (max-width: 1023px) { .ds-rail { flex-direction: row; justify-content: center; width: auto; gap: 12px; padding: 12px 8px; border-left: 0; border-top: 1px solid var(--border, #2a2f39); } .ds-glyph-btn { width: 44px; height: 44px; } }"
+    },
+    {
+      "name": "Stage Feed Item",
+      "kind": "custom",
+      "refersTo": "card",
+      "description": "스냅 피드의 한 항목(생성 중 상태). 위 피크 스트립, 가운데 Bebas 경과 시간, 아래 캡션 스크림과 지나가는 진행선.",
+      "html": "<article class=\"ds-stage\" aria-current=\"true\"><div class=\"ds-stage-peek\"><span class=\"ds-stage-peek-text\"><span class=\"ds-stage-num\">01 / 04</span>비 내리는 서울 밤거리, 네온 간판이 젖은 아스팔트에 비치고, 카메라가 천천히 앞으로 돌리한다</span><span class=\"ds-stage-chip\"><span class=\"ds-stage-chip-dot\"></span>생성 중</span></div><div class=\"ds-stage-center\"><span class=\"ds-stage-spinner\" aria-hidden=\"true\"></span><span class=\"ds-stage-elapsed\" aria-live=\"polite\">0:47</span><span class=\"ds-stage-sub\">생성 중 · 경과 시간</span></div><div class=\"ds-stage-caption\"><div class=\"ds-stage-byline\"><span class=\"ds-stage-model\">Kling 3.0 Standard</span><span class=\"ds-stage-num\">5S · $0.2250</span></div><div class=\"ds-stage-status\"><strong>생성 중</strong><span>· 0:47</span></div><p class=\"ds-stage-prompt\">비 내리는 서울 밤거리, 네온 간판이 젖은 아스팔트에 비치고, 카메라가 천천히 앞으로 돌리한다</p><div class=\"ds-stage-track\" role=\"progressbar\" aria-label=\"생성 진행 중\" aria-valuetext=\"진행률을 알 수 없음\"><div class=\"ds-stage-travel\"></div></div></div></article>",
+      "css": ".ds-stage { position: relative; height: 420px; overflow: hidden; background: var(--surface, #121316); color: var(--foreground, #ffffff); font-family: var(--font-inter), system-ui, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; } .ds-stage-peek { position: absolute; inset: 0 0 auto 0; z-index: 10; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; height: 72px; padding: 12px 20px 0; font-size: 12px; color: var(--muted, #9aa3ad); background: linear-gradient(180deg, rgba(10,10,10,.9) 0%, rgba(10,10,10,0) 100%); } .ds-stage-peek-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ds-stage-num { font-family: var(--font-bebas), 'Arial Narrow', Impact, sans-serif; font-size: 14px; letter-spacing: .06em; color: var(--sand, #c7b9a6); margin-right: 8px; } .ds-stage-chip { display: inline-flex; align-items: center; flex-shrink: 0; padding: 2px 8px; border-radius: 9999px; font: 500 11px/1.4 inherit; background: rgba(14,165,233,.15); color: #7dd3fc; box-shadow: inset 0 0 0 1px rgba(14,165,233,.3); } .ds-stage-chip-dot { width: 6px; height: 6px; margin-right: 6px; border-radius: 9999px; background: currentColor; animation: ds-stage-pulse 2s cubic-bezier(.4,0,.6,1) infinite; } .ds-stage-center { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; height: 100%; padding: 0 24px; text-align: center; } .ds-stage-spinner { width: 56px; height: 56px; border: 2px solid var(--foreground, #ffffff); border-top-color: transparent; border-radius: 9999px; animation: ds-stage-spin 1.4s linear infinite; } .ds-stage-elapsed { font-family: var(--font-bebas), 'Arial Narrow', Impact, sans-serif; font-size: 72px; line-height: 1; letter-spacing: .06em; } .ds-stage-sub { font-size: 14px; color: var(--muted, #9aa3ad); } .ds-stage-caption { position: absolute; inset: auto 0 0 0; z-index: 10; padding: 96px 20px 20px; pointer-events: none; background: linear-gradient(180deg, rgba(10,10,10,0) 0%, rgba(10,10,10,.55) 40%, rgba(10,10,10,.94) 100%); } .ds-stage-byline { font-size: 12px; color: var(--muted, #9aa3ad); } .ds-stage-model { color: var(--foreground-2, #d4d6db); margin-right: 8px; } .ds-stage-status { display: flex; align-items: center; gap: 8px; margin-top: 4px; font-size: 14px; } .ds-stage-status strong { font-weight: 500; } .ds-stage-status span { color: var(--muted, #9aa3ad); } .ds-stage-prompt { margin: 4px 0 0; max-width: 672px; font-size: 14px; line-height: 1.625; color: var(--foreground-2, #d4d6db); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; } .ds-stage-track { margin-top: 12px; height: 2px; overflow: hidden; background: rgba(255,255,255,.15); } .ds-stage-travel { width: 25%; height: 100%; background: var(--foreground, #ffffff); animation: ds-stage-travel 1.8s cubic-bezier(.4,0,.2,1) infinite; } @keyframes ds-stage-travel { 0% { transform: translateX(-100%); } 100% { transform: translateX(400%); } } @keyframes ds-stage-spin { to { transform: rotate(360deg); } } @keyframes ds-stage-pulse { 50% { opacity: .5; } } @media (prefers-reduced-motion: reduce) { .ds-stage-travel { animation: none; width: 100%; opacity: .5; } .ds-stage-spinner, .ds-stage-chip-dot { animation: none; } }"
     },
     {
       "name": "Card",
       "kind": "card",
       "refersTo": "card",
-      "description": "제목 줄 + 본문. 그림자 없음, 1px 헤어라인.",
-      "html": "<section class=\"ds-card\"><header class=\"ds-card-head\"><h2>진행 상황</h2><button class=\"ds-btn-ghost\">취소</button></header><div class=\"ds-empty\">아직 제출한 생성이 없습니다.</div></section>",
-      "css": ".ds-card { padding: 20px; border: 1px solid var(--border, #27272a); border-radius: 16px; background: var(--surface, #121215); color: var(--foreground, #fafafa); font: 400 14px/1.5 Geist, system-ui, sans-serif; } .ds-card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; } .ds-card-head h2 { margin: 0; font: 600 14px/1.43 Geist, system-ui, sans-serif; letter-spacing: .025em; color: var(--foreground-2, #d4d4d8); } .ds-empty { padding: 32px; border: 1px dashed var(--border, #27272a); border-radius: 12px; text-align: center; color: var(--subtle, #8a8a93); } .ds-btn-ghost { height: 36px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; color: var(--foreground-2, #d4d4d8); font: 500 12px/1 inherit; cursor: pointer; } .ds-btn-ghost:hover { background: rgba(255,255,255,.05); }"
-    },
-    {
-      "name": "Model Card",
-      "kind": "custom",
-      "refersTo": "card",
-      "description": "aria-pressed 토글. 선택되면 보라 테두리 + 10% 틴트.",
-      "html": "<div class=\"ds-models\"><button class=\"ds-model\" aria-pressed=\"true\"><div class=\"ds-model-name\">Kling 3.0 Standard</div><div class=\"ds-model-meta\">Kling · $0.0450/s</div><div class=\"ds-model-blurb\">이미지 1장(+마지막 프레임 1장)에서 영상. 사운드, 멀티샷 지원.</div></button><button class=\"ds-model\" aria-pressed=\"false\"><div class=\"ds-model-name\">Seedance 2.5</div><div class=\"ds-model-meta\">ByteDance · 단가 미설정</div><div class=\"ds-model-blurb\">이미지·영상·오디오 레퍼런스에서 영상.</div></button></div>",
-      "css": ".ds-models { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; font-family: Geist, system-ui, sans-serif; } .ds-model { padding: 12px; border: 1px solid var(--border, #27272a); border-radius: 12px; background: var(--surface-2, #19191e); color: var(--foreground, #fafafa); text-align: left; cursor: pointer; transition: border-color 150ms, background-color 150ms; } .ds-model:hover { border-color: #52525b; } .ds-model[aria-pressed=\"true\"] { border-color: var(--accent, #7c3aed); background: rgba(124,58,237,.1); } .ds-model:focus-visible { outline: 2px solid var(--accent, #7c3aed); outline-offset: 2px; } .ds-model-name { font: 500 14px/1.43 inherit; } .ds-model-meta { margin-top: 2px; font: 400 12px/1.33 inherit; color: var(--subtle, #8a8a93); font-variant-numeric: tabular-nums; } .ds-model-blurb { margin-top: 6px; font: 400 12px/1.4 inherit; color: var(--muted, #a1a1aa); }"
-    },
-    {
-      "name": "Upload Zone",
-      "kind": "custom",
-      "refersTo": "card",
-      "description": "점선 박스. sr-only 파일 input으로 키보드 도달, focus-within에 보라.",
-      "html": "<label class=\"ds-upload\">클릭해서 이미지 추가 (jpeg/png/webp/gif)<input type=\"file\" class=\"ds-sr-only\" aria-label=\"이미지 레퍼런스 추가\" /></label>",
-      "css": ".ds-upload { display: flex; align-items: center; justify-content: center; min-height: 96px; padding: 0 12px; border: 1px dashed var(--border, #27272a); border-radius: 12px; color: var(--subtle, #8a8a93); font: 400 14px/1.5 Geist, system-ui, sans-serif; text-align: center; cursor: pointer; transition: border-color 150ms, color 150ms; } .ds-upload:hover, .ds-upload:focus-within { border-color: var(--accent, #7c3aed); color: var(--foreground-2, #d4d4d8); } .ds-upload:focus-within { box-shadow: 0 0 0 2px rgba(124,58,237,.5); } .ds-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }"
+      "description": "문서형 페이지(갤러리·대시보드·어드민)의 카드. ink, 1px Mist, 12px, 그림자 없음. 플레이그라운드에는 없다.",
+      "html": "<section class=\"ds-card\"><header class=\"ds-card-head\"><h2>최근 생성</h2><button class=\"ds-card-action\">모두 보기</button></header><div class=\"ds-empty\">아직 제출한 생성이 없습니다.</div></section>",
+      "css": ".ds-card { padding: 20px; border: 1px solid var(--border, #2a2f39); border-radius: 12px; background: var(--surface, #121316); color: var(--foreground, #ffffff); font: 400 14px/1.43 var(--font-inter), system-ui, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; } .ds-card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; } .ds-card-head h2 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: .025em; color: var(--foreground-2, #d4d6db); } .ds-card-action { height: 36px; padding: 0 16px; border: 0; border-radius: 9999px; background: transparent; color: var(--foreground-2, #d4d6db); font: 500 12px/1 inherit; cursor: pointer; transition: background-color 150ms, color 150ms; } .ds-card-action:hover { background: rgba(255,255,255,.1); color: var(--foreground, #ffffff); } .ds-card-action:focus-visible { outline: 2px solid var(--foreground, #ffffff); outline-offset: 2px; } .ds-empty { padding: 32px; border: 1px dashed var(--border, #2a2f39); border-radius: 12px; text-align: center; color: var(--subtle, #838c98); }"
     }
   ],
   "narrative": {
-    "northStar": "The Night Render Desk",
-    "overview": "불 꺼진 작업실의 책상. 모니터 하나가 렌더를 기다리며 켜져 있고, 그 빛 말고는 아무것도 반짝이지 않는다. 이 시스템은 팀이 하루에도 여러 번 들어와 프롬프트를 넣고, 모델을 고르고, 비용을 확인하고 나가는 도구다. 장식은 없고, 표면은 세 단계의 어두운 회색으로만 깊이를 만들며, 색은 단 하나의 보라가 \"지금 이것이 선택됐다 / 진행 중이다 / 눌러라\"를 말할 때만 켜진다.\n\n밀도는 중간이다. 카드 안쪽은 20px, 카드 사이는 24px로 숨 쉴 자리를 두되, 한 화면에 입력·모델·비용·진행 상황이 모두 보인다. 글은 한국어 본문 14px이 기준이고, 숫자는 전부 고정폭 숫자로 정렬된다. 확인된 거부: 보라·시안 라디얼 글로우 배경, 격자 배경, 색 있는 글로우 그림자, 두 번째 강조색(시안). 이것들은 2026-10-27에 걷어냈고 다시 들이지 않는다.",
+    "northStar": "The Stage (무대)",
+    "overview": "결과 영상 하나가 무대를 다 가진다. 화면은 검은 무대(void)와 그 위에 서 있는 흰 글리프뿐이고, 색은 영상이 가져온다. 왼쪽 서랍의 폼은 오른쪽 무대에 올라갈 한 편을 준비하는 자리이며, 다음 결과는 한 번 스냅하면 온다. 이 시스템은 전문 디자이너·영상 제작자가 매일 들어와 프롬프트를 넣고 모델과 파라미터를 고르고 비용을 확인하는 도구다. 장난스럽거나 가벼운 소비자 앱 느낌은 거부했고, 검정+네온 글로우+그라데이션으로 된 흔한 AI 도구 외형도 거부했다. 2026-10-27에 보라 강조색 세계(\"The Night Render Desk\")를 걷어내고 이 세계로 교체했으며, 이 라운드는 컴프 없이 코드로 바로 지었다.\n\n강조색은 없다. 주 행동은 흰 채움에 검정 글자이고, 선택된 모델 카드도 흰 채움이다. 숫자(비용, 길이, 카운터, 경과 시간)만 Bebas Neue와 Sand로 따로 목소리를 낸다. 깊이는 그림자가 아니라 네 단계 무채색 표면과 미디어 위의 검은 스크림으로 만든다. 밀도는 서랍 안에서는 중간(필드 사이 16px, 안쪽 20px), 무대에서는 비어 있음에 가깝다. 모션은 150ms 색 전환과 ETA가 없어서 채워지지 않고 지나가는 2px 진행선 하나뿐이다.",
     "keyCharacteristics": [
-      "검정에 가까운 바탕 위에 세 단계 회색 표면과 1px 헤어라인으로만 구조를 세운다.",
-      "보라(render-violet)는 신호색이다. 선택, 주 행동, 포커스, 진행 중. 장식으로는 쓰지 않는다.",
-      "텍스트는 네 단계(paper-white, paper-dim, graphite, graphite-faint)만 쓰고, 모두 모든 표면에서 4.5:1을 넘긴다.",
-      "상태는 색 틴트 15% 배경 + 30% 링 + 밝은 글자의 작은 알약 배지로만 말한다.",
-      "모션은 150ms 색 전환과 진행 중 셔머 하나. reduced-motion이면 전부 정지한다."
+      "바탕 void 위에 ink, slate, mist 세 단계 무채색과 1px 헤어라인으로만 구조를 세운다. 색 있는 강조색은 없고 흰색이 강조색이다.",
+      "Bebas Neue는 숫자와 라틴 한 단어(워드마크, 카운터, 비용, 경과 시간, MP4)에만 쓰고, Inter + 시스템 한글이 본문을 맡는다.",
+      "Sand(#c7b9a6)는 Bebas 숫자에만 얹는 따뜻한 색이다. 본문·라벨·아이콘에는 쓰지 않는다.",
+      "결과는 세로 스냅 피드 위에서 한 번에 하나만 무대를 차지하고, 다음 항목의 72px이 아래에 비친다.",
+      "상태색(sky, emerald, rose, amber)은 알약 배지와 오류 상자 안에서만 켜진다.",
+      "그림자 없음. 깊이는 표면 단계와 스크림. reduced-motion이면 스냅·진행선·펄스·색 전환이 모두 정지한다."
     ],
     "rules": [
-      { "name": "The One Signal Rule", "body": "보라는 \"선택됐다·눌러라·진행 중이다\"를 뜻할 때만 켜진다. 배경, 테두리 장식, 아이콘 색, 그라데이션으로는 쓰지 않는다. 두 번째 강조색은 없다.", "section": "colors" },
-      { "name": "The Four Tiers Rule", "body": "글자 색은 paper-white, paper-dim, graphite, graphite-faint 네 토큰(text-foreground, text-foreground-2, text-muted, text-subtle)만 쓴다. text-zinc-*를 직접 쓰지 않는다.", "section": "colors" },
-      { "name": "The Tabular Rule", "body": "비용, 길이, 횟수, 개수 등 숫자가 있는 글자는 모두 tabular-nums. 숫자가 바뀌어도 폭이 흔들리지 않는다.", "section": "typography" },
-      { "name": "The Tonal Depth Rule", "body": "깊이는 표면 색 단계와 1px 테두리로만. 그림자는 주 행동 버튼 하나에만 허용되고, 색 있는 글로우(0 0 Npx 보라)는 어디에도 없다.", "section": "elevation" }
+      { "name": "The White Is The Accent Rule", "body": "강조색은 흰색 하나다. 행동·선택·포커스·진행은 흰 채움 또는 흰 선으로 말하고, 색상(hue)을 가진 면은 상태 배지와 오류 상자 외에는 없다. 보라·시안·네온 글로우는 2026-10-27에 걷어냈고 다시 들이지 않는다.", "section": "colors" },
+      { "name": "The Sand Numeral Rule", "body": "Sand는 Bebas Neue 숫자 위에만 얹는다. 본문, 라벨, 아이콘, 테두리에 Sand를 쓰면 숫자의 목소리가 사라진다.", "section": "colors" },
+      { "name": "The Four Tiers Rule", "body": "글자 색은 white, white-dim, muted, subtle 네 토큰(text-foreground, text-foreground-2, text-muted, text-subtle)만 쓴다. text-zinc-*와 임의 rgba 글자색은 쓰지 않는다. 유일한 예외는 흰 채움 위의 text-background 와 text-background/70.", "section": "colors" },
+      { "name": "The Bebas Is A Numeral Rule", "body": "Bebas Neue는 숫자와 라틴 한 단어에만 쓴다. 한글 본문·라벨·버튼에 .font-display를 얹지 않는다. Bebas에는 한글이 없어 시스템 글꼴로 떨어진다.", "section": "typography" },
+      { "name": "The Tabular Rule", "body": "비용, 길이, 횟수, 개수 등 Inter로 쓴 숫자는 모두 tabular-nums. 비용은 usd()로 소수 자릿수를 맞춘다(≥100은 정수, ≥1은 2자리, 그 아래는 4자리).", "section": "typography" },
+      { "name": "The One Snap Rule", "body": "피드는 scroll-snap-type: y mandatory, 항목은 scroll-snap-stop: always. 한 번에 하나의 결과만 무대를 가지며, 중간에 멈추지 않는다. 항목 높이는 무대 높이 − 72px이라 다음 항목의 피크 스트립(번호 · 프롬프트 · 배지)이 항상 아래에 비친다. 무대의 60% 이상이 보이는 항목이 활성(aria-current)이고 레일의 카운터는 그 항목을 따른다.", "section": "layout" },
+      { "name": "The Scrim Not Shadow Rule", "body": "면은 뜨지 않는다. 글자가 미디어 위에 놓여야 하면 검은 스크림으로 받치고, 면이 면 위에 놓여야 하면 톤 한 단계와 1px Mist로 구분한다. box-shadow와 색 있는 글로우는 어디에도 없다.", "section": "elevation" }
     ],
     "dos": [
-      "Do 글자 색은 네 토큰만. 새 회색이 필요하면 토큰을 늘리지 말고 네 단계 중 하나를 고른다.",
-      "Do 숫자는 전부 tabular-nums. 비용은 usd()로 소수 자릿수를 맞춘다.",
-      "Do 모든 조작은 44px(모바일) 이상, 키보드 포커스 링 표시, 오류는 role=\"alert\".",
-      "Do 상태는 StatusBadge로만, 비어 있음은 Empty(점선 박스)로만.",
-      "Do 페이지마다 h1 24px + graphite 설명 한 줄로 시작한다."
+      "Do 행동은 흰색으로. 주 버튼·활성 글리프·선택 카드는 흰 채움 + void 글자, 포커스는 흰 2px 링 + 2px 오프셋.",
+      "Do 숫자가 목소리를 내야 하면 Bebas Neue + Sand(카운터 16px, 비용 24px, 무대 72/96px). Inter 숫자는 tabular-nums.",
+      "Do 글자 색은 네 토큰만(white, white-dim, muted, subtle). 흰 채움 위에서만 text-background.",
+      "Do 미디어 위의 글자는 .scrim / .scrim-top으로 받친다. 면 위의 면은 톤 한 단계 + 1px Mist.",
+      "Do 상태는 StatusBadge로만, 오류는 ErrorText(role=\"alert\")로만, 비어 있음은 Empty(점선)로만.",
+      "Do 모든 조작은 44px(모바일) 이상, 글리프에 aria-label, 피드 항목에 aria-current. 모션은 prefers-reduced-motion에서 전부 정지.",
+      "Do 진행률을 모르면 지나가는 선과 경과 시간을 보여 준다. ETA를 지어내지 않는다."
     ],
     "donts": [
-      "Don't 보라·시안 라디얼 글로우, 격자 배경, 색 있는 글로우 그림자. 2026-10-27에 제거했다.",
-      "Don't 두 번째 강조색. 시안(#22d3ee)은 토큰에서 지웠다.",
-      "Don't text-zinc-*, hover:text-white, 임의 rgba 글자색.",
-      "Don't 11px 아래 글자, hover에서만 나타나는 조작(터치와 키보드에서 사라진다).",
-      "Don't 카드 안에 카드. 카드 안의 구획은 Raised 표면이나 Hairline 구분선으로."
+      "Don't 보라·시안·네온 글로우, 색 있는 그라데이션 배경, 색 있는 강조 버튼. 2026-10-27 교체 때 걷어냈다.",
+      "Don't box-shadow. 뜨는 면은 내비와 하단 바의 반투명 블러 띠뿐이다.",
+      "Don't 한글에 .font-display. Bebas Neue는 숫자와 라틴 한 단어에만.",
+      "Don't Sand를 본문·라벨·아이콘·테두리에. Sand는 Bebas 숫자 위에만.",
+      "Don't text-zinc-*, hover:text-white, 임의 rgba 글자색, 11px 아래 글자.",
+      "Don't 플레이그라운드에 카드나 패널을 들이지 않는다. 서랍은 Mist 구분선과 섹션 헤딩으로 나누고, 무대에는 영상·스크림·레일 외에 아무것도 없다.",
+      "Don't 영상을 크롭하지 않는다(object-contain). 피드 항목 사이에 간격이나 카드 테두리를 두지 않는다. 다음 항목은 72px 피크로만 예고한다."
     ]
   }
 }

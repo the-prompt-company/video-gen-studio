@@ -9,7 +9,7 @@ export function UsageChart({ rows }: { rows: { day: string; count: number; costU
         {rows.map((r) => (
           <div key={r.day} className="group relative flex-1">
             <div
-              className="w-full rounded-t bg-gradient-to-t from-violet-700 to-cyan-400/80 transition group-hover:brightness-125"
+              className="w-full rounded-t bg-sand/80 transition group-hover:bg-sand"
               style={{ height: `${Math.max(4, (r.costUsd / max) * 100)}%` }}
             />
             <div className="pointer-events-none absolute -top-9 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded bg-zinc-800 px-2 py-1 text-[11px] text-foreground group-hover:block">

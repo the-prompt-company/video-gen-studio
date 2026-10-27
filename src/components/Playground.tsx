@@ -153,7 +153,7 @@ function FeedItem({ g, index, total, active, now, modelName }: { g: PublicGenera
             </>
           ) : (
             <>
-              <span className="font-display text-7xl leading-none text-foreground-2 sm:text-8xl">{label}</span>
+              <span className="text-4xl font-semibold leading-none tracking-tight text-foreground-2 sm:text-5xl">{label}</span>
               <p className="max-w-md text-sm text-muted">{g.error ?? (g.status === "canceled" ? "취소된 생성입니다." : "결과 영상이 없습니다.")}</p>
             </>
           )}
