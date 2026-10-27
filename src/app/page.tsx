@@ -17,10 +17,7 @@ export default async function Landing() {
     <div className="relative flex flex-1 flex-col">
 
       <header className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between px-4">
-        <span className="flex items-center gap-2 font-semibold tracking-tight">
-          <span aria-hidden className="inline-block h-2.5 w-2.5 rounded-sm bg-accent" />
-          Video Gen Studio
-        </span>
+        <span className="font-display text-[22px] leading-none">Video Gen Studio</span>
         <Link href={cta.href} className="text-sm text-foreground-2 hover:text-foreground">
           {session ? `${session.username} →` : "로그인"}
         </Link>

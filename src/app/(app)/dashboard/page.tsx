@@ -3,7 +3,7 @@ import { getDb, schema } from "@/db";
 import { getCurrentUser } from "@/lib/auth";
 import { usageFor } from "@/lib/stats";
 import { usd, fmtDate, shortModel } from "@/lib/format";
-import { Card, Stat, Empty } from "@/components/ui";
+import { Card, Stat, Empty, PageContainer } from "@/components/ui";
 import { StatusBadge } from "@/components/StatusBadge";
 import { UsageChart } from "@/components/UsageChart";
 
@@ -23,7 +23,7 @@ export default async function DashboardPage() {
   ]);
 
   return (
-    <div className="space-y-6">
+    <PageContainer className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">대시보드</h1>
         <p className="mt-1 text-sm text-muted">{user.username} 님의 사용량. 비용은 모델 단가 × 영상 길이로 계산되며 실패·NSFW·취소 건은 과금되지 않습니다.</p>
@@ -98,6 +98,6 @@ export default async function DashboardPage() {
           </div>
         )}
       </Card>
-    </div>
+    </PageContainer>
   );
 }

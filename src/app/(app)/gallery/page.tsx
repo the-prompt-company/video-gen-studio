@@ -3,6 +3,7 @@ import { getDb, schema } from "@/db";
 import { getCurrentUser } from "@/lib/auth";
 import { publicGeneration } from "@/lib/generations";
 import { Gallery } from "@/components/Gallery";
+import { PageContainer } from "@/components/ui";
 
 export const metadata = { title: "갤러리" };
 
@@ -22,5 +23,9 @@ export default async function GalleryPage({ searchParams }: { searchParams: Prom
     .orderBy(desc(g.createdAt))
     .limit(120);
 
-  return <Gallery items={rows.map((r) => publicGeneration(r.g, r.username))} isAdmin={user.role === "admin"} showAll={showAll} />;
+  return (
+    <PageContainer>
+      <Gallery items={rows.map((r) => publicGeneration(r.g, r.username))} isAdmin={user.role === "admin"} showAll={showAll} />
+    </PageContainer>
+  );
 }

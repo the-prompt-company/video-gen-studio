@@ -1,7 +1,7 @@
 import { getCurrentUser } from "@/lib/auth";
 import { usageFor } from "@/lib/stats";
 import { usd } from "@/lib/format";
-import { Stat } from "@/components/ui";
+import { Stat, PageContainer } from "@/components/ui";
 import { AdminPanels } from "@/components/admin/AdminPanels";
 
 export const metadata = { title: "어드민" };
@@ -12,7 +12,7 @@ export default async function AdminPage() {
   const all = await usageFor(null);
 
   return (
-    <div className="space-y-6">
+    <PageContainer className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">어드민</h1>
         <p className="mt-1 text-sm text-muted">사용자와 API 키 할당, 모델 단가, 전체 로그.</p>
@@ -24,6 +24,6 @@ export default async function AdminPage() {
         <Stat label="모델 수" value={all.byModel.length} sub="사용된 모델" />
       </div>
       <AdminPanels adminId={user.id} />
-    </div>
+    </PageContainer>
   );
 }

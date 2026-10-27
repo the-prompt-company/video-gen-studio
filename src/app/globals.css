@@ -1,20 +1,25 @@
 @import "tailwindcss";
+/* Keep Tailwind's source scan (and Turbopack's file watcher) out of design artifacts. */
+@source not "../../.impeccable";
 
+/* World: full-bleed vertical media surface. Media owns the stage; the interface
+   is white glyphs on a void. No accent hue: the primary action is white fill. */
 :root {
-  --background: #09090b;
-  --surface: #121215;
-  --surface-2: #19191e;
-  --border: #27272a;
+  --background: #0a0a0a; /* void */
+  --surface: #121316;    /* ink */
+  --surface-2: #1e2026;  /* slate */
+  --border: #2a2f39;     /* mist */
 
   /* Text tiers. Every tier clears 4.5:1 on every surface above. */
-  --foreground: #fafafa;   /* primary: 18.6:1 on surface */
-  --foreground-2: #d4d4d8; /* secondary: 13.3:1 */
-  --muted: #a1a1aa;        /* labels, descriptions: 7.6:1 */
-  --subtle: #8a8a93;       /* hints, meta, placeholders: 5.5:1 */
+  --foreground: #ffffff;
+  --foreground-2: #d4d6db;
+  --muted: #9aa3ad;   /* 7.9:1 on void, 6.6:1 on ink */
+  --subtle: #838c98;  /* 5.9:1 on void, 4.8:1 on slate */
+  --sand: #c7b9a6;    /* warm numerals: cost, length, counters */
 
-  --accent: #7c3aed;
-  --accent-hover: #8b5cf6;
-  --accent-soft: #c4b5fd;
+  --accent: #ffffff;
+  --accent-hover: #e4e4e7;
+  --accent-soft: #c7b9a6;
 }
 
 @theme inline {
@@ -26,65 +31,88 @@
   --color-foreground-2: var(--foreground-2);
   --color-muted: var(--muted);
   --color-subtle: var(--subtle);
+  --color-sand: var(--sand);
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
   --color-accent-soft: var(--accent-soft);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-inter);
+  --font-display: var(--font-bebas);
 }
 
 html {
   color-scheme: dark;
-  accent-color: var(--accent);
+  accent-color: var(--foreground);
   scrollbar-color: var(--border) transparent;
+  scrollbar-width: thin;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  caret-color: var(--accent);
+  caret-color: var(--foreground);
   font-family: var(--font-sans), ui-sans-serif, system-ui, -apple-system, "Apple SD Gothic Neo",
-    "Noto Sans KR", sans-serif;
+    "Noto Sans KR", "Malgun Gothic", sans-serif;
+}
+
+.font-display {
+  font-family: var(--font-display), "Arial Narrow", Impact, sans-serif;
+  letter-spacing: 0.06em;
 }
 
 ::selection {
-  background: color-mix(in oklab, var(--accent) 45%, transparent);
+  background: rgba(255, 255, 255, 0.28);
   color: var(--foreground);
 }
 
-/* One focus treatment for every control; components only remove the default outline
-   where they draw this ring themselves. */
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--foreground);
   outline-offset: 2px;
 }
 
+/* The stage: one item per snap, the next one peeking below. */
+.feed {
+  scroll-snap-type: y mandatory;
+  overscroll-behavior: contain;
+  scroll-behavior: smooth;
+}
+.feed > * {
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+.scrim {
+  background: linear-gradient(180deg, rgba(10, 10, 10, 0) 0%, rgba(10, 10, 10, 0.55) 40%, rgba(10, 10, 10, 0.94) 100%);
+}
+.scrim-top {
+  background: linear-gradient(180deg, rgba(10, 10, 10, 0.9) 0%, rgba(10, 10, 10, 0) 100%);
+}
 
-
-@keyframes shimmer {
+/* Indeterminate progress line: no ETA from the provider, so the line travels instead of filling. */
+@keyframes travel {
   0% {
-    background-position: -200% 0;
+    transform: translateX(-100%);
   }
   100% {
-    background-position: 200% 0;
+    transform: translateX(400%);
   }
 }
-.shimmer {
-  background: linear-gradient(90deg, var(--surface-2) 25%, #26262c 50%, var(--surface-2) 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.6s linear infinite;
+.travel {
+  animation: travel 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 
-/* Range: the native track is 16px tall; pad the element so the touch target reaches 44px. */
 input[type="range"] {
   height: 2.75rem;
   cursor: pointer;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .shimmer {
+  .feed {
+    scroll-behavior: auto;
+  }
+  .travel {
     animation: none;
-    background: var(--surface-2);
+    transform: none;
+    width: 100%;
+    opacity: 0.5;
   }
   .animate-pulse {
     animation: none;

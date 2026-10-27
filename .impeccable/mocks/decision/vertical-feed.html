@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>Video Gen Studio · 플레이그라운드</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#000;color:#fff;font-family:"Noto Sans KR",sans-serif;font-size:13px}
+.frame{width:1440px;height:900px;overflow:hidden;position:relative;background:#000}
+.bebas{font-family:"Bebas Neue",sans-serif;letter-spacing:.05em}
+nav{height:44px;display:flex;align-items:center;gap:28px;padding:0 20px;border-bottom:1px solid #222}
+nav .wm{font-family:"Bebas Neue",sans-serif;font-size:26px;letter-spacing:.06em}
+nav a{color:#9ca3af;text-decoration:none;font-size:13px}
+nav a.on{color:#fff}
+nav .user{margin-left:auto;display:flex;gap:14px;align-items:center;color:#9ca3af;font-size:12px}
+nav button{background:none;border:1px solid #333;color:#fff;font:inherit;font-size:12px;padding:4px 12px;border-radius:999px}
+main{display:grid;grid-template-columns:576px 1fr;height:856px}
+.drawer{border-right:1px solid #222;padding:18px 20px;display:flex;flex-direction:column;gap:14px;position:relative}
+.toggle{position:absolute;right:-12px;top:20px;width:24px;height:24px;border-radius:50%;border:1px solid #333;background:#000;color:#fff;font-size:12px;display:grid;place-items:center}
+.lab{font-size:11px;color:#9ca3af;letter-spacing:.08em;margin-bottom:6px}
+textarea,input,select{width:100%;background:#000;border:1px solid #333;color:#fff;font:inherit;padding:8px 10px;border-radius:6px}
+textarea{height:66px;resize:none;line-height:1.5}
+.refs{display:flex;gap:10px;align-items:flex-start}
+.refs .note{font-size:12px;color:#9ca3af;align-self:flex-end}
+.p169{aspect-ratio:16/9;width:120px;background:#1a1a1a;border:1px solid #333;border-radius:6px;display:grid;place-items:center;font-family:"Bebas Neue",sans-serif;font-size:22px}
+.models{display:flex;gap:8px}
+.chip{flex:1;border:1px solid #333;border-radius:8px;padding:8px 10px;display:grid;gap:2px;font-size:12px;color:#9ca3af}
+.chip b{color:#fff;font-size:13px;font-weight:500}
+.chip.on{background:#fff;color:#555;border-color:#fff}
+.chip.on b{color:#000}
+.params{display:grid;grid-template-columns:1fr 1fr;gap:8px 16px}
+.params label{display:grid;gap:3px;font-size:12px;color:#9ca3af}
+input[type=range]{accent-color:#fff;padding:0;border:0;height:26px}
+.foot{display:flex;justify-content:space-between;align-items:center;color:#9ca3af}
+.foot b{color:#fff}
+.btn{background:#fff;color:#000;border:0;border-radius:999px;font:inherit;font-weight:700;font-size:14px;padding:10px 26px}
+.recent{margin-top:auto;border-top:1px solid #222;padding-top:12px}
+.strip{display:flex;gap:14px}
+.mini{width:72px}
+.mini .f{aspect-ratio:9/16;width:72px;background:linear-gradient(180deg,#2c2c2c,#101010);border-radius:6px;border:1px solid #222}
+.mini .f.fail{background:#0a0a0a;border-style:dashed}
+.mini .f.wait{background:#111}
+.mini div{font-size:11px;color:#9ca3af;margin-top:4px;line-height:1.35}
+.mini b{color:#fff;font-weight:500;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.feed{position:relative}
+.media{position:absolute;left:174px;top:16px;width:440px;height:760px;border-radius:12px;overflow:hidden;background:linear-gradient(160deg,#1b2430 0%,#0c0f14 55%,#1a1419 100%)}
+.spin{position:absolute;left:192px;top:330px;width:56px;height:56px;border-radius:50%;border:2px solid #fff;border-top-color:transparent}
+.scrim{position:absolute;inset:auto 0 0 0;padding:140px 18px 20px;background:linear-gradient(180deg,transparent,rgba(0,0,0,.88))}
+.author{font-size:12px;color:#9ca3af;margin-bottom:6px}
+.state{font-size:14px;font-weight:500;margin-bottom:6px}
+.cap{font-size:14px;line-height:1.6;margin:0}
+.prog{position:absolute;left:0;bottom:0;height:2px;width:38%;background:#fff}
+.next{position:absolute;left:174px;top:788px;width:440px;height:200px;border-radius:12px;background:linear-gradient(180deg,#1f2a22,#0a0c0a);padding:14px 18px;font-size:13px;color:#9ca3af}
+.next b{color:#fff;font-weight:500}
+.rail{position:absolute;left:638px;top:368px;display:grid;gap:14px;justify-items:center}
+.rail div{display:grid;justify-items:center;gap:4px}
+.rail button{width:52px;height:52px;border-radius:50%;border:1.5px solid #fff;background:none;color:#fff;font-size:20px;display:grid;place-items:center;padding:0}
+.rail button.on{background:#fff;color:#000}
+.rail .c{font-family:"Bebas Neue",sans-serif;font-size:18px;letter-spacing:.06em;line-height:1}
+.rail .l{font-size:11px;color:#9ca3af;line-height:1}
+</style>
+</head>
+<body style="margin:0">
+<div class="frame">
+<nav>
+  <span class="wm">Video Gen Studio</span>
+  <a class="on" href="#">플레이그라운드</a><a href="#">갤러리</a><a href="#">대시보드</a>
+  <div class="user"><span>jeongjun@the-prompt.me</span><button>로그아웃</button></div>
+</nav>
+<main>
+  <section class="drawer">
+    <div class="toggle">‹</div>
+    <div>
+      <div class="lab">1 · 프롬프트와 레퍼런스</div>
+      <textarea>비 내리는 서울 밤거리, 네온 간판이 젖은 아스팔트에 비치고, 카메라가 천천히 앞으로 돌리한다</textarea>
+    </div>
+    <div class="refs">
+      <div><div class="lab">이미지 레퍼런스 2/2</div><div style="display:flex;gap:8px"><div class="p169">1</div><div class="p169" style="background:#222a33">2</div></div></div>
+      <div class="note">영상 레퍼런스 · 이 모델은 미지원</div>
+    </div>
+    <div>
+      <div class="lab">2 · 모델과 하이퍼파라미터</div>
+      <div class="models">
+        <div class="chip on"><b>Kling 3.0 Standard</b><span>Kling · $0.045/s</span></div>
+        <div class="chip"><b>Seedance 2.5</b><span>ByteDance · $0.060/s</span></div>
+        <div class="chip"><b>Wan 3.0</b><span>Alibaba · $0.038/s</span></div>
+      </div>
+    </div>
+    <div class="params">
+      <label>길이(초) · 5<input type="range" min="3" max="10" value="5"></label>
+      <label>사운드<select><option>off</option><option>on</option></select></label>
+      <label>CFG scale · 0.5<input type="range" min="0" max="1" step="0.1" value="0.5"></label>
+      <label>네거티브 프롬프트<input type="text" placeholder="흐릿함, 왜곡된 글자"></label>
+    </div>
+    <div class="foot"><span>예상 비용 <b>$0.23</b> · 5s × $0.045/s</span><button class="btn">생성하기</button></div>
+    <div class="recent">
+      <div class="lab">최근 생성</div>
+      <div class="strip">
+        <div class="mini"><div class="f"></div><div><b>노을 지는 해변, 드론 샷</b>완료 · $0.23</div></div>
+        <div class="mini"><div class="f"></div><div><b>스튜디오 제품 턴테이블</b>완료 · $0.30</div></div>
+        <div class="mini"><div class="f fail"></div><div><b>군중 속 클로즈업</b>실패 · $0.00</div></div>
+        <div class="mini"><div class="f wait"></div><div><b>눈 내리는 산장, 타임랩스</b>대기 · $0.19</div></div>
+      </div>
+    </div>
+  </section>
+  <section class="feed">
+    <div class="media">
+      <div class="spin"></div>
+      <div class="scrim">
+        <div class="author">Kling 3.0 Standard · $0.23 · 5s</div>
+        <div class="state">생성 중 · 약 40초 남음</div>
+        <p class="cap">비 내리는 서울 밤거리, 네온 간판이 젖은 아스팔트에 비치고, 카메라가 천천히 앞으로 돌리한다</p>
+      </div>
+      <div class="prog"></div>
+    </div>
+    <div class="rail">
+      <div><button class="on">▶</button><span class="c">$0.23</span><span class="l">생성</span></div>
+      <div><button>✕</button><span class="c">40S</span><span class="l">취소</span></div>
+      <div><button>↓</button><span class="c">MP4</span><span class="l">다운로드</span></div>
+      <div><button>▦</button><span class="c">128</span><span class="l">갤러리</span></div>
+      <div><button>↻</button><span class="c">×3</span><span class="l">다시</span></div>
+    </div>
+    <div class="next"><b>눈 내리는 산장, 타임랩스</b> · 대기 · Kling 3.0 Standard · $0.19</div>
+  </section>
+</main>
+</div>
+</body>
+</html>

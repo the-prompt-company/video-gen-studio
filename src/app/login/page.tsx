@@ -8,8 +8,7 @@ export default function LoginPage() {
   return (
     <main className="flex flex-1 items-center justify-center px-4">
       <div className="w-full max-w-sm">
-        <Link href="/" className="mb-8 flex items-center gap-2 font-semibold tracking-tight">
-          <span aria-hidden className="inline-block h-2.5 w-2.5 rounded-sm bg-accent" />
+        <Link href="/" className="font-display mb-8 inline-block text-[22px] leading-none">
           Video Gen Studio
         </Link>
         <h1 className="text-2xl font-semibold">로그인</h1>

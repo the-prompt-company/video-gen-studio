@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>Video Gen Studio · 플레이그라운드</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#0b0f14;color:#f7f7f2;font-family:"IBM Plex Sans KR",sans-serif;font-size:13px;font-variant-numeric:tabular-nums}
+.frame{width:1440px;height:900px;overflow:hidden;position:relative;background:#0b0f14}
+.mono{font-family:"IBM Plex Mono",monospace}
+.disp{font-family:"Barlow Condensed",sans-serif;text-transform:uppercase;letter-spacing:.08em;font-weight:700}
+nav{height:56px;display:flex;align-items:center;gap:32px;padding:0 32px;border-bottom:1px solid #2a323c}
+nav .wm{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:26px;letter-spacing:.06em;text-transform:uppercase}
+nav a{color:#f7f7f2;text-decoration:none;font-size:14px;opacity:.65}
+nav a.on{opacity:1;border-bottom:2px solid #f7f7f2;padding-bottom:2px}
+nav .user{margin-left:auto;display:flex;gap:16px;align-items:center;font-size:13px}
+nav button{background:none;border:1px solid #2a323c;color:#f7f7f2;padding:6px 12px;font:inherit}
+main{display:grid;grid-template-columns:55% 45%;height:844px}
+.pass{padding:24px 28px;border-right:1px solid #2a323c;display:grid;grid-template-columns:1fr 112px;grid-template-rows:auto 1fr;background:#10151b}
+.pass-h{grid-column:1/-1;display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid #2a323c;padding-bottom:10px;margin-bottom:12px}
+.pass-h .disp{font-size:32px}
+.segs{border-right:2px dashed #2a323c;padding-right:20px;display:flex;flex-direction:column}
+.seg{padding:12px 0 16px;border-bottom:2px dashed #2a323c}
+.seg:last-child{border-bottom:0}
+.lab{font-size:11px;letter-spacing:.14em;text-transform:uppercase;opacity:.6;margin-bottom:8px;font-family:"IBM Plex Mono",monospace}
+textarea,input,select{width:100%;background:#0b0f14;border:1px solid #2a323c;color:#f7f7f2;font:inherit;padding:8px 10px;border-radius:0}
+textarea{height:70px;resize:none;line-height:1.5}
+.refs{display:flex;gap:12px;margin-top:12px;align-items:flex-start}
+.refs .note{font-size:12px;opacity:.6;align-self:flex-end}
+.plate{aspect-ratio:16/9;width:150px;background:#1a222c;border:1px solid #2a323c;display:grid;place-items:center;font-family:"IBM Plex Mono",monospace;font-size:20px}
+.models{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.card{border:1px solid #2a323c;padding:10px 12px;display:grid;gap:3px}
+.card.on{background:#f7f7f2;color:#0b0f14}
+.card b{font-size:15px;font-weight:600}
+.card span{font-size:12px;opacity:.7}
+.params{display:grid;grid-template-columns:1fr 1fr;gap:10px 20px;margin-top:14px}
+.params label{display:grid;gap:4px;font-size:12px;opacity:.9}
+input[type=range]{accent-color:#f7f7f2;padding:0;border:0;height:30px}
+.foot{display:flex;justify-content:space-between;align-items:center;margin-top:16px}
+.btn{background:#f7f7f2;color:#000;border:0;font:inherit;font-weight:600;font-size:16px;padding:12px 36px}
+.stub{padding-left:16px;display:flex;flex-direction:column;justify-content:space-between;align-items:center}
+.seq{writing-mode:vertical-rl;font-size:22px;letter-spacing:.24em;font-family:"Barlow Condensed",sans-serif;text-transform:uppercase;font-weight:600}
+.bar{width:88px;height:72px;background:repeating-linear-gradient(90deg,#f7f7f2 0 2px,transparent 2px 4px,#f7f7f2 4px 5px,transparent 5px 9px,#f7f7f2 9px 12px,transparent 12px 14px,#f7f7f2 14px 15px,transparent 15px 18px)}
+.board{display:flex;flex-direction:column;background:#06090d}
+.board-h{display:flex;justify-content:space-between;align-items:baseline;padding:18px 24px 12px;border-bottom:1px solid #2a323c}
+.board-h .disp{font-size:32px}
+.now{background:#ffb400;color:#000;display:grid;grid-template-columns:240px 1fr;gap:20px;padding:20px 24px;align-items:center}
+.now .plate{width:240px;background:#000;color:#ffb400;border:0;font-size:12px;font-family:"IBM Plex Sans KR",sans-serif}
+.now .big{font-family:"Barlow Condensed",sans-serif;font-size:76px;font-weight:700;line-height:.95;letter-spacing:.02em}
+.now p{margin:6px 0 0;font-size:13px}
+.grid{display:grid;grid-template-columns:72px 1fr 128px 72px 84px;padding:0 24px}
+.grid>div{padding:16px 8px;border-bottom:1px solid #2a323c}
+.grid .hd{font-family:"Barlow Condensed",sans-serif;text-transform:uppercase;letter-spacing:.14em;font-size:14px;opacity:.6;padding:14px 8px 8px}
+.ok{color:#1fb57a}.dim{opacity:.5}.r{text-align:right}
+</style>
+</head>
+<body style="margin:0">
+<div class="frame">
+<nav>
+  <span class="wm">Video Gen Studio</span>
+  <a class="on" href="#">플레이그라운드</a><a href="#">갤러리</a><a href="#">대시보드</a>
+  <div class="user"><span>jeongjun@the-prompt.me</span><button>로그아웃</button></div>
+</nav>
+<main>
+  <section class="pass">
+    <div class="pass-h"><span class="disp">Playground · Boarding Pass</span><span class="mono">HIGGSFIELD · 2026-10-27 · 14:07</span></div>
+    <div class="segs">
+      <div class="seg">
+        <div class="lab">1 · 프롬프트와 레퍼런스</div>
+        <textarea>비 내리는 서울 밤거리, 네온 간판이 젖은 아스팔트에 비치고, 카메라가 천천히 앞으로 돌리한다</textarea>
+        <div class="refs">
+          <div><div class="lab">이미지 레퍼런스 2/2</div><div style="display:flex;gap:8px"><div class="plate">1</div><div class="plate" style="background:#243040">2</div></div></div>
+          <div class="note">영상 레퍼런스 · 이 모델은 미지원</div>
+        </div>
+      </div>
+      <div class="seg">
+        <div class="lab">2 · 모델과 하이퍼파라미터</div>
+        <div class="models">
+          <div class="card on"><b>Kling 3.0 Standard</b><span>Kling</span><span class="mono">$0.045/s</span></div>
+          <div class="card"><b>Seedance 2.5</b><span>ByteDance</span><span class="mono">$0.060/s</span></div>
+          <div class="card"><b>Wan 3.0</b><span>Alibaba</span><span class="mono">$0.038/s</span></div>
+        </div>
+        <div class="params">
+          <label>길이(초) · <span class="mono">5</span><input type="range" min="3" max="10" value="5"></label>
+          <label>사운드<select><option>off</option><option>on</option></select></label>
+          <label>CFG scale · <span class="mono">0.5</span><input type="range" min="0" max="1" step="0.1" value="0.5"></label>
+          <label>네거티브 프롬프트<input type="text" placeholder="흐릿함, 왜곡된 글자"></label>
+        </div>
+        <div class="foot"><span class="mono">예상 비용 <b>$0.23</b> · 5s × $0.045/s</span><button class="btn">생성하기</button></div>
+      </div>
+    </div>
+    <div class="stub"><span class="seq">SEQ 0417</span><div class="bar"></div></div>
+  </section>
+  <aside class="board">
+    <div class="board-h"><span class="disp">Departures · 최근 생성</span><span class="mono">14:07:22</span></div>
+    <div class="now">
+      <div class="plate">생성 중</div>
+      <div><div class="big">40s</div><p>생성 중 · 약 40초 남음</p><p>비 내리는 서울 밤거리, 네온 간판이… · Kling 3.0 Standard · <span class="mono">$0.23</span></p></div>
+    </div>
+    <div class="grid">
+      <div class="hd">시간</div><div class="hd">프롬프트</div><div class="hd">모델</div><div class="hd">상태</div><div class="hd r">비용</div>
+      <div class="mono">13:48</div><div>노을 지는 해변, 드론 샷</div><div>Kling 3.0</div><div class="ok">완료</div><div class="mono r">$0.23</div>
+      <div class="mono">13:31</div><div>스튜디오 제품 턴테이블</div><div>Seedance 2.5</div><div class="ok">완료</div><div class="mono r">$0.30</div>
+      <div class="mono">13:20</div><div class="dim">군중 속 클로즈업</div><div class="dim">Wan 3.0</div><div class="dim">실패</div><div class="mono r dim">$0.00</div>
+      <div class="mono">13:12</div><div>눈 내리는 산장, 타임랩스</div><div>Kling 3.0</div><div class="dim">대기</div><div class="mono r">$0.19</div>
+    </div>
+  </aside>
+</main>
+</div>
+</body>
+</html>

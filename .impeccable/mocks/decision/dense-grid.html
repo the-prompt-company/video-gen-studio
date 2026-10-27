@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><title>Video Gen Studio · dense-grid</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&family=Zen+Kaku+Gothic+New:wght@700&display=swap">
+<style>
+*{box-sizing:border-box}
+body{margin:0;font:12px/1.35 "Noto Sans KR",sans-serif;color:#111;background:#fff}
+.frame{width:1440px;height:900px;overflow:hidden;position:relative;background:#fff}
+.nav1{height:36px;display:flex;align-items:center;gap:10px;padding:0 10px;border-bottom:1px solid #e5e7eb}
+.wm{font:700 19px "Zen Kaku Gothic New","Noto Sans KR",sans-serif;letter-spacing:-.02em;margin-right:4px}
+.nav2{height:30px;display:flex;align-items:flex-end;gap:2px;padding:0 10px;border-bottom:2px solid #111}
+.tab{padding:5px 14px;border:1px solid #e5e7eb;border-bottom:0;background:#f3f4f6;font-weight:700}
+.tab.on{background:#111;color:#fff;border-color:#111}
+.grid{display:grid;grid-template-columns:200px 1fr 320px;gap:6px;padding:6px;height:834px}
+.col{display:flex;flex-direction:column;gap:6px}
+.center{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;align-content:start}
+.s2{grid-column:span 2}.s3{grid-column:span 3}.s4{grid-column:span 4}.s6{grid-column:span 6}
+.m{border:1px solid #e5e7eb;background:#fff;display:flex;flex-direction:column}
+.m h3{margin:0;font-size:12px;font-weight:700;background:#f3f4f6;border-left:3px solid #d7261e;border-bottom:1px solid #e5e7eb;padding:4px 8px;display:flex;justify-content:space-between;align-items:center}
+.b{padding:6px 8px;flex:1}
+.f{border-top:1px solid #e5e7eb;padding:3px 8px;font-size:11px;color:#6b7280;display:flex;gap:10px}
+.f a{color:#6b7280;text-decoration:underline}
+.bd{display:inline-block;border:1px solid #111;font-size:10px;line-height:14px;padding:0 4px;font-weight:700;white-space:nowrap}
+.bd.red{border-color:#d7261e;color:#d7261e}.bd.grey{border-color:#9ca3af;color:#6b7280}.bd.fill{background:#d7261e;border-color:#d7261e;color:#fff}
+.row{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid #e5e7eb;margin:0}
+.row:last-child{border-bottom:0}.g{flex:1}
+.price{color:#d7261e;font-weight:700;white-space:nowrap}
+.tot{color:#d7261e;font-weight:700;font-size:20px;line-height:1.1}
+.plate{background:#d1d5db;aspect-ratio:16/9;position:relative;border:1px solid #e5e7eb}
+.plate b{position:absolute;left:5px;top:2px;font-size:11px}
+.pl{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:4px}
+textarea,input[type=text],select{width:100%;border:1px solid #e5e7eb;padding:4px 6px;font:12px/1.4 "Noto Sans KR",sans-serif;background:#fff;color:#111}
+textarea{height:150px;resize:none;display:block}
+.btn{border:1px solid #111;background:#fff;font:700 11px "Noto Sans KR",sans-serif;padding:3px 8px;white-space:nowrap}
+.btn.red{background:#d7261e;border-color:#d7261e;color:#fff;width:100%;font-size:16px;padding:11px;letter-spacing:.1em}
+table{width:100%;border-collapse:collapse}
+td{border-bottom:1px solid #e5e7eb;padding:4px 0;vertical-align:middle}
+tr:last-child td{border-bottom:0}
+td:first-child{width:38%;color:#4b5563;font-weight:700;padding-right:6px}
+.rg{display:flex;gap:8px;align-items:center}.rg input{flex:1;accent-color:#d7261e;margin:0}
+.bar{height:4px;background:#e5e7eb;margin-top:6px}.bar i{display:block;height:4px;background:#d7261e}
+.six{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
+.mut{color:#6b7280;font-size:11px}
+</style></head>
+<body style="margin:0"><div class="frame">
+<div class="nav1"><span class="wm">Video Gen Studio</span><span class="bd red">BETA</span><span class="mut">Higgsfield 연동 · 팀 워크스페이스</span><span style="margin-left:auto">jeongjun@the-prompt.me</span><span class="bd">ADMIN</span><button class="btn">로그아웃</button></div>
+<div class="nav2"><span class="tab on">플레이그라운드</span><span class="tab">갤러리</span><span class="tab">대시보드</span><span class="tab">어드민</span><span class="mut" style="margin-left:auto;padding-bottom:5px">2026.10.27 · 서울</span></div>
+<div class="grid">
+ <div class="col">
+  <div class="m"><h3>모델 <span class="bd">3</span></h3><div class="b">
+   <div class="row"><b>Kling 3.0 Standard</b><span class="price">$0.045/s</span></div>
+   <div class="row"><span>Seedance 2.5</span><span class="price">$0.060/s</span></div>
+   <div class="row"><span>Wan 3.0</span><span class="price">$0.038/s</span></div>
+  </div><div class="f"><a>전체 보기</a><a>요금표</a></div></div>
+  <div class="m"><h3>최근 생성 <span class="bd">4</span></h3><div class="b">
+   <div class="row"><span class="bd">완료</span><span class="g">노을 지는 해변, 드론 샷</span><span class="price">$0.23</span></div>
+   <div class="row"><span class="bd">완료</span><span class="g">스튜디오 제품 턴테이블</span><span class="price">$0.30</span></div>
+   <div class="row"><span class="bd red">실패</span><span class="g">군중 속 클로즈업</span><span class="price">$0.00</span></div>
+   <div class="row"><span class="bd grey">대기</span><span class="g">눈 내리는 산장, 타임랩스</span><span class="price">$0.19</span></div>
+  </div><div class="f"><a>갤러리</a><a>재시도</a></div></div>
+  <div class="m"><h3>사용량 이번 달</h3><div class="b"><div class="tot">$12.40</div><div class="bar"><i style="width:31%"></i></div><div class="row"><span class="mut">한도 $40.00</span><span class="mut">31%</span></div><div class="row"><span class="mut">생성 수</span><b>54</b></div><div class="row"><span class="mut">실패율</span><b>5.6%</b></div></div></div>
+  <div class="m"><h3>공지 <span class="bd red">NEW</span></h3><div class="b">Seedance 2.5 · 10/30 02:00 점검<br><span class="mut">Wan 3.0 영상 레퍼런스 11월 지원 예정</span></div></div>
+  <div class="m"><h3>태그</h3><div class="b" style="display:flex;flex-wrap:wrap;gap:4px"><span class="bd grey">도시</span><span class="bd grey">야경</span><span class="bd grey">드론</span><span class="bd grey">제품</span><span class="bd grey">타임랩스</span><span class="bd grey">비</span></div></div>
+ </div>
+ <div class="center">
+  <div class="m s3"><h3>1 · 프롬프트와 레퍼런스 <span class="bd grey">KO</span></h3><div class="b"><textarea>비 내리는 서울 밤거리, 네온 간판이 젖은 아스팔트에 비치고, 카메라가 천천히 앞으로 돌리한다</textarea></div><div class="f"><a>템플릿</a><a>이전 프롬프트</a><a>번역</a><span style="margin-left:auto">58 / 500</span></div></div>
+  <div class="m s3"><h3>1 · 레퍼런스 <span class="bd">이미지 레퍼런스 2/2</span></h3><div class="b"><div class="pl"><div class="plate"><b>1</b></div><div class="plate"><b>2</b></div></div><div class="row"><span>영상 레퍼런스 · <span class="mut">이 모델은 미지원</span></span><button class="btn">이미지 업로드</button></div></div><div class="f"><a>순서 변경</a><a>모두 삭제</a></div></div>
+  <div class="m s3"><h3>2 · 모델과 하이퍼파라미터 <span class="bd">모델 선택</span></h3><div class="b">
+   <label class="row"><input type="radio" name="m" checked style="margin:0;accent-color:#d7261e"><span class="g"><b>Kling 3.0 Standard</b> · Kling</span><span class="price">$0.045/s</span><span class="bd fill">선택</span></label>
+   <label class="row"><input type="radio" name="m" style="margin:0"><span class="g"><b>Seedance 2.5</b> · ByteDance</span><span class="price">$0.060/s</span><span class="bd red">NEW</span></label>
+   <label class="row"><input type="radio" name="m" style="margin:0"><span class="g"><b>Wan 3.0</b> · Alibaba</span><span class="price">$0.038/s</span><span class="bd grey">저가</span></label>
+  </div><div class="f"><a>모델 비교</a><a>요금표</a></div></div>
+  <div class="m s3"><h3>2 · 파라미터</h3><div class="b"><table>
+   <tr><td>길이(초)</td><td><div class="rg"><input type="range" min="1" max="10" value="5"><b>5</b></div></td></tr>
+   <tr><td>사운드</td><td><select><option>off</option><option>on</option></select></td></tr>
+   <tr><td>CFG scale</td><td><div class="rg"><input type="range" min="0" max="1" step="0.1" value="0.5"><b>0.5</b></div></td></tr>
+   <tr><td>네거티브 프롬프트</td><td><input type="text" placeholder="제외할 요소 (예: 텍스트, 워터마크)"></td></tr>
+  </table></div><div class="f"><a>기본값 복원</a><a>프리셋 저장</a></div></div>
+  <div class="m s2"><h3>출력</h3><div class="b"><table><tr><td>비율</td><td><select><option>16:9</option><option>9:16</option></select></td></tr><tr><td>해상도</td><td><select><option>1080p</option><option>720p</option></select></td></tr></table></div></div>
+  <div class="m s2"><h3>시드</h3><div class="b"><table><tr><td>고정</td><td><input type="checkbox" style="margin:0"> <span class="mut">재현 가능</span></td></tr><tr><td>값</td><td><input type="text" value="랜덤"></td></tr></table></div></div>
+  <div class="m s2"><h3>작업 큐 <span class="bd">2</span></h3><div class="b"><div class="row"><span class="bd fill">생성 중</span><span class="g">비 내리는 서울 밤거리</span></div><div class="row"><span class="bd grey">대기</span><span class="g">눈 내리는 산장, 타임랩스</span></div></div></div>
+  <div class="m s4"><h3>생성 로그</h3><div class="b"><table>
+   <tr><td>14:02:11</td><td>Kling 3.0 Standard 요청 전송 · job_8f21</td></tr><tr><td>14:02:13</td><td>이미지 레퍼런스 2장 업로드 완료</td></tr>
+   <tr><td>14:02:40</td><td>렌더링 55% · 예상 40초</td></tr><tr><td class="mut">13:51:07</td><td class="mut">군중 속 클로즈업 · 실패 (콘텐츠 정책)</td></tr>
+  </table></div><div class="f"><a>전체 로그</a></div></div>
+  <div class="m s2"><h3>단축키</h3><div class="b"><table><tr><td>⌘ ⏎</td><td>생성하기</td></tr><tr><td>⌘ K</td><td>모델 전환</td></tr><tr><td>⌘ U</td><td>레퍼런스 업로드</td></tr><tr><td>Esc</td><td>취소</td></tr></table></div></div>
+  <div class="m s6"><h3>갤러리 최근 <span class="bd">54</span></h3><div class="b six"><div class="plate"><b>노을 해변</b></div><div class="plate"><b>턴테이블</b></div><div class="plate"><b>산장</b></div><div class="plate"><b>도심 야경</b></div><div class="plate"><b>카페</b></div><div class="plate"><b>항구</b></div></div></div>
+ </div>
+ <div class="col">
+  <div class="m"><h3>비용</h3><div class="b"><table><tr><td>단가</td><td class="price">$0.045/s</td></tr><tr><td>길이</td><td>5s</td></tr><tr><td>예상 비용</td><td class="tot">$0.23</td></tr></table><div class="mut" style="margin-top:6px">예상 비용 $0.23 · 5s × $0.045/s</div></div><div class="f"><a>단가 안내</a><a>이번 달 사용량</a></div></div>
+  <button class="btn red">생성하기</button>
+  <div class="m"><h3>진행 상황 <span class="bd fill">생성 중</span></h3><div class="b"><div class="plate" style="background:#111"><b style="color:#fff">job_8f21</b></div><div class="row"><span>생성 중 · 약 40초 남음</span><span class="price">55%</span></div><div class="bar"><i style="width:55%"></i></div><div class="row"><span class="mut">Kling 3.0 Standard · 5s · 1080p</span></div></div><div class="f"><a>취소</a><a>알림 받기</a></div></div>
+  <div class="m"><h3>결과 메타</h3><div class="b"><table><tr><td>프롬프트</td><td>비 내리는 서울 밤거리…</td></tr><tr><td>레퍼런스</td><td>이미지 2 · 영상 0</td></tr><tr><td>CFG</td><td>0.5</td></tr><tr><td>사운드</td><td>off</td></tr></table></div><div class="f"><a>JSON 복사</a></div></div>
+ </div>
+</div></div></body></html>

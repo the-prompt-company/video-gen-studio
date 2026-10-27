@@ -1,11 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ModelSpec, ParamSpec } from "@/lib/catalog";
 import { defaultParams } from "@/lib/catalog";
 import type { PublicGeneration } from "@/lib/generations";
-import { usd, STATUS_LABEL } from "@/lib/format";
-import { Button, Card, ErrorText, Field, Input, Select, Textarea, Empty } from "@/components/ui";
+import { usd, STATUS_LABEL, shortModel } from "@/lib/format";
+import { Button, ErrorText, Field, Input, Select, Textarea } from "@/components/ui";
 import { StatusBadge } from "@/components/StatusBadge";
 
 type ModelWithPrice = ModelSpec & { pricePerSecUsd: number };
@@ -14,6 +15,8 @@ type Ref = { url: string; name: string; kind: "image" | "video"; local?: string 
 const SMALL = 4 * 1024 * 1024;
 const MAX_IMAGES = 6;
 const MAX_VIDEOS = 3;
+const LIVE = new Set(["queued", "in_progress"]);
+const FEED_LIMIT = 12;
 
 async function uploadFile(file: File, largeUploads: boolean): Promise<string> {
   if (file.size <= SMALL) {
@@ -26,12 +29,17 @@ async function uploadFile(file: File, largeUploads: boolean): Promise<string> {
   }
   if (!largeUploads) throw new Error("4 MB를 넘는 파일은 Blob 스토어가 연결돼야 올릴 수 있습니다");
   const { upload: blobUpload } = await import("@vercel/blob/client");
-  const blob = await blobUpload(`refs/${Date.now()}-${file.name}`, file, {
-    access: "public",
-    handleUploadUrl: "/api/uploads/blob",
-    multipart: true,
-  });
+  const blob = await blobUpload(`refs/${Date.now()}-${file.name}`, file, { access: "public", handleUploadUrl: "/api/uploads/blob", multipart: true });
   return blob.url;
+}
+
+function fmtElapsed(ms: number) {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+function prefersReducedMotion() {
+  return typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
 function ParamInput({ spec, value, onChange }: { spec: ParamSpec; value: unknown; onChange: (v: unknown) => void }) {
@@ -42,15 +50,7 @@ function ParamInput({ spec, value, onChange }: { spec: ParamSpec; value: unknown
       return (
         <Field label={spec.label} hint={isRange ? String(value) : `${spec.min}~${spec.max}`}>
           {isRange ? (
-            <input
-              type="range"
-              min={spec.min}
-              max={spec.max}
-              step={spec.type === "float" ? spec.step : 1}
-              value={Number(value)}
-              onChange={(e) => onChange(Number(e.target.value))}
-              className="w-full"
-            />
+            <input type="range" min={spec.min} max={spec.max} step={spec.type === "float" ? spec.step : 1} value={Number(value)} onChange={(e) => onChange(Number(e.target.value))} className="w-full" />
           ) : (
             <Input type="number" min={spec.min} max={spec.max} value={String(value)} onChange={(e) => onChange(e.target.value)} />
           )}
@@ -69,9 +69,7 @@ function ParamInput({ spec, value, onChange }: { spec: ParamSpec; value: unknown
         <Field label={spec.label}>
           <Select value={String(value)} onChange={(e) => onChange(e.target.value)}>
             {spec.options.map((o) => (
-              <option key={o} value={o}>
-                {o}
-              </option>
+              <option key={o} value={o}>{o}</option>
             ))}
           </Select>
         </Field>
@@ -85,6 +83,98 @@ function ParamInput({ spec, value, onChange }: { spec: ParamSpec; value: unknown
   }
 }
 
+/* Rail glyph: circular white-outline control with a display counter and a label. */
+function Glyph({ label, counter, icon, active, disabled, onClick, href, download }: { label: string; counter: string; icon: React.ReactNode; active?: boolean; disabled?: boolean; onClick?: () => void; href?: string; download?: boolean }) {
+  const cls = `grid h-13 w-13 place-items-center rounded-full border-[1.5px] transition focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
+    active ? "border-foreground bg-foreground text-background hover:bg-accent-hover" : "border-foreground/80 text-foreground hover:bg-white/15"
+  } ${disabled ? "cursor-not-allowed opacity-35" : ""}`;
+  const body = (
+    <>
+      <span aria-hidden className="h-5 w-5">{icon}</span>
+    </>
+  );
+  return (
+    <div className="flex flex-col items-center gap-1.5 text-center">
+      {href && !disabled ? (
+        download ? (
+          <a href={href} download target="_blank" rel="noreferrer" className={cls} aria-label={label}>{body}</a>
+        ) : (
+          <Link href={href} className={cls} aria-label={label}>{body}</Link>
+        )
+      ) : (
+        <button type="button" onClick={onClick} disabled={disabled} className={cls} aria-label={label}>{body}</button>
+      )}
+      <span className="font-display text-base leading-none text-sand">{counter}</span>
+      <span className="text-[11px] leading-none text-muted">{label}</span>
+    </div>
+  );
+}
+
+const I = {
+  play: <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5"><path d="M6 4.5v11l9-5.5z" /></svg>,
+  x: <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5"><path d="M5 5l10 10M15 5L5 15" /></svg>,
+  down: <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5"><path d="M10 3v11m0 0l-4-4m4 4l4-4M4 17h12" /></svg>,
+  grid: <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-5 w-5"><path d="M3.5 3.5h5v5h-5zM11.5 3.5h5v5h-5zM3.5 11.5h5v5h-5zM11.5 11.5h5v5h-5z" /></svg>,
+  redo: <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5"><path d="M4 10a6 6 0 1 1 1.8 4.3M4 6v4h4" /></svg>,
+};
+
+function FeedItem({ g, index, total, active, now }: { g: PublicGeneration; index: number; total: number; active: boolean; now: number }) {
+  const live = LIVE.has(g.status);
+  const started = new Date(g.createdAt).getTime();
+  const took = g.completedAt ? new Date(g.completedAt).getTime() - started : now - started;
+  const label = STATUS_LABEL[g.status] ?? g.status;
+  return (
+    <article data-id={g.id} aria-current={active ? "true" : undefined} aria-label={`${index + 1}번째 결과: ${label}`} className="relative h-[calc(100%_-_72px)] w-full overflow-hidden bg-surface">
+      {/* Peek strip: what shows when this item waits one snap below. */}
+      <div className="scrim-top absolute inset-x-0 top-0 z-10 flex h-[72px] items-start justify-between gap-4 px-5 pt-3 text-xs text-muted">
+        <span className="min-w-0 truncate">
+          <span className="font-display mr-2 text-sm text-sand">{String(index + 1).padStart(2, "0")} / {String(total).padStart(2, "0")}</span>
+          {g.prompt || "(프롬프트 없음)"}
+        </span>
+        <StatusBadge status={g.status} />
+      </div>
+
+      {g.status === "completed" && g.resultUrl ? (
+        <video src={g.resultUrl} controls={active} autoPlay={active} loop muted playsInline preload={active ? "auto" : "metadata"} className="h-full w-full object-contain" aria-label="생성된 영상" />
+      ) : (
+        <div className="flex h-full w-full flex-col items-center justify-center gap-3 px-6 text-center">
+          {live ? (
+            <>
+              <span aria-hidden className="h-14 w-14 animate-spin rounded-full border-2 border-foreground border-t-transparent [animation-duration:1.4s]" />
+              <span className="font-display text-5xl leading-none text-foreground" aria-live="polite">{fmtElapsed(took)}</span>
+              <span className="text-sm text-muted">{label} · 경과 시간</span>
+            </>
+          ) : (
+            <>
+              <span className="font-display text-5xl leading-none text-foreground-2">{label}</span>
+              <p className="max-w-md text-sm text-muted">{g.error ?? (g.status === "canceled" ? "취소된 생성입니다." : "결과 영상이 없습니다.")}</p>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Caption scrim */}
+      <div className={`scrim pointer-events-none absolute inset-x-0 bottom-0 z-10 px-5 pt-24 ${g.status === "completed" && active ? "pb-16" : "pb-5"}`}>
+        <div className="text-xs text-muted">
+          <span className="text-foreground-2">{shortModel(g.modelId)}</span>
+          <span className="font-display ml-2 text-sm text-sand">{g.durationS}S · {usd(g.costUsd)}</span>
+        </div>
+        <div className="mt-1 flex items-center gap-2 text-sm text-foreground">
+          <span className="font-medium">{label}</span>
+          {!live && g.completedAt && <span className="text-muted">· {fmtElapsed(took)} 걸림</span>}
+          {live && <span className="text-muted" aria-hidden>· {fmtElapsed(took)}</span>}
+        </div>
+        <p className="mt-1 line-clamp-2 max-w-2xl break-words text-sm leading-relaxed text-foreground-2">{g.prompt || "(프롬프트 없음)"}</p>
+        {live && (
+          <div className="mt-3 h-0.5 w-full overflow-hidden bg-white/15" role="progressbar" aria-label="생성 진행 중" aria-valuetext="진행률을 알 수 없음">
+            <div className="travel h-full w-1/4 bg-foreground" />
+          </div>
+        )}
+      </div>
+    </article>
+  );
+}
+
 export function Playground({ models, hasApiKey, largeUploads }: { models: ModelWithPrice[]; hasApiKey: boolean; largeUploads: boolean }) {
   const [modelId, setModelId] = useState(models[0]?.id ?? "");
   const model = useMemo(() => models.find((m) => m.id === modelId) ?? models[0], [models, modelId]);
@@ -94,45 +184,85 @@ export function Playground({ models, hasApiKey, largeUploads }: { models: ModelW
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [current, setCurrent] = useState<PublicGeneration | null>(null);
-  const [recent, setRecent] = useState<PublicGeneration[]>([]);
-  const pollRef = useRef<number | null>(null);
+
+  const [items, setItems] = useState<PublicGeneration[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  const feedRef = useRef<HTMLDivElement>(null);
+
+  function upsert(item: PublicGeneration) {
+    setItems((list) => (list.some((x) => x.id === item.id) ? list.map((x) => (x.id === item.id ? item : x)) : [item, ...list].slice(0, FEED_LIMIT)));
+  }
 
   useEffect(() => {
-    fetch("/api/generations?limit=8")
+    fetch(`/api/generations?limit=${FEED_LIMIT}`)
       .then((r) => r.json())
-      .then((b: { items?: PublicGeneration[] }) => setRecent(b.items ?? []))
-      .catch(() => {});
+      .then((b: { items?: PublicGeneration[] }) => {
+        setItems(b.items ?? []);
+        setActiveId(b.items?.[0]?.id ?? null);
+      })
+      .catch(() => {})
+      .finally(() => setLoaded(true));
   }, []);
 
-  // Poll the current generation with backoff (2s → ×1.5 → cap 10s), as Higgsfield recommends.
+  const liveIds = useMemo(() => items.filter((i) => LIVE.has(i.status)).map((i) => i.id), [items]);
+  const liveKey = liveIds.join(",");
+
+  // Poll every live item with backoff (2s → ×1.5 → cap 10s), as Higgsfield recommends.
   useEffect(() => {
-    if (!current || !["queued", "in_progress"].includes(current.status)) return;
+    if (!liveKey) return;
+    const ids = liveKey.split(",").map(Number);
     let delay = 2000;
     let stopped = false;
+    let t = 0;
     const tick = async () => {
       if (stopped) return;
-      try {
-        const res = await fetch(`/api/generations/${current.id}`, { cache: "no-store" });
-        const body = (await res.json()) as { item?: PublicGeneration; error?: string };
-        if (body.item) {
-          setCurrent(body.item);
-          setRecent((list) => [body.item!, ...list.filter((x) => x.id !== body.item!.id)].slice(0, 8));
-          if (!["queued", "in_progress"].includes(body.item.status)) return;
-        }
-      } catch {
-        /* retry */
-      }
+      await Promise.all(
+        ids.map(async (id) => {
+          try {
+            const res = await fetch(`/api/generations/${id}`, { cache: "no-store" });
+            const body = (await res.json()) as { item?: PublicGeneration };
+            if (body.item) upsert(body.item);
+          } catch {
+            /* retry on next tick */
+          }
+        }),
+      );
+      if (stopped) return;
       delay = Math.min(10000, delay * 1.5) + Math.random() * 500;
-      pollRef.current = window.setTimeout(tick, delay);
+      t = window.setTimeout(tick, delay);
     };
-    pollRef.current = window.setTimeout(tick, delay);
+    t = window.setTimeout(tick, delay);
     return () => {
       stopped = true;
-      if (pollRef.current) window.clearTimeout(pollRef.current);
+      window.clearTimeout(t);
     };
-  }, [current?.id, current?.status]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [liveKey]);
 
+  // Elapsed-time clock while anything is live.
+  useEffect(() => {
+    if (!liveKey) return;
+    const t = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(t);
+  }, [liveKey]);
+
+  // The item occupying the stage is the active one.
+  const idsKey = items.map((i) => i.id).join(",");
+  useEffect(() => {
+    const root = feedRef.current;
+    if (!root) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) if (e.isIntersecting) setActiveId((e.target as HTMLElement).dataset.id ?? null);
+      },
+      { root, threshold: 0.6 },
+    );
+    root.querySelectorAll<HTMLElement>("[data-id]").forEach((el) => io.observe(el));
+    return () => io.disconnect();
+  }, [idsKey]);
+
+  const active = items.find((i) => i.id === activeId) ?? items[0] ?? null;
   const images = refs.filter((r) => r.kind === "image");
   const videos = refs.filter((r) => r.kind === "video");
   const imageMax = model ? Math.min(MAX_IMAGES, model.images.max) : 0;
@@ -142,7 +272,7 @@ export function Playground({ models, hasApiKey, largeUploads }: { models: ModelW
 
   async function addFiles(files: FileList | null, kind: "image" | "video") {
     if (!files || !model) return;
-    const room = (kind === "image" ? imageMax - images.length : videoMax - videos.length);
+    const room = kind === "image" ? imageMax - images.length : videoMax - videos.length;
     const picked = Array.from(files).slice(0, Math.max(0, room));
     if (picked.length === 0) {
       setError(kind === "image" ? `이미지는 최대 ${imageMax}장` : videoMax === 0 ? "이 모델은 영상 레퍼런스를 받지 않습니다" : `영상은 최대 ${videoMax}개`);
@@ -170,18 +300,14 @@ export function Playground({ models, hasApiKey, largeUploads }: { models: ModelW
       const res = await fetch("/api/generations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          modelId: model.id,
-          prompt,
-          params,
-          imageUrls: images.map((r) => r.url),
-          videoUrls: videos.map((r) => r.url),
-        }),
+        body: JSON.stringify({ modelId: model.id, prompt, params, imageUrls: images.map((r) => r.url), videoUrls: videos.map((r) => r.url) }),
       });
       const body = (await res.json().catch(() => ({}))) as { item?: PublicGeneration; error?: string };
       if (!res.ok || !body.item) throw new Error(body.error ?? `제출 실패 (${res.status})`);
-      setCurrent(body.item);
-      setRecent((list) => [body.item!, ...list].slice(0, 8));
+      upsert(body.item);
+      setActiveId(body.item.id);
+      feedRef.current?.scrollTo({ top: 0, behavior: prefersReducedMotion() ? "auto" : "smooth" });
+      feedRef.current?.closest("section")?.scrollIntoView({ block: "start", behavior: prefersReducedMotion() ? "auto" : "smooth" });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -189,183 +315,163 @@ export function Playground({ models, hasApiKey, largeUploads }: { models: ModelW
     }
   }
 
-  async function cancelCurrent() {
-    if (!current) return;
+  async function cancel(g: PublicGeneration) {
     try {
-      const res = await fetch(`/api/generations/${current.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/generations/${g.id}`, { method: "DELETE" });
       const body = (await res.json().catch(() => ({}))) as { item?: PublicGeneration; error?: string };
-      if (body.item) setCurrent(body.item);
+      if (body.item) upsert(body.item);
       else setError(body.error ?? `취소 실패 (${res.status})`);
     } catch {
       setError("서버에 연결할 수 없습니다. 잠시 후 다시 시도하세요");
     }
   }
 
-  if (!model) return <Empty>사용할 수 있는 모델이 없습니다. 관리자에게 문의하세요.</Empty>;
+  function reuse(g: PublicGeneration) {
+    const m = models.find((x) => x.id === g.modelId) ?? model;
+    if (!m) return;
+    setModelId(m.id);
+    setParams({ ...defaultParams(m), ...((g.params as Record<string, unknown>) ?? {}) });
+    setPrompt(g.prompt ?? "");
+    setRefs([]);
+    setError(null);
+    document.getElementById("prompt")?.focus();
+  }
+
+  if (!model) return <div className="p-8 text-center text-sm text-subtle">사용할 수 있는 모델이 없습니다. 관리자에게 문의하세요.</div>;
+
+  const canGenerate = hasApiKey && !submitting && !uploading;
+  const activeLive = Boolean(active && LIVE.has(active.status));
+  const activeStarted = active ? new Date(active.createdAt).getTime() : 0;
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
-      <div className="space-y-6">
-        {!hasApiKey && (
-          <div role="status" className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
-            API 키가 아직 할당되지 않았습니다. 관리자가 어드민에서 키를 넣어야 생성할 수 있습니다.
-          </div>
-        )}
-
-        <Card title="1 · 프롬프트와 레퍼런스">
-          <Field label="프롬프트" hint={prompt.length > 0 ? `${prompt.length}자` : undefined}>
-            <Textarea rows={4} placeholder="장면, 카메라 움직임, 분위기를 적어 주세요…" value={prompt} onChange={(e) => setPrompt(e.target.value)} />
-          </Field>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <div>
-              <div className="mb-2 flex items-baseline justify-between gap-3 text-xs text-muted">
-                <span>이미지 레퍼런스</span>
-                <span className="text-right tabular-nums">
-                  {images.length}/{imageMax}
-                  {model.images.field === "image_url" && " · 1번=첫 프레임, 2번=마지막 프레임"}
-                </span>
-              </div>
-              <label className="flex min-h-24 cursor-pointer items-center justify-center rounded-xl border border-dashed border-border px-3 text-center text-sm text-subtle transition hover:border-accent hover:text-foreground-2 focus-within:border-accent focus-within:text-foreground-2 focus-within:ring-2 focus-within:ring-accent/50 has-disabled:cursor-not-allowed has-disabled:opacity-60">
-                {uploading ? "업로드 중…" : images.length >= imageMax ? `이미지 ${imageMax}장 모두 추가됨` : "클릭해서 이미지 추가 (jpeg/png/webp/gif)"}
-                <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple className="sr-only" aria-label="이미지 레퍼런스 추가" disabled={uploading || images.length >= imageMax} onChange={(e) => addFiles(e.target.files, "image")} />
-              </label>
+    <div className="flex flex-1 flex-col lg:h-[calc(100dvh_-_3.5rem)] lg:flex-none lg:flex-row lg:overflow-hidden">
+      {/* STAGE: one result owns it; the next waits one snap below. */}
+      <section aria-label="결과 무대" className="order-1 flex h-[72dvh] min-h-[480px] min-w-0 shrink-0 flex-col bg-background lg:order-2 lg:h-full lg:flex-1 lg:shrink lg:flex-row">
+        <div ref={feedRef} className="feed relative h-full min-h-0 flex-1 overflow-y-auto" tabIndex={-1}>
+          {items.length === 0 ? (
+            <div className="flex h-full w-full flex-col items-center justify-center gap-3 px-6 text-center">
+              <span className="font-display text-6xl leading-none text-foreground-2">{loaded ? "EMPTY" : "…"}</span>
+              <p className="max-w-sm text-sm text-muted">
+                {loaded ? "아직 만든 영상이 없습니다. 왼쪽에서 프롬프트를 적고 모델을 고른 뒤 생성하면 여기에 올라옵니다." : "최근 생성을 불러오는 중"}
+              </p>
             </div>
-            <div>
-              <div className="mb-2 flex items-baseline justify-between gap-3 text-xs text-muted">
-                <span>영상 레퍼런스 (video-to-video)</span>
-                <span className="tabular-nums">{videoMax === 0 ? "이 모델은 미지원" : `${videos.length}/${videoMax}`}</span>
-              </div>
-              <label className={`flex min-h-24 items-center justify-center rounded-xl border border-dashed border-border px-3 text-center text-sm text-subtle transition ${videoMax === 0 ? "opacity-60" : "cursor-pointer hover:border-accent hover:text-foreground-2 focus-within:border-accent focus-within:text-foreground-2 focus-within:ring-2 focus-within:ring-accent/50"}`}>
-                {videoMax === 0 ? "이 모델은 영상 레퍼런스를 받지 않습니다" : uploading ? "업로드 중…" : largeUploads ? "클릭해서 mp4 추가 (최대 200 MB)" : "클릭해서 mp4 추가 (최대 4 MB)"}
-                <input type="file" accept="video/mp4" className="sr-only" aria-label="영상 레퍼런스 추가" disabled={uploading || videoMax === 0 || videos.length >= videoMax} onChange={(e) => addFiles(e.target.files, "video")} />
-              </label>
-            </div>
-          </div>
-          {refs.length > 0 && (
-            <ul className="mt-4 flex flex-wrap gap-2">
-              {refs.map((r, i) => (
-                <li key={r.url} className="group relative h-20 w-20 overflow-hidden rounded-lg border border-border bg-surface-2">
-                  {r.kind === "image" ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={r.local ?? r.url} alt={r.name} className="h-full w-full object-cover" />
-                  ) : (
-                    <video src={r.local ?? r.url} className="h-full w-full object-cover" muted playsInline aria-label={r.name} />
-                  )}
-                  <span aria-hidden className="absolute left-1 top-1 rounded bg-black/70 px-1 font-mono text-[11px] tabular-nums">{i + 1}</span>
-                  <button
-                    type="button"
-                    aria-label={`${i + 1}번 레퍼런스 ${r.name} 제거`}
-                    onClick={() => setRefs((list) => list.filter((x) => x.url !== r.url))}
-                    className="absolute inset-x-0 bottom-0 min-h-7 bg-black/75 text-[11px] text-rose-300 opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
-                  >
-                    제거
-                  </button>
-                </li>
-              ))}
-            </ul>
+          ) : (
+            items.map((g, i) => <FeedItem key={g.id} g={g} index={i} total={items.length} active={g.id === active?.id} now={now} />)
           )}
-        </Card>
+        </div>
+        <div aria-label="결과 동작" className="flex shrink-0 items-center justify-center gap-6 border-t border-border px-3 py-3 lg:w-24 lg:flex-col lg:gap-5 lg:border-t-0 lg:border-l lg:py-0">
+          <Glyph label="생성" counter={model.pricePerSecUsd > 0 ? usd(estimate) : "—"} icon={I.play} active={canGenerate} disabled={!canGenerate} onClick={generate} />
+          <Glyph label="취소" counter={activeLive ? fmtElapsed(now - activeStarted) : "—"} icon={I.x} disabled={!active || active.status !== "queued"} onClick={() => active && cancel(active)} />
+          <Glyph label="다운로드" counter="MP4" icon={I.down} disabled={!active || active.status !== "completed" || !active.resultUrl} href={active?.resultUrl ?? undefined} download />
+          <Glyph label="갤러리" counter="ALL" icon={I.grid} href="/gallery" />
+          <Glyph label="다시" counter="REDO" icon={I.redo} disabled={!active} onClick={() => active && reuse(active)} />
+        </div>
+      </section>
 
-        <Card title="2 · 모델과 하이퍼파라미터">
-          <div className="grid gap-3 sm:grid-cols-3">
-            {models.map((m) => (
-              <button
-                key={m.id}
-                type="button"
-                onClick={() => {
-                  setModelId(m.id);
-                  setParams(defaultParams(m));
-                  setRefs([]);
-                }}
-                aria-pressed={m.id === model.id}
-                className={`rounded-xl border p-3 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-accent ${m.id === model.id ? "border-accent bg-accent/10" : "border-border bg-surface-2 hover:border-zinc-600"}`}
-              >
-                <div className="text-sm font-medium">{m.name}</div>
-                <div className="mt-0.5 text-xs tabular-nums text-subtle">{m.vendor} · {m.pricePerSecUsd > 0 ? `${usd(m.pricePerSecUsd)}/s` : "단가 미설정"}</div>
-                <div className="mt-1.5 text-xs text-muted">{m.blurb}</div>
-              </button>
-            ))}
+      {/* DRAWER: the form that puts the next item on the stage. */}
+      <aside aria-label="생성 설정" className="order-2 flex w-full flex-col border-t border-border bg-background lg:order-1 lg:h-full lg:w-[480px] lg:shrink-0 lg:border-r lg:border-t-0">
+        <div className="min-h-0 flex-1 space-y-7 overflow-y-auto p-5">
+          <div>
+            <h1 className="text-lg font-semibold">플레이그라운드</h1>
+            <p className="mt-1 text-sm text-muted">프롬프트와 레퍼런스를 올리고 모델을 고른 뒤 생성합니다. 완료 영상은 갤러리와 사용량에 자동 기록됩니다.</p>
           </div>
-          <div className="mt-5 grid gap-4 sm:grid-cols-2">
-            {model.params.map((p) => (
-              <ParamInput key={p.key} spec={p} value={params[p.key]} onChange={(v) => setParams((s) => ({ ...s, [p.key]: v }))} />
-            ))}
-          </div>
-          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
-            <div className="text-sm text-muted tabular-nums">
+
+          {!hasApiKey && (
+            <div role="status" className="rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+              API 키가 아직 할당되지 않았습니다. 관리자가 어드민에서 키를 넣어야 생성할 수 있습니다.
+            </div>
+          )}
+
+          <section className="space-y-4">
+            <h2 className="text-xs font-semibold tracking-wider text-muted">1 · 프롬프트와 레퍼런스</h2>
+            <Field label="프롬프트" hint={prompt.length > 0 ? `${prompt.length}자` : undefined}>
+              <Textarea id="prompt" rows={4} placeholder="장면, 카메라 움직임, 분위기를 적어 주세요…" value={prompt} onChange={(e) => setPrompt(e.target.value)} />
+            </Field>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <div className="mb-2 flex items-baseline justify-between gap-3 text-xs text-muted">
+                  <span>이미지 레퍼런스</span>
+                  <span className="tabular-nums">{images.length}/{imageMax}</span>
+                </div>
+                <label className="flex min-h-20 cursor-pointer items-center justify-center rounded-md border border-dashed border-border px-3 text-center text-sm text-subtle transition hover:border-foreground/60 hover:text-foreground-2 focus-within:border-foreground focus-within:text-foreground-2 focus-within:ring-2 focus-within:ring-accent/40 has-disabled:cursor-not-allowed has-disabled:opacity-60">
+                  {uploading ? "업로드 중…" : images.length >= imageMax ? `이미지 ${imageMax}장 모두 추가됨` : "클릭해서 이미지 추가"}
+                  <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple className="sr-only" aria-label="이미지 레퍼런스 추가" disabled={uploading || images.length >= imageMax} onChange={(e) => addFiles(e.target.files, "image")} />
+                </label>
+                {model.images.field === "image_url" && <p className="mt-1.5 text-[11px] text-subtle">1번은 첫 프레임, 2번은 마지막 프레임으로 쓰입니다.</p>}
+              </div>
+              <div>
+                <div className="mb-2 flex items-baseline justify-between gap-3 text-xs text-muted">
+                  <span>영상 레퍼런스</span>
+                  <span className="tabular-nums">{videoMax === 0 ? "이 모델은 미지원" : `${videos.length}/${videoMax}`}</span>
+                </div>
+                <label className={`flex min-h-20 items-center justify-center rounded-md border border-dashed border-border px-3 text-center text-sm text-subtle transition ${videoMax === 0 ? "opacity-50" : "cursor-pointer hover:border-foreground/60 hover:text-foreground-2 focus-within:border-foreground focus-within:text-foreground-2 focus-within:ring-2 focus-within:ring-accent/40"}`}>
+                  {videoMax === 0 ? "영상 레퍼런스를 받지 않는 모델" : uploading ? "업로드 중…" : largeUploads ? "mp4 추가 (최대 200 MB)" : "mp4 추가 (최대 4 MB)"}
+                  <input type="file" accept="video/mp4" className="sr-only" aria-label="영상 레퍼런스 추가" disabled={uploading || videoMax === 0 || videos.length >= videoMax} onChange={(e) => addFiles(e.target.files, "video")} />
+                </label>
+              </div>
+            </div>
+            {refs.length > 0 && (
+              <ul className="flex flex-wrap gap-2">
+                {refs.map((r, i) => (
+                  <li key={r.url} className="group relative aspect-video w-28 overflow-hidden rounded-md border border-border bg-surface-2">
+                    {r.kind === "image" ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={r.local ?? r.url} alt={r.name} className="h-full w-full object-cover" />
+                    ) : (
+                      <video src={r.local ?? r.url} className="h-full w-full object-cover" muted playsInline aria-label={r.name} />
+                    )}
+                    <span aria-hidden className="font-display absolute left-1.5 top-1 text-[14px] text-foreground drop-shadow">{i + 1}</span>
+                    <button type="button" aria-label={`${i + 1}번 레퍼런스 ${r.name} 제거`} onClick={() => setRefs((list) => list.filter((x) => x.url !== r.url))} className="absolute inset-x-0 bottom-0 min-h-7 bg-background/80 text-[11px] text-rose-300 opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100">
+                      제거
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <section className="space-y-4">
+            <h2 className="text-xs font-semibold tracking-wider text-muted">2 · 모델과 하이퍼파라미터</h2>
+            <div className="grid gap-2 sm:grid-cols-3">
+              {models.map((m) => {
+                const on = m.id === model.id;
+                return (
+                  <button key={m.id} type="button" aria-pressed={on} onClick={() => { setModelId(m.id); setParams(defaultParams(m)); setRefs([]); }} className={`rounded-md border p-3 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background ${on ? "border-foreground bg-foreground text-background" : "border-border bg-surface-2 hover:border-foreground/50"}`}>
+                    <div className="text-sm font-medium">{m.name}</div>
+                    <div className={`mt-0.5 text-xs tabular-nums ${on ? "text-background/70" : "text-subtle"}`}>{m.vendor} · {m.pricePerSecUsd > 0 ? `${usd(m.pricePerSecUsd)}/s` : "단가 미설정"}</div>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-xs text-muted">{model.blurb}</p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {model.params.map((p) => (
+                <ParamInput key={p.key} spec={p} value={params[p.key]} onChange={(v) => setParams((s) => ({ ...s, [p.key]: v }))} />
+              ))}
+            </div>
+            {error && <ErrorText>{error}</ErrorText>}
+          </section>
+        </div>
+
+        <div className="flex items-center justify-between gap-4 border-t border-border bg-background/90 px-5 py-3 backdrop-blur">
+          <div className="min-w-0 text-sm text-muted">
+            <div className="flex items-baseline gap-2">
+              <span>예상 비용</span>
               {model.pricePerSecUsd > 0 ? (
-                <>
-                  예상 비용 <span className="font-semibold text-foreground">{usd(estimate)}</span>
-                  <span className="text-subtle"> · {duration}s × {usd(model.pricePerSecUsd)}/s</span>
-                </>
+                <span className="font-display text-2xl leading-none text-sand">{usd(estimate)}</span>
               ) : (
-                <>
-                  예상 비용 <span className="font-semibold text-foreground">미정</span>
-                  <span className="text-subtle"> · 관리자가 단가를 넣으면 {duration}s 기준으로 계산됩니다</span>
-                </>
+                <span className="font-semibold text-foreground">미정</span>
               )}
             </div>
-            <Button size="lg" onClick={generate} disabled={submitting || uploading || !hasApiKey}>
-              {submitting ? "제출 중…" : "생성하기"}
-            </Button>
+            <div className="mt-0.5 truncate text-[11px] text-subtle tabular-nums">
+              {model.pricePerSecUsd > 0 ? `${duration}s × ${usd(model.pricePerSecUsd)}/s` : `관리자가 단가를 넣으면 ${duration}s 기준으로 계산`}
+            </div>
           </div>
-          {error && <div className="mt-3"><ErrorText>{error}</ErrorText></div>}
-        </Card>
-      </div>
-
-      <div className="space-y-6">
-        <Card title="진행 상황" action={current && current.status === "queued" ? <Button size="sm" variant="ghost" onClick={cancelCurrent}>취소</Button> : null}>
-          {!current ? (
-            <Empty>아직 제출한 생성이 없습니다.</Empty>
-          ) : (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <StatusBadge status={current.status} />
-                <span className="truncate text-xs text-subtle" title={current.modelId}>{current.modelId.split("/").slice(0, 2).join("/")}</span>
-              </div>
-              {current.status === "completed" && current.resultUrl ? (
-                <>
-                  <video src={current.resultUrl} controls autoPlay loop muted playsInline className="aspect-video w-full rounded-lg bg-black" aria-label="생성된 영상" />
-                  <div className="flex items-center justify-between text-xs text-muted">
-                    <span className="tabular-nums">비용 {usd(current.costUsd)}</span>
-                    <a href={current.resultUrl} download target="_blank" rel="noreferrer" className="inline-flex min-h-9 items-center rounded-md px-2 text-accent-soft underline-offset-4 hover:underline">
-                      다운로드
-                    </a>
-                  </div>
-                </>
-              ) : ["queued", "in_progress"].includes(current.status) ? (
-                <div className="shimmer aspect-video w-full rounded-lg" role="status" aria-label="영상을 생성하는 중" />
-              ) : (
-                <ErrorText>{current.error ?? STATUS_LABEL[current.status]}</ErrorText>
-              )}
-              <p className="line-clamp-3 break-words text-xs text-subtle">{current.prompt || "(프롬프트 없음)"}</p>
-            </div>
-          )}
-        </Card>
-
-        <Card title="최근 생성">
-          {recent.length === 0 ? (
-            <Empty>기록이 없습니다.</Empty>
-          ) : (
-            <ul className="-mx-2 divide-y divide-border">
-              {recent.map((g) => (
-                <li key={g.id}>
-                  <button
-                    type="button"
-                    onClick={() => setCurrent(g)}
-                    aria-current={current?.id === g.id ? "true" : undefined}
-                    className={`flex min-h-11 w-full items-center gap-3 rounded-md px-2 text-left text-sm transition hover:bg-white/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent ${current?.id === g.id ? "bg-white/5" : ""}`}
-                  >
-                    <StatusBadge status={g.status} />
-                    <span className="min-w-0 flex-1 truncate text-foreground-2">{g.prompt || g.modelId}</span>
-                    <span className="text-xs tabular-nums text-subtle">{usd(g.costUsd)}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-      </div>
+          <Button size="lg" onClick={generate} disabled={!canGenerate}>
+            {submitting ? "제출 중…" : "생성하기"}
+          </Button>
+        </div>
+      </aside>
     </div>
   );
 }

@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>Video Gen Studio · Call Sheet</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#efebe3;color:#141414;font:13px/1.45 "IBM Plex Sans KR",sans-serif;font-variant-numeric:tabular-nums}
+.frame{width:1440px;height:900px;overflow:hidden;position:relative;background:#efebe3;display:grid;grid-template-rows:auto auto 1fr;padding:20px 32px 0}
+.hd{font-family:Oswald,sans-serif;text-transform:uppercase;letter-spacing:.12em;font-weight:600}
+header{display:grid;grid-template-columns:1fr 1fr 1fr;border:1px solid #141414;border-bottom:0}
+header>div{padding:10px 14px;border-right:1px solid #141414}
+header>div:last-child{border-right:0;text-align:right}
+.wm{font-size:34px;line-height:1;letter-spacing:.08em}
+.k{font-size:11px;letter-spacing:.14em;display:block;margin-bottom:2px}
+.day{font-size:22px;letter-spacing:.08em}
+.user{display:flex;justify-content:flex-end;gap:14px;align-items:center;height:100%}
+button,select,input,textarea{font:inherit;border-radius:0;color:#141414}
+.ghost{background:#fff;border:1px solid #141414;padding:4px 12px;font-size:12px}
+.tabs{display:grid;grid-template-columns:repeat(3,180px) 1fr;border:1px solid #141414;margin-bottom:16px}
+.tabs a{display:block;padding:9px 0;text-align:center;border-right:1px solid #141414;color:#141414;text-decoration:none;font-size:14px}
+.tabs a.on{background:#141414;color:#efebe3}
+.tabs span{text-align:right;padding:9px 14px;font-size:11px}
+main{display:grid;grid-template-columns:1fr 440px;gap:16px;min-height:0}
+.tbl{border:1px solid #141414;background:#efebe3;display:flex;flex-direction:column}
+.bar{background:#141414;color:#efebe3;padding:6px 12px;display:flex;justify-content:space-between;font-size:14px}
+.cell{padding:12px;border-bottom:1px solid #141414}
+.row{display:grid;grid-template-columns:1fr 300px;border-bottom:1px solid #141414}
+.row>div{padding:12px;border-right:1px solid #141414}.row>div:last-child{border-right:0}
+label{display:block;font-size:11px;letter-spacing:.12em;margin-bottom:6px}
+textarea,input[type=text],select{width:100%;background:#fff;border:1px solid #141414;padding:9px 10px}
+textarea{height:132px;resize:none;line-height:1.6}
+.thumbs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.th{aspect-ratio:16/9;background:#a9c7e8;border:1px solid #141414;display:grid;place-items:center;font-size:18px}
+.na{font-size:11px;border-top:1px dotted #141414;padding-top:6px}
+.models{display:grid;grid-template-columns:repeat(3,1fr);border-bottom:1px solid #141414}
+.m{padding:12px 14px;border-right:1px solid #141414;border-top:3px solid transparent;min-height:84px;display:flex;flex-direction:column;gap:2px;position:relative}
+.m:last-child{border-right:0}.m b{font-size:15px}.m span{font-size:12px}.m i{font-style:normal;margin-top:auto;font-weight:500}
+.m.sel{border-top-color:#141414;background:#fff}
+.m.sel::after{content:"✓";position:absolute;right:12px;top:8px;color:#c8322b;font-size:22px;font-weight:700}
+.params{display:grid;grid-template-columns:1fr 1fr 1fr 1.5fr;border-bottom:1px solid #141414}
+.params>div{padding:12px;border-right:1px solid #141414}.params>div:last-child{border-right:0}
+label.sp{display:flex;justify-content:space-between}
+input[type=range]{width:100%;accent-color:#141414;margin:10px 0 0}
+.cost{display:flex;align-items:center;gap:20px;padding:12px}
+.cost .v{font-size:20px;letter-spacing:.06em}.cost small{font-size:12px}
+.go{margin-left:auto;background:#141414;color:#efebe3;border:0;padding:11px 40px;font-size:16px;letter-spacing:.14em}
+.plate{aspect-ratio:16/9;background:#a9c7e8;border-bottom:1px solid #141414;position:relative;display:grid;place-items:center}
+.stamp{font-family:Oswald,sans-serif;font-size:34px;letter-spacing:.16em;color:#c8322b;border:2px solid #c8322b;padding:2px 18px 2px 22px;transform:rotate(-8deg);opacity:.85;background:rgba(239,235,227,.3)}
+.stat{display:flex;justify-content:space-between;padding:8px 12px;border-bottom:1px solid #141414;font-size:12px}
+.strip{display:grid;grid-template-columns:48px 1fr 60px;align-items:center;gap:10px;height:54px;padding:0 12px;border-bottom:1px solid #141414}
+.strip em{font-style:normal;font-size:11px;letter-spacing:.1em}.strip .c{text-align:right}
+.y{background:#f5d94a}.w{background:#fff}.g{background:#d6d2c8;color:#6a665f}.g span{text-decoration:line-through}
+.foot{margin-top:auto;padding:8px 12px;font-size:11px;display:flex;justify-content:space-between;border-top:1px solid #141414}
+</style>
+</head>
+<body>
+<div class="frame">
+<header>
+ <div><span class="k hd">Production</span><div class="wm hd">Video Gen Studio</div></div>
+ <div><span class="k hd">Playground · Sheet</span><div class="day hd">DAY 12 · 2026-10-27</div></div>
+ <div class="user"><span>jeongjun@the-prompt.me</span><button class="ghost">로그아웃</button></div>
+</header>
+<nav class="tabs">
+ <a class="on" href="#">플레이그라운드</a><a href="#">갤러리</a><a href="#">대시보드</a>
+ <span class="hd">Higgsfield · Kling · ByteDance · Alibaba</span>
+</nav>
+<main>
+ <div class="tbl">
+  <div class="bar hd"><span>1 · 프롬프트와 레퍼런스</span><span>Scene 01</span></div>
+  <div class="row">
+   <div><label class="hd">프롬프트</label>
+    <textarea>비 내리는 서울 밤거리, 네온 간판이 젖은 아스팔트에 비치고, 카메라가 천천히 앞으로 돌리한다</textarea></div>
+   <div><label class="hd sp"><span>이미지 레퍼런스</span><span>2/2</span></label>
+    <div class="thumbs"><div class="th hd">1</div><div class="th hd">2</div></div>
+    <div class="na">영상 레퍼런스 · 이 모델은 미지원</div></div>
+  </div>
+  <div class="bar hd"><span>2 · 모델과 하이퍼파라미터</span><span>Unit A</span></div>
+  <div class="models">
+   <div class="m sel"><b>Kling 3.0 Standard</b><span>Kling</span><i>$0.045/s</i></div>
+   <div class="m"><b>Seedance 2.5</b><span>ByteDance</span><i>$0.060/s</i></div>
+   <div class="m"><b>Wan 3.0</b><span>Alibaba</span><i>$0.038/s</i></div>
+  </div>
+  <div class="params">
+   <div><label class="hd sp"><span>길이(초)</span><span>5</span></label><input type="range" min="1" max="10" value="5"></div>
+   <div><label class="hd">사운드</label><select><option>off</option><option>on</option></select></div>
+   <div><label class="hd sp"><span>CFG scale</span><span>0.5</span></label><input type="range" min="0" max="1" step="0.1" value="0.5"></div>
+   <div><label class="hd">네거티브 프롬프트</label><input type="text" placeholder="흐림, 왜곡, 텍스트"></div>
+  </div>
+  <div class="cost"><span class="v hd">예상 비용 $0.23</span><small>5s × $0.045/s</small><button class="go hd">생성하기</button></div>
+  <div class="foot"><span>SHEET 1 OF 1 · PLAYGROUND</span><span>jeongjun@the-prompt.me</span></div>
+ </div>
+ <aside class="tbl">
+  <div class="bar hd"><span>진행 상황</span><span>1 / 1</span></div>
+  <div class="plate"><span class="stamp">진행 중</span></div>
+  <div class="stat"><span>생성 중 · 약 40초 남음</span><span>Kling 3.0 Standard · $0.23</span></div>
+  <div class="bar hd"><span>최근 생성 · Stripboard</span><span>4</span></div>
+  <div class="strip w"><em class="hd">완료</em><span>노을 지는 해변, 드론 샷</span><span class="c">$0.23</span></div>
+  <div class="strip w"><em class="hd">완료</em><span>스튜디오 제품 턴테이블</span><span class="c">$0.30</span></div>
+  <div class="strip g"><em class="hd">실패</em><span>군중 속 클로즈업</span><span class="c">$0.00</span></div>
+  <div class="strip y"><em class="hd">대기</em><span>눈 내리는 산장, 타임랩스</span><span class="c">$0.19</span></div>
+  <div class="foot"><span>Yellow 대기 · Blue 생성 중 · White 완료 · Grey 실패</span><span>$0.72</span></div>
+ </aside>
+</main>
+</div>
+</body>
+</html>
