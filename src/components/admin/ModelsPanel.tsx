@@ -41,12 +41,12 @@ export function ModelsPanel() {
 
   return (
     <Card title="모델 단가 (USD / 초)">
-      <p className="mb-4 text-xs text-zinc-500">
+      <p className="mb-4 text-xs text-subtle">
         Higgsfield API 응답에는 비용이 없으므로 여기 단가 × 요청한 길이(초)로 과금을 계산합니다. 단가는 Higgsfield 콘솔의 모델 가격표를 보고 넣으세요.
       </p>
       {error && <p className="mb-3 rounded-lg bg-rose-500/10 px-3 py-2 text-sm text-rose-300">{error}</p>}
       <table className="w-full text-sm">
-        <thead className="text-left text-xs uppercase tracking-wider text-zinc-500">
+        <thead className="text-left text-xs uppercase tracking-wider text-subtle">
           <tr>
             <th className="py-2 pr-3 font-medium">모델</th>
             <th className="py-2 pr-3 font-medium">단가</th>
@@ -57,8 +57,8 @@ export function ModelsPanel() {
           {rows.map((r) => (
             <tr key={r.modelId}>
               <td className="py-3 pr-3">
-                <div className="text-zinc-100">{r.name} <span className="text-xs text-zinc-500">· {r.vendor}</span></div>
-                <div className="font-mono text-[11px] text-zinc-500">{r.modelId}</div>
+                <div className="text-foreground">{r.name} <span className="text-xs text-subtle">· {r.vendor}</span></div>
+                <div className="font-mono text-[11px] text-subtle">{r.modelId}</div>
               </td>
               <td className="py-3 pr-3">
                 <div className="flex items-center gap-2">

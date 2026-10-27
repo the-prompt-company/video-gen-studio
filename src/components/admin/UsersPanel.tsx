@@ -72,7 +72,7 @@ export function UsersPanel({ adminId }: { adminId: number }) {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="text-left text-xs uppercase tracking-wider text-zinc-500">
+              <thead className="text-left text-xs uppercase tracking-wider text-subtle">
                 <tr>
                   <th className="py-2 pr-3 font-medium">ID</th>
                   <th className="py-2 pr-3 font-medium">역할</th>
@@ -86,13 +86,13 @@ export function UsersPanel({ adminId }: { adminId: number }) {
               <tbody className="divide-y divide-border">
                 {rows.map((r) => (
                   <tr key={r.id} onClick={() => openDetail(r.id)} className={`cursor-pointer hover:bg-white/5 ${selected?.id === r.id ? "bg-white/5" : ""}`}>
-                    <td className="py-2 pr-3 text-zinc-100">{r.username}{r.note && <span className="ml-2 text-xs text-zinc-500">{r.note}</span>}</td>
-                    <td className="py-2 pr-3 text-zinc-400">{r.role}</td>
+                    <td className="py-2 pr-3 text-foreground">{r.username}{r.note && <span className="ml-2 text-xs text-subtle">{r.note}</span>}</td>
+                    <td className="py-2 pr-3 text-muted">{r.role}</td>
                     <td className="py-2 pr-3">{r.hasApiKey ? <span className="text-emerald-300">할당</span> : <span className="text-amber-300">없음</span>}</td>
-                    <td className="py-2 pr-3 text-right tabular-nums">{r.generations}<span className="text-zinc-500"> / {r.completed}</span></td>
+                    <td className="py-2 pr-3 text-right tabular-nums">{r.generations}<span className="text-subtle"> / {r.completed}</span></td>
                     <td className="py-2 pr-3 text-right tabular-nums">{usd(r.totalCostUsd)}</td>
-                    <td className="whitespace-nowrap py-2 pr-3 text-zinc-400">{fmtDate(r.lastUsedAt)}</td>
-                    <td className="py-2">{r.active ? <span className="text-zinc-300">활성</span> : <span className="text-rose-300">비활성</span>}</td>
+                    <td className="whitespace-nowrap py-2 pr-3 text-muted">{fmtDate(r.lastUsedAt)}</td>
+                    <td className="py-2">{r.active ? <span className="text-foreground-2">활성</span> : <span className="text-rose-300">비활성</span>}</td>
                   </tr>
                 ))}
               </tbody>
@@ -103,11 +103,11 @@ export function UsersPanel({ adminId }: { adminId: number }) {
 
       <div className="space-y-6">
         {selected && (
-          <Card title={`${selected.username} 편집`} action={<button className="text-xs text-zinc-500 hover:text-white" onClick={() => setSelected(null)}>닫기</button>}>
+          <Card title={`${selected.username} 편집`} action={<button className="text-xs text-subtle hover:text-foreground" onClick={() => setSelected(null)}>닫기</button>}>
             <div className="space-y-3 text-sm">
               <div className="flex items-center justify-between">
-                <span className="text-zinc-400">API 키</span>
-                <span className="font-mono text-zinc-200">{selected.apiKeyMasked ?? "없음"}</span>
+                <span className="text-muted">API 키</span>
+                <span className="font-mono text-foreground-2">{selected.apiKeyMasked ?? "없음"}</span>
               </div>
               <ApiKeyForm onSave={(k) => patch(selected.id, { apiKey: k })} onClear={() => patch(selected.id, { apiKey: null })} hasKey={Boolean(selected.apiKeyMasked)} />
               <PasswordForm onSave={(p) => patch(selected.id, { password: p })} />

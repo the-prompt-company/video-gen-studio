@@ -26,7 +26,7 @@ export default async function DashboardPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">대시보드</h1>
-        <p className="mt-1 text-sm text-zinc-400">{user.username} 님의 사용량. 비용은 모델 단가 × 영상 길이로 계산되며 실패·NSFW·취소 건은 과금되지 않습니다.</p>
+        <p className="mt-1 text-sm text-muted">{user.username} 님의 사용량. 비용은 모델 단가 × 영상 길이로 계산되며 실패·NSFW·취소 건은 과금되지 않습니다.</p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -50,8 +50,8 @@ export default async function DashboardPage() {
                 return (
                   <li key={m.modelId}>
                     <div className="flex justify-between text-sm">
-                      <span className="text-zinc-200">{shortModel(m.modelId)}</span>
-                      <span className="text-zinc-400">
+                      <span className="text-foreground-2">{shortModel(m.modelId)}</span>
+                      <span className="text-muted">
                         {m.count}회 · {usd(m.costUsd)}
                       </span>
                     </div>
@@ -72,7 +72,7 @@ export default async function DashboardPage() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="text-left text-xs uppercase tracking-wider text-zinc-500">
+              <thead className="text-left text-xs uppercase tracking-wider text-subtle">
                 <tr>
                   <th className="py-2 pr-4 font-medium">시각</th>
                   <th className="py-2 pr-4 font-medium">상태</th>
@@ -85,11 +85,11 @@ export default async function DashboardPage() {
               <tbody className="divide-y divide-border">
                 {recent.map((g) => (
                   <tr key={g.id}>
-                    <td className="whitespace-nowrap py-2 pr-4 text-zinc-400">{fmtDate(g.createdAt)}</td>
+                    <td className="whitespace-nowrap py-2 pr-4 text-muted">{fmtDate(g.createdAt)}</td>
                     <td className="py-2 pr-4"><StatusBadge status={g.status} /></td>
-                    <td className="whitespace-nowrap py-2 pr-4 text-zinc-300">{shortModel(g.modelId)}</td>
-                    <td className="max-w-[320px] truncate py-2 pr-4 text-zinc-300">{g.prompt || "—"}</td>
-                    <td className="py-2 pr-4 text-right tabular-nums text-zinc-400">{g.durationS}s</td>
+                    <td className="whitespace-nowrap py-2 pr-4 text-foreground-2">{shortModel(g.modelId)}</td>
+                    <td className="max-w-[320px] truncate py-2 pr-4 text-foreground-2">{g.prompt || "—"}</td>
+                    <td className="py-2 pr-4 text-right tabular-nums text-muted">{g.durationS}s</td>
                     <td className="py-2 text-right tabular-nums">{usd(g.costUsd)}</td>
                   </tr>
                 ))}

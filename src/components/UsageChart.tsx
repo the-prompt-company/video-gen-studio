@@ -12,13 +12,13 @@ export function UsageChart({ rows }: { rows: { day: string; count: number; costU
               className="w-full rounded-t bg-gradient-to-t from-violet-700 to-cyan-400/80 transition group-hover:brightness-125"
               style={{ height: `${Math.max(4, (r.costUsd / max) * 100)}%` }}
             />
-            <div className="pointer-events-none absolute -top-9 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-100 group-hover:block">
+            <div className="pointer-events-none absolute -top-9 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded bg-zinc-800 px-2 py-1 text-[11px] text-foreground group-hover:block">
               {r.day.slice(5)} · {r.count}회 · {usd(r.costUsd)}
             </div>
           </div>
         ))}
       </div>
-      <div className="mt-2 flex justify-between text-[11px] text-zinc-500">
+      <div className="mt-2 flex justify-between text-[11px] text-subtle">
         <span>{rows[0]?.day}</span>
         <span>{rows[rows.length - 1]?.day}</span>
       </div>

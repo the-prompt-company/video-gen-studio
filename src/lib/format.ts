@@ -29,12 +29,12 @@ export const STATUS_LABEL: Record<string, string> = {
 };
 
 export const STATUS_TONE: Record<string, string> = {
-  queued: "bg-zinc-500/15 text-zinc-300 ring-zinc-500/30",
+  queued: "bg-zinc-500/15 text-foreground-2 ring-zinc-500/30",
   in_progress: "bg-sky-500/15 text-sky-300 ring-sky-500/30",
   completed: "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30",
   failed: "bg-rose-500/15 text-rose-300 ring-rose-500/30",
   nsfw: "bg-amber-500/15 text-amber-300 ring-amber-500/30",
-  canceled: "bg-zinc-500/15 text-zinc-400 ring-zinc-500/30",
+  canceled: "bg-zinc-500/15 text-muted ring-zinc-500/30",
 };
 
 export function shortModel(id: string): string {

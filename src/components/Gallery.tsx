@@ -22,14 +22,14 @@ export function Gallery({ items, isAdmin, showAll }: { items: PublicGeneration[]
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">갤러리</h1>
-          <p className="mt-1 text-sm text-zinc-400">완료된 영상 {items.length}건. 결과는 Higgsfield에 7일간만 보관되니 필요한 건 다운로드하세요.</p>
+          <p className="mt-1 text-sm text-muted">완료된 영상 {items.length}건. 결과는 Higgsfield에 7일간만 보관되니 필요한 건 다운로드하세요.</p>
         </div>
         {isAdmin && (
           <div className="flex rounded-lg border border-border p-0.5 text-sm">
-            <Link href="/gallery" className={`rounded-md px-3 py-1 ${!showAll ? "bg-white/10" : "text-zinc-400"}`}>
+            <Link href="/gallery" className={`rounded-md px-3 py-1 ${!showAll ? "bg-white/10" : "text-muted"}`}>
               내 것
             </Link>
-            <Link href="/gallery?all=1" className={`rounded-md px-3 py-1 ${showAll ? "bg-white/10" : "text-zinc-400"}`}>
+            <Link href="/gallery?all=1" className={`rounded-md px-3 py-1 ${showAll ? "bg-white/10" : "text-muted"}`}>
               전체
             </Link>
           </div>
@@ -50,8 +50,8 @@ export function Gallery({ items, isAdmin, showAll }: { items: PublicGeneration[]
                   <video src={g.resultUrl ?? undefined} muted loop playsInline preload="metadata" className="aspect-video w-full bg-black object-cover" onMouseEnter={(e) => e.currentTarget.play().catch(() => {})} onMouseLeave={(e) => e.currentTarget.pause()} />
                 </button>
                 <div className="space-y-1.5 p-3">
-                  <p className="line-clamp-2 text-sm text-zinc-200">{g.prompt || "(프롬프트 없음)"}</p>
-                  <div className="flex items-center justify-between text-[11px] text-zinc-500">
+                  <p className="line-clamp-2 text-sm text-foreground-2">{g.prompt || "(프롬프트 없음)"}</p>
+                  <div className="flex items-center justify-between text-[11px] text-subtle">
                     <span>
                       {shortModel(g.modelId)} · {g.durationS}s · {usd(g.costUsd)}
                     </span>
@@ -71,12 +71,12 @@ export function Gallery({ items, isAdmin, showAll }: { items: PublicGeneration[]
             <video src={open.resultUrl ?? undefined} controls autoPlay loop className="w-full bg-black" />
             <div className="grid gap-4 p-5 sm:grid-cols-[1fr_auto]">
               <div className="space-y-2">
-                <p className="text-sm text-zinc-100">{open.prompt || "(프롬프트 없음)"}</p>
-                <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs text-zinc-400">
+                <p className="text-sm text-foreground">{open.prompt || "(프롬프트 없음)"}</p>
+                <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs text-muted">
                   <dt>모델</dt>
-                  <dd className="font-mono text-zinc-300">{open.modelId}</dd>
+                  <dd className="font-mono text-foreground-2">{open.modelId}</dd>
                   <dt>파라미터</dt>
-                  <dd className="font-mono text-zinc-300">{JSON.stringify(open.params)}</dd>
+                  <dd className="font-mono text-foreground-2">{JSON.stringify(open.params)}</dd>
                   <dt>레퍼런스</dt>
                   <dd>이미지 {open.imageRefs.length} · 영상 {open.videoRefs.length}</dd>
                   <dt>생성</dt>
@@ -85,11 +85,11 @@ export function Gallery({ items, isAdmin, showAll }: { items: PublicGeneration[]
               </div>
               <div className="flex flex-col gap-2">
                 {open.resultUrl && (
-                  <a href={open.resultUrl} download target="_blank" rel="noreferrer" className="rounded-lg bg-accent px-4 py-2 text-center text-sm font-medium text-white hover:bg-violet-500">
+                  <a href={open.resultUrl} download target="_blank" rel="noreferrer" className="rounded-lg bg-accent px-4 py-2 text-center text-sm font-medium text-white hover:bg-accent-hover">
                     다운로드
                   </a>
                 )}
-                <button type="button" onClick={() => setOpen(null)} className="rounded-lg border border-border px-4 py-2 text-sm text-zinc-300 hover:bg-white/5">
+                <button type="button" onClick={() => setOpen(null)} className="rounded-lg border border-border px-4 py-2 text-sm text-foreground-2 hover:bg-white/5">
                   닫기
                 </button>
               </div>

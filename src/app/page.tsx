@@ -20,26 +20,26 @@ export default async function Landing() {
 
       <header className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between px-4">
         <span className="flex items-center gap-2 font-semibold tracking-tight">
-          <span className="inline-block h-2.5 w-2.5 rounded-sm bg-accent shadow-[0_0_12px_rgba(124,58,237,.9)]" />
+          <span aria-hidden className="inline-block h-2.5 w-2.5 rounded-sm bg-accent" />
           Video Gen Studio
         </span>
-        <Link href={cta.href} className="text-sm text-zinc-300 hover:text-white">
+        <Link href={cta.href} className="text-sm text-foreground-2 hover:text-foreground">
           {session ? `${session.username} →` : "로그인"}
         </Link>
       </header>
 
       <section className="mx-auto flex w-full max-w-6xl flex-1 flex-col items-start justify-center px-4 py-20">
-        <span className="mb-6 rounded-full border border-border bg-surface px-3 py-1 text-xs text-zinc-400">
+        <span className="mb-6 rounded-full border border-border bg-surface px-3 py-1 text-xs text-muted">
           Higgsfield API · 팀 전용 워크스페이스
         </span>
         <h1 className="max-w-3xl text-4xl font-semibold leading-[1.1] tracking-tight sm:text-6xl">
           레퍼런스 몇 장으로
           <br />
-          <span className="text-violet-300">
+          <span className="text-accent-soft">
             영상을 만들고, 비용까지 추적
           </span>
         </h1>
-        <p className="mt-6 max-w-xl text-base leading-relaxed text-zinc-400 sm:text-lg">
+        <p className="mt-6 max-w-xl text-base leading-relaxed text-muted sm:text-lg">
           개인별로 배부된 ID로 로그인하면 끝. API 키는 관리자가 서버에 할당하고, 생성 한 건 한 건의 모델·파라미터·비용이
           사용자별로 쌓입니다.
         </p>
@@ -59,21 +59,21 @@ export default async function Landing() {
             <div key={s.n} className="rounded-2xl border border-border bg-surface/80 p-5 backdrop-blur">
               <div className="font-mono text-xs text-accent-2">{s.n}</div>
               <div className="mt-2 font-medium">{s.t}</div>
-              <div className="mt-1 text-sm text-zinc-400">{s.d}</div>
+              <div className="mt-1 text-sm text-muted">{s.d}</div>
             </div>
           ))}
         </div>
 
         <div className="mt-10 flex flex-wrap gap-2">
           {CATALOG.map((m) => (
-            <span key={m.id} className="rounded-full border border-border bg-surface px-3 py-1 text-xs text-zinc-300">
-              {m.name} <span className="text-zinc-500">· {m.vendor}</span>
+            <span key={m.id} className="rounded-full border border-border bg-surface px-3 py-1 text-xs text-foreground-2">
+              {m.name} <span className="text-subtle">· {m.vendor}</span>
             </span>
           ))}
         </div>
       </section>
 
-      <footer className="mx-auto w-full max-w-6xl px-4 py-6 text-xs text-zinc-600">
+      <footer className="mx-auto w-full max-w-6xl px-4 py-6 text-xs text-subtle">
         결과 영상은 Higgsfield에 7일간 보관됩니다. 보관하려면 갤러리에서 다운로드하세요.
       </footer>
     </div>

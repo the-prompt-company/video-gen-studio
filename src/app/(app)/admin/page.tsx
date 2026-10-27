@@ -15,7 +15,7 @@ export default async function AdminPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">어드민</h1>
-        <p className="mt-1 text-sm text-zinc-400">사용자와 API 키 할당, 모델 단가, 전체 로그.</p>
+        <p className="mt-1 text-sm text-muted">사용자와 API 키 할당, 모델 단가, 전체 로그.</p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label="전체 비용" value={usd(all.totalCostUsd)} sub={`최근 30일 ${usd(all.last30dCostUsd)}`} />

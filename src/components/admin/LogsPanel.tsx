@@ -84,7 +84,7 @@ export function LogsPanel() {
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="text-left text-xs uppercase tracking-wider text-zinc-500">
+            <thead className="text-left text-xs uppercase tracking-wider text-subtle">
               <tr>
                 <th className="py-2 pr-3 font-medium">시각</th>
                 <th className="py-2 pr-3 font-medium">사용자</th>
@@ -98,12 +98,12 @@ export function LogsPanel() {
             <tbody className="divide-y divide-border">
               {items.map((g) => (
                 <tr key={g.id} onClick={() => setOpen(g)} className="cursor-pointer hover:bg-white/5">
-                  <td className="whitespace-nowrap py-2 pr-3 text-zinc-400">{fmtDate(g.createdAt)}</td>
-                  <td className="py-2 pr-3 text-zinc-100">{g.username}</td>
+                  <td className="whitespace-nowrap py-2 pr-3 text-muted">{fmtDate(g.createdAt)}</td>
+                  <td className="py-2 pr-3 text-foreground">{g.username}</td>
                   <td className="py-2 pr-3"><StatusBadge status={g.status} /></td>
-                  <td className="whitespace-nowrap py-2 pr-3 text-zinc-300">{shortModel(g.modelId)}</td>
-                  <td className="max-w-[280px] truncate py-2 pr-3 text-zinc-300">{g.prompt || "—"}</td>
-                  <td className="py-2 pr-3 text-right tabular-nums text-zinc-400">{g.durationS}s</td>
+                  <td className="whitespace-nowrap py-2 pr-3 text-foreground-2">{shortModel(g.modelId)}</td>
+                  <td className="max-w-[280px] truncate py-2 pr-3 text-foreground-2">{g.prompt || "—"}</td>
+                  <td className="py-2 pr-3 text-right tabular-nums text-muted">{g.durationS}s</td>
                   <td className="py-2 text-right tabular-nums">{usd(g.costUsd)}</td>
                 </tr>
               ))}
@@ -122,16 +122,16 @@ export function LogsPanel() {
           <div className="w-full max-w-2xl space-y-3 rounded-2xl border border-border bg-surface p-5 text-sm" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <StatusBadge status={open.status} />
-              <span className="text-xs text-zinc-500">{open.username} · {fmtDate(open.createdAt)}</span>
+              <span className="text-xs text-subtle">{open.username} · {fmtDate(open.createdAt)}</span>
             </div>
             {open.resultUrl && open.status === "completed" && <video src={open.resultUrl} controls className="w-full rounded-lg bg-black" />}
-            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs text-zinc-400">
-              <dt>모델</dt><dd className="font-mono text-zinc-200">{open.modelId}</dd>
-              <dt>프롬프트</dt><dd className="text-zinc-200">{open.prompt || "—"}</dd>
-              <dt>파라미터</dt><dd className="font-mono text-zinc-200">{JSON.stringify(open.params)}</dd>
-              <dt>이미지</dt><dd className="break-all text-zinc-300">{open.imageRefs.join(", ") || "—"}</dd>
-              <dt>영상</dt><dd className="break-all text-zinc-300">{open.videoRefs.join(", ") || "—"}</dd>
-              <dt>비용</dt><dd className="text-zinc-200">{usd(open.costUsd)} ({open.durationS}s)</dd>
+            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs text-muted">
+              <dt>모델</dt><dd className="font-mono text-foreground-2">{open.modelId}</dd>
+              <dt>프롬프트</dt><dd className="text-foreground-2">{open.prompt || "—"}</dd>
+              <dt>파라미터</dt><dd className="font-mono text-foreground-2">{JSON.stringify(open.params)}</dd>
+              <dt>이미지</dt><dd className="break-all text-foreground-2">{open.imageRefs.join(", ") || "—"}</dd>
+              <dt>영상</dt><dd className="break-all text-foreground-2">{open.videoRefs.join(", ") || "—"}</dd>
+              <dt>비용</dt><dd className="text-foreground-2">{usd(open.costUsd)} ({open.durationS}s)</dd>
               {open.error && (<><dt>오류</dt><dd className="text-rose-300">{open.error}</dd></>)}
             </dl>
             <div className="text-right"><Button variant="outline" size="sm" onClick={() => setOpen(null)}>닫기</Button></div>

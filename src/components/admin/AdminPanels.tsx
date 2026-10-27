@@ -17,7 +17,7 @@ export function AdminPanels({ adminId }: { adminId: number }) {
     <div>
       <div className="mb-4 flex gap-1 rounded-lg border border-border p-1 text-sm">
         {TABS.map((t) => (
-          <button key={t.id} type="button" onClick={() => setTab(t.id)} className={`rounded-md px-3 py-1.5 ${tab === t.id ? "bg-white/10 text-white" : "text-zinc-400 hover:text-white"}`}>
+          <button key={t.id} type="button" onClick={() => setTab(t.id)} className={`rounded-md px-3 py-1.5 ${tab === t.id ? "bg-white/10 text-white" : "text-muted hover:text-foreground"}`}>
             {t.label}
           </button>
         ))}
