@@ -1,3 +1,4 @@
+import { and, count, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { getCurrentUser } from "@/lib/auth";
 import { CATALOG } from "@/lib/catalog";
@@ -9,6 +10,9 @@ export default async function PlaygroundPage() {
   const user = await getCurrentUser();
   const db = getDb();
   const rows = await db.select().from(schema.models);
+  const [{ completed }] = user
+    ? await db.select({ completed: count() }).from(schema.generations).where(and(eq(schema.generations.userId, user.id), eq(schema.generations.status, "completed")))
+    : [{ completed: 0 }];
   const byId = new Map(rows.map((r) => [r.modelId, r]));
   const models = CATALOG.filter((m) => byId.get(m.id)?.enabled !== false).map((m) => ({
     ...m,
@@ -20,6 +24,7 @@ export default async function PlaygroundPage() {
       models={models}
       hasApiKey={Boolean(user?.apiKeyEnc)}
       largeUploads={Boolean(process.env.BLOB_READ_WRITE_TOKEN)}
+      galleryCount={Number(completed)}
     />
   );
 }

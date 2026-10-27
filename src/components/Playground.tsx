@@ -182,7 +182,7 @@ function FeedItem({ g, index, total, active, now, modelName }: { g: PublicGenera
   );
 }
 
-export function Playground({ models, hasApiKey, largeUploads }: { models: ModelWithPrice[]; hasApiKey: boolean; largeUploads: boolean }) {
+export function Playground({ models, hasApiKey, largeUploads, galleryCount }: { models: ModelWithPrice[]; hasApiKey: boolean; largeUploads: boolean; galleryCount: number }) {
   const [modelId, setModelId] = useState(models[0]?.id ?? "");
   const model = useMemo(() => models.find((m) => m.id === modelId) ?? models[0], [models, modelId]);
   const [params, setParams] = useState<Record<string, unknown>>(() => (model ? defaultParams(model) : {}));
@@ -198,8 +198,14 @@ export function Playground({ models, hasApiKey, largeUploads }: { models: ModelW
   const [now, setNow] = useState(() => Date.now());
   const feedRef = useRef<HTMLDivElement>(null);
 
+  const [galleryTotal, setGalleryTotal] = useState(galleryCount);
+
   function upsert(item: PublicGeneration) {
-    setItems((list) => (list.some((x) => x.id === item.id) ? list.map((x) => (x.id === item.id ? item : x)) : [item, ...list].slice(0, FEED_LIMIT)));
+    setItems((list) => {
+      const prev = list.find((x) => x.id === item.id);
+      if (item.status === "completed" && prev && prev.status !== "completed") setGalleryTotal((n) => n + 1);
+      return prev ? list.map((x) => (x.id === item.id ? item : x)) : [item, ...list].slice(0, FEED_LIMIT);
+    });
   }
 
   useEffect(() => {
@@ -350,7 +356,6 @@ export function Playground({ models, hasApiKey, largeUploads }: { models: ModelW
   const canCancel = Boolean(active && active.status === "queued");
   const activeStarted = active ? new Date(active.createdAt).getTime() : 0;
   const activeIndex = active ? items.findIndex((i) => i.id === active.id) : -1;
-  const completedCount = items.filter((i) => i.status === "completed").length;
   const reuseCount = active ? items.filter((i) => i.prompt === active.prompt && i.modelId === active.modelId).length : 0;
   function goTo(i: number) {
     const feed = feedRef.current;
@@ -404,14 +409,14 @@ export function Playground({ models, hasApiKey, largeUploads }: { models: ModelW
           <Glyph label="생성" counter={model.pricePerSecUsd > 0 ? usd(estimate) : "—"} icon={I.play} active={canGenerate} disabled={!canGenerate} onClick={generate} />
           <Glyph label="취소" counter={canCancel ? fmtElapsed(now - activeStarted) : "—"} icon={I.x} disabled={!canCancel} onClick={() => active && cancel(active)} />
           <Glyph label="다운로드" counter={active?.status === "completed" && active.resultUrl ? "MP4" : "—"} icon={I.down} disabled={!active || active.status !== "completed" || !active.resultUrl} href={active?.resultUrl ?? undefined} download />
-          <Glyph label="갤러리" counter={completedCount > 0 ? String(completedCount) : "—"} icon={I.grid} href="/gallery" />
+          <Glyph label="갤러리" counter={galleryTotal > 0 ? String(galleryTotal) : "—"} icon={I.grid} href="/gallery" />
           <Glyph label="다시" counter={active ? `×${reuseCount}` : "—"} icon={I.redo} disabled={!active} onClick={() => active && reuse(active)} />
         </div>
       </section>
 
       {/* DRAWER: the form that puts the next item on the stage. */}
       <aside aria-label="생성 설정" className="order-2 flex w-full flex-col border-t border-border bg-background lg:order-1 lg:h-full lg:w-[480px] lg:shrink-0 lg:border-r lg:border-t-0">
-        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
           <h1 className="text-base font-semibold">플레이그라운드</h1>
 
           {!hasApiKey && (
@@ -421,7 +426,7 @@ export function Playground({ models, hasApiKey, largeUploads }: { models: ModelW
             </div>
           )}
 
-          <section className="space-y-4">
+          <section className="space-y-3">
             <h2 className="text-xs font-semibold tracking-wider text-muted">1 · 프롬프트와 레퍼런스</h2>
             <Field label="프롬프트" hint={prompt.length > 0 ? `${prompt.length}자` : undefined}>
               <Textarea id="prompt" rows={3} placeholder="장면, 카메라 움직임, 분위기를 적어 주세요…" value={prompt} onChange={(e) => setPrompt(e.target.value)} />
@@ -433,10 +438,9 @@ export function Playground({ models, hasApiKey, largeUploads }: { models: ModelW
                   <span className="tabular-nums">{images.length}/{imageMax}</span>
                 </div>
                 <label className="flex min-h-20 cursor-pointer items-center justify-center rounded-md border border-dashed border-border px-3 text-center text-sm text-subtle transition hover:border-foreground/60 hover:text-foreground-2 focus-within:border-foreground focus-within:text-foreground-2 focus-within:ring-2 focus-within:ring-accent/40 has-disabled:cursor-not-allowed has-disabled:opacity-60">
-                  {uploading ? "업로드 중…" : images.length >= imageMax ? `이미지 ${imageMax}장 모두 추가됨` : "클릭해서 이미지 추가"}
+                  {uploading ? "업로드 중…" : images.length >= imageMax ? `이미지 ${imageMax}장 모두 추가됨` : model.images.field === "image_url" ? "클릭해서 이미지 추가 · 1번 첫 프레임, 2번 마지막 프레임" : "클릭해서 이미지 추가"}
                   <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple className="sr-only" aria-label="이미지 레퍼런스 추가" disabled={uploading || images.length >= imageMax} onChange={(e) => addFiles(e.target.files, "image")} />
                 </label>
-                {model.images.field === "image_url" && <p className="mt-1.5 text-[11px] text-subtle">1번은 첫 프레임, 2번은 마지막 프레임으로 쓰입니다.</p>}
               </div>
               <div>
                 <div className="mb-2 flex items-baseline justify-between gap-3 text-xs text-muted">
@@ -469,20 +473,19 @@ export function Playground({ models, hasApiKey, largeUploads }: { models: ModelW
             )}
           </section>
 
-          <section className="space-y-4">
+          <section className="space-y-3">
             <h2 className="text-xs font-semibold tracking-wider text-muted">2 · 모델과 하이퍼파라미터</h2>
             <div className="grid gap-2 sm:grid-cols-3">
               {models.map((m) => {
                 const on = m.id === model.id;
                 return (
                   <button key={m.id} type="button" aria-pressed={on} onClick={() => { setModelId(m.id); setParams(defaultParams(m)); setRefs([]); }} className={`rounded-md border p-3 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background ${on ? "border-foreground bg-foreground text-background" : "border-border bg-surface-2 hover:border-foreground/50"}`}>
-                    <div className="text-sm font-medium">{m.name}</div>
+                    <div className="text-sm font-medium" title={m.blurb}>{m.name}</div>
                     <div className={`mt-0.5 text-xs tabular-nums ${on ? "text-background/70" : "text-subtle"}`}>{m.vendor} · {m.pricePerSecUsd > 0 ? `${usd(m.pricePerSecUsd)}/s` : "단가 미설정"}</div>
                   </button>
                 );
               })}
             </div>
-            <p className="text-xs text-muted">{model.blurb}</p>
             <div className="grid gap-4 sm:grid-cols-2">
               {model.params.map((p) => (
                 <ParamInput key={p.key} spec={p} value={params[p.key]} onChange={(v) => setParams((s) => ({ ...s, [p.key]: v }))} />
