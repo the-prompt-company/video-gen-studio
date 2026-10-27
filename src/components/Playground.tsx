@@ -85,7 +85,7 @@ function ParamInput({ spec, value, onChange }: { spec: ParamSpec; value: unknown
 
 /* Rail glyph: circular white-outline control with a display counter and a label. */
 function Glyph({ label, counter, icon, active, disabled, onClick, href, download }: { label: string; counter: string; icon: React.ReactNode; active?: boolean; disabled?: boolean; onClick?: () => void; href?: string; download?: boolean }) {
-  const cls = `grid h-13 w-13 place-items-center rounded-full border-[1.5px] transition focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
+  const cls = `grid h-11 w-11 place-items-center rounded-full border-[1.5px] lg:h-13 lg:w-13 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
     active ? "border-foreground bg-foreground text-background hover:bg-accent-hover" : "border-foreground/80 text-foreground hover:bg-white/15"
   } ${disabled ? "cursor-not-allowed opacity-35" : ""}`;
   const body = (
@@ -110,15 +110,22 @@ function Glyph({ label, counter, icon, active, disabled, onClick, href, download
   );
 }
 
+const svg = (d: string) => (
+  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+    <path d={d} />
+  </svg>
+);
 const I = {
-  play: <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5"><path d="M6 4.5v11l9-5.5z" /></svg>,
-  x: <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5"><path d="M5 5l10 10M15 5L5 15" /></svg>,
-  down: <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5"><path d="M10 3v11m0 0l-4-4m4 4l4-4M4 17h12" /></svg>,
-  grid: <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-5 w-5"><path d="M3.5 3.5h5v5h-5zM11.5 3.5h5v5h-5zM3.5 11.5h5v5h-5zM11.5 11.5h5v5h-5z" /></svg>,
-  redo: <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5"><path d="M4 10a6 6 0 1 1 1.8 4.3M4 6v4h4" /></svg>,
+  play: svg("M6.5 4.5v11l9-5.5z"),
+  x: svg("M5.5 5.5l9 9M14.5 5.5l-9 9"),
+  down: svg("M10 3.5v10m0 0l-4-4m4 4l4-4M4.5 16.5h11"),
+  grid: svg("M3.5 3.5h5v5h-5zM11.5 3.5h5v5h-5zM3.5 11.5h5v5h-5zM11.5 11.5h5v5h-5z"),
+  redo: svg("M4.5 10a5.5 5.5 0 1 0 1.6-3.9M4.5 4.5v3.5H8"),
+  up: svg("M5 12.5l5-5 5 5"),
+  downChevron: svg("M5 7.5l5 5 5-5"),
 };
 
-function FeedItem({ g, index, total, active, now }: { g: PublicGeneration; index: number; total: number; active: boolean; now: number }) {
+function FeedItem({ g, index, total, active, now, modelName }: { g: PublicGeneration; index: number; total: number; active: boolean; now: number; modelName: string }) {
   const live = LIVE.has(g.status);
   const started = new Date(g.createdAt).getTime();
   const took = g.completedAt ? new Date(g.completedAt).getTime() - started : now - started;
@@ -141,12 +148,12 @@ function FeedItem({ g, index, total, active, now }: { g: PublicGeneration; index
           {live ? (
             <>
               <span aria-hidden className="h-14 w-14 animate-spin rounded-full border-2 border-foreground border-t-transparent [animation-duration:1.4s]" />
-              <span className="font-display text-5xl leading-none text-foreground" aria-live="polite">{fmtElapsed(took)}</span>
+              <span className="font-display text-7xl leading-none text-foreground sm:text-8xl" aria-live="polite">{fmtElapsed(took)}</span>
               <span className="text-sm text-muted">{label} · 경과 시간</span>
             </>
           ) : (
             <>
-              <span className="font-display text-5xl leading-none text-foreground-2">{label}</span>
+              <span className="font-display text-7xl leading-none text-foreground-2 sm:text-8xl">{label}</span>
               <p className="max-w-md text-sm text-muted">{g.error ?? (g.status === "canceled" ? "취소된 생성입니다." : "결과 영상이 없습니다.")}</p>
             </>
           )}
@@ -156,7 +163,7 @@ function FeedItem({ g, index, total, active, now }: { g: PublicGeneration; index
       {/* Caption scrim */}
       <div className={`scrim pointer-events-none absolute inset-x-0 bottom-0 z-10 px-5 pt-24 ${g.status === "completed" && active ? "pb-16" : "pb-5"}`}>
         <div className="text-xs text-muted">
-          <span className="text-foreground-2">{shortModel(g.modelId)}</span>
+          <span className="text-foreground-2">{modelName}</span>
           <span className="font-display ml-2 text-sm text-sand">{g.durationS}S · {usd(g.costUsd)}</span>
         </div>
         <div className="mt-1 flex items-center gap-2 text-sm text-foreground">
@@ -340,8 +347,16 @@ export function Playground({ models, hasApiKey, largeUploads }: { models: ModelW
   if (!model) return <div className="p-8 text-center text-sm text-subtle">사용할 수 있는 모델이 없습니다. 관리자에게 문의하세요.</div>;
 
   const canGenerate = hasApiKey && !submitting && !uploading;
-  const activeLive = Boolean(active && LIVE.has(active.status));
+  const canCancel = Boolean(active && active.status === "queued");
   const activeStarted = active ? new Date(active.createdAt).getTime() : 0;
+  const activeIndex = active ? items.findIndex((i) => i.id === active.id) : -1;
+  const completedCount = items.filter((i) => i.status === "completed").length;
+  const reuseCount = active ? items.filter((i) => i.prompt === active.prompt && i.modelId === active.modelId).length : 0;
+  function goTo(i: number) {
+    const feed = feedRef.current;
+    if (!feed || i < 0 || i >= items.length) return;
+    feed.scrollTo({ top: i * (feed.clientHeight - 72), behavior: prefersReducedMotion() ? "auto" : "smooth" });
+  }
 
   return (
     <div className="flex flex-1 flex-col lg:h-[calc(100dvh_-_3.5rem)] lg:flex-none lg:flex-row lg:overflow-hidden">
@@ -349,43 +364,67 @@ export function Playground({ models, hasApiKey, largeUploads }: { models: ModelW
       <section aria-label="결과 무대" className="order-1 flex h-[72dvh] min-h-[480px] min-w-0 shrink-0 flex-col bg-background lg:order-2 lg:h-full lg:flex-1 lg:shrink lg:flex-row">
         <div ref={feedRef} className="feed relative h-full min-h-0 flex-1 overflow-y-auto" tabIndex={-1}>
           {items.length === 0 ? (
-            <div className="flex h-full w-full flex-col items-center justify-center gap-3 px-6 text-center">
-              <span className="font-display text-6xl leading-none text-foreground-2">{loaded ? "EMPTY" : "…"}</span>
-              <p className="max-w-sm text-sm text-muted">
-                {loaded ? "아직 만든 영상이 없습니다. 왼쪽에서 프롬프트를 적고 모델을 고른 뒤 생성하면 여기에 올라옵니다." : "최근 생성을 불러오는 중"}
-              </p>
+            <div className="flex h-full w-full flex-col items-center justify-center gap-4 px-6 text-center">
+              {loaded ? (
+                <>
+                  <p className="text-xl font-semibold text-foreground sm:text-2xl">첫 영상을 만들어 보세요</p>
+                  <p className="max-w-sm text-sm text-muted">
+                    <span className="hidden lg:inline">왼쪽 서랍</span>
+                    <span className="lg:hidden">아래</span>
+                    에서 프롬프트를 적고 모델을 고른 뒤 생성하면 결과가 이 무대에 올라옵니다.
+                  </p>
+                  <Button variant="outline" size="sm" className="lg:hidden" onClick={() => document.querySelector('aside[aria-label="생성 설정"]')?.scrollIntoView({ block: "start", behavior: prefersReducedMotion() ? "auto" : "smooth" })}>
+                    생성 설정으로 이동
+                  </Button>
+                </>
+              ) : (
+                <p className="text-sm text-muted">최근 생성을 불러오는 중</p>
+              )}
             </div>
           ) : (
-            items.map((g, i) => <FeedItem key={g.id} g={g} index={i} total={items.length} active={g.id === active?.id} now={now} />)
+            items.map((g, i) => <FeedItem key={g.id} g={g} index={i} total={items.length} active={g.id === active?.id} now={now} modelName={models.find((m) => m.id === g.modelId)?.name ?? shortModel(g.modelId)} />)
           )}
         </div>
-        <div aria-label="결과 동작" className="flex shrink-0 items-center justify-center gap-6 border-t border-border px-3 py-3 lg:w-24 lg:flex-col lg:gap-5 lg:border-t-0 lg:border-l lg:py-0">
+        <div aria-label="결과 동작" className="flex shrink-0 items-center justify-center gap-3 border-t border-border px-2 py-3 sm:gap-5 lg:w-24 lg:flex-col lg:gap-4 lg:border-t-0 lg:border-l lg:py-4">
+          {items.length > 1 && (
+            <div className="flex flex-col items-center gap-0.5 lg:gap-1" aria-label="결과 위치">
+              <button type="button" aria-label="이전 결과" disabled={activeIndex <= 0} onClick={() => goTo(activeIndex - 1)} className="grid h-9 w-9 place-items-center rounded-full text-foreground-2 transition hover:bg-white/15 hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent">
+                {I.up}
+              </button>
+              <ol className="hidden flex-col items-center gap-1.5 py-1 lg:flex" aria-hidden>
+                {items.map((g, i) => (
+                  <li key={g.id} className={`h-1.5 w-1.5 rounded-full ${i === activeIndex ? "bg-foreground" : "bg-foreground/30"}`} />
+                ))}
+              </ol>
+              <button type="button" aria-label="다음 결과" disabled={activeIndex >= items.length - 1} onClick={() => goTo(activeIndex + 1)} className="grid h-9 w-9 place-items-center rounded-full text-foreground-2 transition hover:bg-white/15 hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent">
+                {I.downChevron}
+              </button>
+            </div>
+          )}
           <Glyph label="생성" counter={model.pricePerSecUsd > 0 ? usd(estimate) : "—"} icon={I.play} active={canGenerate} disabled={!canGenerate} onClick={generate} />
-          <Glyph label="취소" counter={activeLive ? fmtElapsed(now - activeStarted) : "—"} icon={I.x} disabled={!active || active.status !== "queued"} onClick={() => active && cancel(active)} />
-          <Glyph label="다운로드" counter="MP4" icon={I.down} disabled={!active || active.status !== "completed" || !active.resultUrl} href={active?.resultUrl ?? undefined} download />
-          <Glyph label="갤러리" counter="ALL" icon={I.grid} href="/gallery" />
-          <Glyph label="다시" counter="REDO" icon={I.redo} disabled={!active} onClick={() => active && reuse(active)} />
+          <Glyph label="취소" counter={canCancel ? fmtElapsed(now - activeStarted) : "—"} icon={I.x} disabled={!canCancel} onClick={() => active && cancel(active)} />
+          <Glyph label="다운로드" counter={active?.status === "completed" && active.resultUrl ? "MP4" : "—"} icon={I.down} disabled={!active || active.status !== "completed" || !active.resultUrl} href={active?.resultUrl ?? undefined} download />
+          <Glyph label="갤러리" counter={completedCount > 0 ? String(completedCount) : "—"} icon={I.grid} href="/gallery" />
+          <Glyph label="다시" counter={active ? `×${reuseCount}` : "—"} icon={I.redo} disabled={!active} onClick={() => active && reuse(active)} />
         </div>
       </section>
 
       {/* DRAWER: the form that puts the next item on the stage. */}
       <aside aria-label="생성 설정" className="order-2 flex w-full flex-col border-t border-border bg-background lg:order-1 lg:h-full lg:w-[480px] lg:shrink-0 lg:border-r lg:border-t-0">
-        <div className="min-h-0 flex-1 space-y-7 overflow-y-auto p-5">
-          <div>
-            <h1 className="text-lg font-semibold">플레이그라운드</h1>
-            <p className="mt-1 text-sm text-muted">프롬프트와 레퍼런스를 올리고 모델을 고른 뒤 생성합니다. 완료 영상은 갤러리와 사용량에 자동 기록됩니다.</p>
-          </div>
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
+          <h1 className="text-base font-semibold">플레이그라운드</h1>
 
           {!hasApiKey && (
-            <div role="status" className="rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
-              API 키가 아직 할당되지 않았습니다. 관리자가 어드민에서 키를 넣어야 생성할 수 있습니다.
+            <div role="status" className="flex items-start gap-3 rounded-md border border-border bg-surface px-4 py-3 text-sm text-foreground-2">
+              <span aria-hidden className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-amber-400" />
+              <span>API 키가 아직 할당되지 않았습니다. 관리자가 어드민에서 키를 넣어야 생성할 수 있습니다.</span>
             </div>
           )}
 
           <section className="space-y-4">
             <h2 className="text-xs font-semibold tracking-wider text-muted">1 · 프롬프트와 레퍼런스</h2>
             <Field label="프롬프트" hint={prompt.length > 0 ? `${prompt.length}자` : undefined}>
-              <Textarea id="prompt" rows={4} placeholder="장면, 카메라 움직임, 분위기를 적어 주세요…" value={prompt} onChange={(e) => setPrompt(e.target.value)} />
+              <Textarea id="prompt" rows={3} placeholder="장면, 카메라 움직임, 분위기를 적어 주세요…" value={prompt} onChange={(e) => setPrompt(e.target.value)} />
             </Field>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
