@@ -6,8 +6,7 @@ export const metadata = { title: "로그인" };
 
 export default function LoginPage() {
   return (
-    <main className="relative flex flex-1 items-center justify-center px-4">
-      <div className="glow pointer-events-none absolute inset-0 -z-10" />
+    <main className="flex flex-1 items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <Link href="/" className="mb-8 flex items-center gap-2 font-semibold tracking-tight">
           <span aria-hidden className="inline-block h-2.5 w-2.5 rounded-sm bg-accent" />

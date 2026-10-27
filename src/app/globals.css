@@ -15,7 +15,6 @@
   --accent: #7c3aed;
   --accent-hover: #8b5cf6;
   --accent-soft: #c4b5fd;
-  --accent-2: #22d3ee;
 }
 
 @theme inline {
@@ -30,7 +29,6 @@
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
   --color-accent-soft: var(--accent-soft);
-  --color-accent-2: var(--accent-2);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -61,19 +59,7 @@ body {
   outline-offset: 2px;
 }
 
-.glow {
-  background:
-    radial-gradient(60% 50% at 20% 0%, rgba(124, 58, 237, 0.28), transparent 70%),
-    radial-gradient(50% 40% at 90% 10%, rgba(34, 211, 238, 0.18), transparent 70%);
-}
 
-.grid-bg {
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
-  background-size: 32px 32px;
-  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.9), transparent 90%);
-}
 
 @keyframes shimmer {
   0% {

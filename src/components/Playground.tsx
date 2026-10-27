@@ -328,7 +328,7 @@ export function Playground({ models, hasApiKey, largeUploads }: { models: ModelW
                   <video src={current.resultUrl} controls autoPlay loop muted playsInline className="aspect-video w-full rounded-lg bg-black" aria-label="생성된 영상" />
                   <div className="flex items-center justify-between text-xs text-muted">
                     <span className="tabular-nums">비용 {usd(current.costUsd)}</span>
-                    <a href={current.resultUrl} download target="_blank" rel="noreferrer" className="inline-flex min-h-9 items-center rounded-md px-2 text-accent-2 underline-offset-4 hover:underline">
+                    <a href={current.resultUrl} download target="_blank" rel="noreferrer" className="inline-flex min-h-9 items-center rounded-md px-2 text-accent-soft underline-offset-4 hover:underline">
                       다운로드
                     </a>
                   </div>

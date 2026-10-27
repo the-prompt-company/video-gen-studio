@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# impeccable session cache (design.json is committed)
+.impeccable/hook.cache.json

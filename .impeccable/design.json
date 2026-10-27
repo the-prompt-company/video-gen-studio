@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-27T18:30:00+09:00",
+  "title": "Design System: Video Gen Studio",
+  "extensions": {
+    "colorMeta": {
+      "render-violet": { "role": "primary", "displayName": "Render Violet", "canonical": "oklch(54% 0.25 293)", "tonalRamp": ["oklch(20% 0.12 293)", "oklch(30% 0.17 293)", "oklch(40% 0.21 293)", "oklch(54% 0.25 293)", "oklch(64% 0.22 293)", "oklch(74% 0.16 293)", "oklch(84% 0.10 293)", "oklch(94% 0.04 293)"] },
+      "render-violet-lit": { "role": "primary", "displayName": "Render Violet, Lit", "canonical": "oklch(61% 0.22 293)", "tonalRamp": ["oklch(20% 0.12 293)", "oklch(30% 0.17 293)", "oklch(40% 0.21 293)", "oklch(54% 0.25 293)", "oklch(61% 0.22 293)", "oklch(74% 0.16 293)", "oklch(84% 0.10 293)", "oklch(94% 0.04 293)"] },
+      "render-violet-soft": { "role": "primary", "displayName": "Render Violet, Soft", "canonical": "oklch(80% 0.10 293)", "tonalRamp": ["oklch(20% 0.12 293)", "oklch(30% 0.17 293)", "oklch(40% 0.21 293)", "oklch(54% 0.25 293)", "oklch(64% 0.22 293)", "oklch(74% 0.16 293)", "oklch(80% 0.10 293)", "oklch(94% 0.04 293)"] },
+      "ink-black": { "role": "neutral", "displayName": "Ink Black", "canonical": "oklch(13% 0.005 286)", "tonalRamp": ["oklch(13% 0.005 286)", "oklch(18% 0.006 286)", "oklch(21% 0.006 286)", "oklch(27% 0.006 286)", "oklch(60% 0.008 286)", "oklch(70% 0.008 286)", "oklch(87% 0.005 286)", "oklch(98% 0.001 286)"] },
+      "desk-surface": { "role": "neutral", "displayName": "Desk Surface", "canonical": "oklch(18% 0.006 286)", "tonalRamp": ["oklch(13% 0.005 286)", "oklch(18% 0.006 286)", "oklch(21% 0.006 286)", "oklch(27% 0.006 286)", "oklch(60% 0.008 286)", "oklch(70% 0.008 286)", "oklch(87% 0.005 286)", "oklch(98% 0.001 286)"] },
+      "desk-surface-raised": { "role": "neutral", "displayName": "Desk Surface, Raised", "canonical": "oklch(21% 0.006 286)", "tonalRamp": ["oklch(13% 0.005 286)", "oklch(18% 0.006 286)", "oklch(21% 0.006 286)", "oklch(27% 0.006 286)", "oklch(60% 0.008 286)", "oklch(70% 0.008 286)", "oklch(87% 0.005 286)", "oklch(98% 0.001 286)"] },
+      "hairline": { "role": "neutral", "displayName": "Hairline", "canonical": "oklch(27% 0.006 286)", "tonalRamp": ["oklch(13% 0.005 286)", "oklch(18% 0.006 286)", "oklch(21% 0.006 286)", "oklch(27% 0.006 286)", "oklch(60% 0.008 286)", "oklch(70% 0.008 286)", "oklch(87% 0.005 286)", "oklch(98% 0.001 286)"] },
+      "paper-white": { "role": "neutral", "displayName": "Paper White", "canonical": "oklch(98% 0.001 286)", "tonalRamp": ["oklch(13% 0.005 286)", "oklch(18% 0.006 286)", "oklch(21% 0.006 286)", "oklch(27% 0.006 286)", "oklch(60% 0.008 286)", "oklch(70% 0.008 286)", "oklch(87% 0.005 286)", "oklch(98% 0.001 286)"] },
+      "paper-dim": { "role": "neutral", "displayName": "Paper Dim", "canonical": "oklch(87% 0.005 286)", "tonalRamp": ["oklch(13% 0.005 286)", "oklch(18% 0.006 286)", "oklch(21% 0.006 286)", "oklch(27% 0.006 286)", "oklch(60% 0.008 286)", "oklch(70% 0.008 286)", "oklch(87% 0.005 286)", "oklch(98% 0.001 286)"] },
+      "graphite": { "role": "neutral", "displayName": "Graphite", "canonical": "oklch(71% 0.008 286)", "tonalRamp": ["oklch(13% 0.005 286)", "oklch(18% 0.006 286)", "oklch(21% 0.006 286)", "oklch(27% 0.006 286)", "oklch(60% 0.008 286)", "oklch(71% 0.008 286)", "oklch(87% 0.005 286)", "oklch(98% 0.001 286)"] },
+      "graphite-faint": { "role": "neutral", "displayName": "Graphite, Faint", "canonical": "oklch(63% 0.008 286)", "tonalRamp": ["oklch(13% 0.005 286)", "oklch(18% 0.006 286)", "oklch(21% 0.006 286)", "oklch(27% 0.006 286)", "oklch(63% 0.008 286)", "oklch(71% 0.008 286)", "oklch(87% 0.005 286)", "oklch(98% 0.001 286)"] },
+      "status-running": { "role": "tertiary", "displayName": "Running Sky", "canonical": "oklch(85% 0.10 230)", "tonalRamp": ["oklch(25% 0.06 230)", "oklch(35% 0.09 230)", "oklch(45% 0.12 230)", "oklch(60% 0.14 230)", "oklch(70% 0.13 230)", "oklch(85% 0.10 230)", "oklch(92% 0.05 230)", "oklch(97% 0.02 230)"] },
+      "status-done": { "role": "tertiary", "displayName": "Done Emerald", "canonical": "oklch(88% 0.12 165)", "tonalRamp": ["oklch(25% 0.06 165)", "oklch(35% 0.09 165)", "oklch(45% 0.12 165)", "oklch(60% 0.15 165)", "oklch(70% 0.15 165)", "oklch(88% 0.12 165)", "oklch(93% 0.07 165)", "oklch(97% 0.03 165)"] },
+      "status-failed": { "role": "tertiary", "displayName": "Failed Rose", "canonical": "oklch(81% 0.10 10)", "tonalRamp": ["oklch(25% 0.08 10)", "oklch(35% 0.12 10)", "oklch(45% 0.16 10)", "oklch(60% 0.20 10)", "oklch(70% 0.17 10)", "oklch(81% 0.10 10)", "oklch(90% 0.05 10)", "oklch(97% 0.02 10)"] },
+      "status-blocked": { "role": "tertiary", "displayName": "Blocked Amber", "canonical": "oklch(88% 0.14 85)", "tonalRamp": ["oklch(25% 0.06 85)", "oklch(35% 0.09 85)", "oklch(45% 0.12 85)", "oklch(60% 0.15 85)", "oklch(75% 0.16 85)", "oklch(88% 0.14 85)", "oklch(93% 0.09 85)", "oklch(97% 0.04 85)"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "랜딩 헤드라인에만." },
+      "headline": { "displayName": "Headline", "purpose": "앱 페이지의 h1. 아래에 graphite 14px 설명 한 줄." },
+      "title": { "displayName": "Title", "purpose": "카드 제목 h2." },
+      "body": { "displayName": "Body", "purpose": "본문, 입력, 버튼, 목록." },
+      "label": { "displayName": "Label", "purpose": "필드 라벨과 힌트." },
+      "mono": { "displayName": "Mono", "purpose": "썸네일 번호, 배지. 11px 바닥." }
+    },
+    "shadows": [
+      { "name": "button-primary", "value": "inset 0 1px 0 rgba(255,255,255,.12), 0 8px 20px -10px rgba(0,0,0,.8)", "purpose": "주 행동 버튼에만. 위 하이라이트 + 짧은 검정 그림자. 보라 글로우 금지." }
+    ],
+    "motion": [
+      { "name": "ease-state", "value": "150ms cubic-bezier(0.4, 0, 0.2, 1)", "purpose": "hover/focus 색 전환. reduced-motion이면 0s." },
+      { "name": "shimmer", "value": "1.6s linear infinite", "purpose": "생성 중 결과 자리. reduced-motion이면 정지된 Raised 표면." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "lg", "value": "1024px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "주 행동. 생성하기, 로그인, 저장.",
+      "html": "<button class=\"ds-btn-primary\">생성하기</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 40px; padding: 0 16px; border: 0; border-radius: 8px; background: var(--accent, #7c3aed); color: #fff; font: 500 14px/1 Geist, system-ui, sans-serif; white-space: nowrap; box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 8px 20px -10px rgba(0,0,0,.8); transition: background-color 150ms; cursor: pointer; } .ds-btn-primary:hover { background: var(--accent-hover, #8b5cf6); } .ds-btn-primary:focus-visible { outline: 2px solid var(--accent, #7c3aed); outline-offset: 2px; } .ds-btn-primary:disabled { opacity: .5; cursor: not-allowed; }"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "보조 행동. 갤러리 보기, 닫기.",
+      "html": "<button class=\"ds-btn-outline\">갤러리 보기</button>",
+      "css": ".ds-btn-outline { display: inline-flex; align-items: center; justify-content: center; height: 40px; padding: 0 16px; border: 1px solid var(--border, #27272a); border-radius: 8px; background: transparent; color: var(--foreground, #fafafa); font: 500 14px/1 Geist, system-ui, sans-serif; white-space: nowrap; transition: background-color 150ms; cursor: pointer; } .ds-btn-outline:hover { background: rgba(255,255,255,.05); } .ds-btn-outline:focus-visible { outline: 2px solid var(--accent, #7c3aed); outline-offset: 2px; }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "카드 제목 줄의 작은 액션. 취소, 닫기.",
+      "html": "<button class=\"ds-btn-ghost\">취소</button>",
+      "css": ".ds-btn-ghost { display: inline-flex; align-items: center; justify-content: center; height: 36px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; color: var(--foreground-2, #d4d4d8); font: 500 12px/1 Geist, system-ui, sans-serif; transition: background-color 150ms, color 150ms; cursor: pointer; } .ds-btn-ghost:hover { background: rgba(255,255,255,.05); color: var(--foreground, #fafafa); } .ds-btn-ghost:focus-visible { outline: 2px solid var(--accent, #7c3aed); outline-offset: 2px; }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "라벨이 입력을 감싸는 Field + Input.",
+      "html": "<label class=\"ds-field\"><span class=\"ds-field-label\"><span>네거티브 프롬프트</span><span class=\"ds-field-hint\">선택</span></span><input class=\"ds-input\" placeholder=\"피하고 싶은 요소\" /></label>",
+      "css": ".ds-field { display: block; } .ds-field-label { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 6px; font: 500 12px/1.33 Geist, system-ui, sans-serif; color: var(--muted, #a1a1aa); } .ds-field-hint { font-weight: 400; color: var(--subtle, #8a8a93); font-variant-numeric: tabular-nums; } .ds-input { width: 100%; height: 40px; padding: 0 12px; border: 1px solid var(--border, #27272a); border-radius: 8px; background: var(--surface-2, #19191e); color: var(--foreground, #fafafa); font: 400 14px/1.5 Geist, system-ui, sans-serif; caret-color: var(--accent, #7c3aed); transition: border-color 150ms; } .ds-input::placeholder { color: var(--subtle, #8a8a93); } .ds-input:focus { border-color: var(--accent, #7c3aed); outline: 0; } .ds-input:focus-visible { box-shadow: 0 0 0 2px rgba(124,58,237,.5); }"
+    },
+    {
+      "name": "Top Navigation",
+      "kind": "nav",
+      "refersTo": "nav-link-active",
+      "description": "Sticky 헤더. 활성 링크는 흰색 10% 틴트.",
+      "html": "<header class=\"ds-nav\"><a class=\"ds-nav-brand\" href=\"#\"><span class=\"ds-nav-dot\"></span>Video Gen Studio</a><nav><a class=\"ds-nav-link is-active\" aria-current=\"page\" href=\"#\">플레이그라운드</a><a class=\"ds-nav-link\" href=\"#\">갤러리</a><a class=\"ds-nav-link\" href=\"#\">대시보드</a></nav><span class=\"ds-nav-user\">jeongjun</span><button class=\"ds-nav-logout\">로그아웃</button></header>",
+      "css": ".ds-nav { display: flex; align-items: center; gap: 24px; height: 56px; padding: 0 16px; border-bottom: 1px solid var(--border, #27272a); background: rgba(9,9,11,.8); backdrop-filter: blur(8px); font: 400 14px/1 Geist, system-ui, sans-serif; color: var(--foreground, #fafafa); } .ds-nav-brand { display: flex; align-items: center; gap: 8px; font-weight: 600; letter-spacing: -0.01em; color: inherit; text-decoration: none; white-space: nowrap; } .ds-nav-dot { width: 10px; height: 10px; border-radius: 2px; background: var(--accent, #7c3aed); } .ds-nav nav { display: flex; gap: 4px; } .ds-nav-link { display: inline-flex; align-items: center; min-height: 40px; padding: 0 12px; border-radius: 6px; color: var(--muted, #a1a1aa); text-decoration: none; white-space: nowrap; transition: color 150ms, background-color 150ms; } .ds-nav-link:hover { color: var(--foreground, #fafafa); } .ds-nav-link.is-active { background: rgba(255,255,255,.1); color: var(--foreground, #fafafa); } .ds-nav-link:focus-visible, .ds-nav-logout:focus-visible { outline: 2px solid var(--accent, #7c3aed); outline-offset: 2px; } .ds-nav-user { margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ds-nav-logout { min-height: 44px; padding: 0 8px; border: 0; background: none; color: var(--muted, #a1a1aa); font: inherit; cursor: pointer; } .ds-nav-logout:hover { color: var(--foreground, #fafafa); }"
+    },
+    {
+      "name": "Status Chip",
+      "kind": "chip",
+      "refersTo": "status-chip",
+      "description": "생성 상태. 틴트 15% 바탕 + 30% 링 + 밝은 글자. 진행 중이면 점이 pulse.",
+      "html": "<span class=\"ds-chip ds-chip-running\"><span class=\"ds-chip-dot\"></span>생성 중</span> <span class=\"ds-chip ds-chip-done\">완료</span> <span class=\"ds-chip ds-chip-failed\">실패</span>",
+      "css": ".ds-chip { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 9999px; font: 500 11px/1.4 Geist, system-ui, sans-serif; white-space: nowrap; box-shadow: inset 0 0 0 1px var(--chip-ring); background: var(--chip-bg); color: var(--chip-fg); } .ds-chip-dot { width: 6px; height: 6px; margin-right: 6px; border-radius: 9999px; background: currentColor; animation: ds-pulse 2s cubic-bezier(.4,0,.6,1) infinite; } @keyframes ds-pulse { 50% { opacity: .5; } } .ds-chip-running { --chip-bg: rgba(14,165,233,.15); --chip-ring: rgba(14,165,233,.3); --chip-fg: #7dd3fc; } .ds-chip-done { --chip-bg: rgba(16,185,129,.15); --chip-ring: rgba(16,185,129,.3); --chip-fg: #6ee7b7; } .ds-chip-failed { --chip-bg: rgba(244,63,94,.15); --chip-ring: rgba(244,63,94,.3); --chip-fg: #fda4af; } @media (prefers-reduced-motion: reduce) { .ds-chip-dot { animation: none; } }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "제목 줄 + 본문. 그림자 없음, 1px 헤어라인.",
+      "html": "<section class=\"ds-card\"><header class=\"ds-card-head\"><h2>진행 상황</h2><button class=\"ds-btn-ghost\">취소</button></header><div class=\"ds-empty\">아직 제출한 생성이 없습니다.</div></section>",
+      "css": ".ds-card { padding: 20px; border: 1px solid var(--border, #27272a); border-radius: 16px; background: var(--surface, #121215); color: var(--foreground, #fafafa); font: 400 14px/1.5 Geist, system-ui, sans-serif; } .ds-card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; } .ds-card-head h2 { margin: 0; font: 600 14px/1.43 Geist, system-ui, sans-serif; letter-spacing: .025em; color: var(--foreground-2, #d4d4d8); } .ds-empty { padding: 32px; border: 1px dashed var(--border, #27272a); border-radius: 12px; text-align: center; color: var(--subtle, #8a8a93); } .ds-btn-ghost { height: 36px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; color: var(--foreground-2, #d4d4d8); font: 500 12px/1 inherit; cursor: pointer; } .ds-btn-ghost:hover { background: rgba(255,255,255,.05); }"
+    },
+    {
+      "name": "Model Card",
+      "kind": "custom",
+      "refersTo": "card",
+      "description": "aria-pressed 토글. 선택되면 보라 테두리 + 10% 틴트.",
+      "html": "<div class=\"ds-models\"><button class=\"ds-model\" aria-pressed=\"true\"><div class=\"ds-model-name\">Kling 3.0 Standard</div><div class=\"ds-model-meta\">Kling · $0.0450/s</div><div class=\"ds-model-blurb\">이미지 1장(+마지막 프레임 1장)에서 영상. 사운드, 멀티샷 지원.</div></button><button class=\"ds-model\" aria-pressed=\"false\"><div class=\"ds-model-name\">Seedance 2.5</div><div class=\"ds-model-meta\">ByteDance · 단가 미설정</div><div class=\"ds-model-blurb\">이미지·영상·오디오 레퍼런스에서 영상.</div></button></div>",
+      "css": ".ds-models { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; font-family: Geist, system-ui, sans-serif; } .ds-model { padding: 12px; border: 1px solid var(--border, #27272a); border-radius: 12px; background: var(--surface-2, #19191e); color: var(--foreground, #fafafa); text-align: left; cursor: pointer; transition: border-color 150ms, background-color 150ms; } .ds-model:hover { border-color: #52525b; } .ds-model[aria-pressed=\"true\"] { border-color: var(--accent, #7c3aed); background: rgba(124,58,237,.1); } .ds-model:focus-visible { outline: 2px solid var(--accent, #7c3aed); outline-offset: 2px; } .ds-model-name { font: 500 14px/1.43 inherit; } .ds-model-meta { margin-top: 2px; font: 400 12px/1.33 inherit; color: var(--subtle, #8a8a93); font-variant-numeric: tabular-nums; } .ds-model-blurb { margin-top: 6px; font: 400 12px/1.4 inherit; color: var(--muted, #a1a1aa); }"
+    },
+    {
+      "name": "Upload Zone",
+      "kind": "custom",
+      "refersTo": "card",
+      "description": "점선 박스. sr-only 파일 input으로 키보드 도달, focus-within에 보라.",
+      "html": "<label class=\"ds-upload\">클릭해서 이미지 추가 (jpeg/png/webp/gif)<input type=\"file\" class=\"ds-sr-only\" aria-label=\"이미지 레퍼런스 추가\" /></label>",
+      "css": ".ds-upload { display: flex; align-items: center; justify-content: center; min-height: 96px; padding: 0 12px; border: 1px dashed var(--border, #27272a); border-radius: 12px; color: var(--subtle, #8a8a93); font: 400 14px/1.5 Geist, system-ui, sans-serif; text-align: center; cursor: pointer; transition: border-color 150ms, color 150ms; } .ds-upload:hover, .ds-upload:focus-within { border-color: var(--accent, #7c3aed); color: var(--foreground-2, #d4d4d8); } .ds-upload:focus-within { box-shadow: 0 0 0 2px rgba(124,58,237,.5); } .ds-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Night Render Desk",
+    "overview": "불 꺼진 작업실의 책상. 모니터 하나가 렌더를 기다리며 켜져 있고, 그 빛 말고는 아무것도 반짝이지 않는다. 이 시스템은 팀이 하루에도 여러 번 들어와 프롬프트를 넣고, 모델을 고르고, 비용을 확인하고 나가는 도구다. 장식은 없고, 표면은 세 단계의 어두운 회색으로만 깊이를 만들며, 색은 단 하나의 보라가 \"지금 이것이 선택됐다 / 진행 중이다 / 눌러라\"를 말할 때만 켜진다.\n\n밀도는 중간이다. 카드 안쪽은 20px, 카드 사이는 24px로 숨 쉴 자리를 두되, 한 화면에 입력·모델·비용·진행 상황이 모두 보인다. 글은 한국어 본문 14px이 기준이고, 숫자는 전부 고정폭 숫자로 정렬된다. 확인된 거부: 보라·시안 라디얼 글로우 배경, 격자 배경, 색 있는 글로우 그림자, 두 번째 강조색(시안). 이것들은 2026-10-27에 걷어냈고 다시 들이지 않는다.",
+    "keyCharacteristics": [
+      "검정에 가까운 바탕 위에 세 단계 회색 표면과 1px 헤어라인으로만 구조를 세운다.",
+      "보라(render-violet)는 신호색이다. 선택, 주 행동, 포커스, 진행 중. 장식으로는 쓰지 않는다.",
+      "텍스트는 네 단계(paper-white, paper-dim, graphite, graphite-faint)만 쓰고, 모두 모든 표면에서 4.5:1을 넘긴다.",
+      "상태는 색 틴트 15% 배경 + 30% 링 + 밝은 글자의 작은 알약 배지로만 말한다.",
+      "모션은 150ms 색 전환과 진행 중 셔머 하나. reduced-motion이면 전부 정지한다."
+    ],
+    "rules": [
+      { "name": "The One Signal Rule", "body": "보라는 \"선택됐다·눌러라·진행 중이다\"를 뜻할 때만 켜진다. 배경, 테두리 장식, 아이콘 색, 그라데이션으로는 쓰지 않는다. 두 번째 강조색은 없다.", "section": "colors" },
+      { "name": "The Four Tiers Rule", "body": "글자 색은 paper-white, paper-dim, graphite, graphite-faint 네 토큰(text-foreground, text-foreground-2, text-muted, text-subtle)만 쓴다. text-zinc-*를 직접 쓰지 않는다.", "section": "colors" },
+      { "name": "The Tabular Rule", "body": "비용, 길이, 횟수, 개수 등 숫자가 있는 글자는 모두 tabular-nums. 숫자가 바뀌어도 폭이 흔들리지 않는다.", "section": "typography" },
+      { "name": "The Tonal Depth Rule", "body": "깊이는 표면 색 단계와 1px 테두리로만. 그림자는 주 행동 버튼 하나에만 허용되고, 색 있는 글로우(0 0 Npx 보라)는 어디에도 없다.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do 글자 색은 네 토큰만. 새 회색이 필요하면 토큰을 늘리지 말고 네 단계 중 하나를 고른다.",
+      "Do 숫자는 전부 tabular-nums. 비용은 usd()로 소수 자릿수를 맞춘다.",
+      "Do 모든 조작은 44px(모바일) 이상, 키보드 포커스 링 표시, 오류는 role=\"alert\".",
+      "Do 상태는 StatusBadge로만, 비어 있음은 Empty(점선 박스)로만.",
+      "Do 페이지마다 h1 24px + graphite 설명 한 줄로 시작한다."
+    ],
+    "donts": [
+      "Don't 보라·시안 라디얼 글로우, 격자 배경, 색 있는 글로우 그림자. 2026-10-27에 제거했다.",
+      "Don't 두 번째 강조색. 시안(#22d3ee)은 토큰에서 지웠다.",
+      "Don't text-zinc-*, hover:text-white, 임의 rgba 글자색.",
+      "Don't 11px 아래 글자, hover에서만 나타나는 조작(터치와 키보드에서 사라진다).",
+      "Don't 카드 안에 카드. 카드 안의 구획은 Raised 표면이나 Hairline 구분선으로."
+    ]
+  }
+}

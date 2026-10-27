@@ -53,7 +53,7 @@ export function LogsPanel() {
     <Card
       title={`히스토리 ${total}건`}
       action={
-        <a href={`/api/admin/generations?${qs({ format: "csv", limit: "500" })}`} className="text-xs text-accent-2 hover:underline">
+        <a href={`/api/admin/generations?${qs({ format: "csv", limit: "500" })}`} className="text-xs text-accent-soft hover:underline">
           CSV 내보내기 (최근 500)
         </a>
       }

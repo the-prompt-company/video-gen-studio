@@ -15,8 +15,6 @@ export default async function Landing() {
 
   return (
     <div className="relative flex flex-1 flex-col">
-      <div className="glow pointer-events-none absolute inset-0 -z-10" />
-      <div className="grid-bg pointer-events-none absolute inset-0 -z-10" />
 
       <header className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between px-4">
         <span className="flex items-center gap-2 font-semibold tracking-tight">
@@ -57,7 +55,7 @@ export default async function Landing() {
         <div className="mt-20 grid w-full gap-4 sm:grid-cols-3">
           {STEPS.map((s) => (
             <div key={s.n} className="rounded-2xl border border-border bg-surface/80 p-5 backdrop-blur">
-              <div className="font-mono text-xs text-accent-2">{s.n}</div>
+              <div className="font-mono text-xs text-accent-soft">{s.n}</div>
               <div className="mt-2 font-medium">{s.t}</div>
               <div className="mt-1 text-sm text-muted">{s.d}</div>
             </div>

@@ -38,7 +38,7 @@ export function Gallery({ items, isAdmin, showAll }: { items: PublicGeneration[]
 
       {items.length === 0 ? (
         <Empty>
-          완료된 영상이 없습니다. <Link href="/playground" className="text-accent-2 hover:underline">플레이그라운드</Link>에서 첫 영상을 만들어 보세요.
+          완료된 영상이 없습니다. <Link href="/playground" className="text-accent-soft hover:underline">플레이그라운드</Link>에서 첫 영상을 만들어 보세요.
         </Empty>
       ) : (
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
