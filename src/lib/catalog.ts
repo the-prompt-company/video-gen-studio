@@ -2,13 +2,21 @@
  * Model catalog: how each Higgsfield model takes references and which
  * hyperparameters it exposes. Shared by the playground form (client) and
  * the generate route (server), so the request body is built in one place.
+ *
+ * Verified against docs.higgsfield.ai model pages (2026-10-27):
+ *   bytedance/seedance-2.0/reference-to-video   image_urls 1–9, video_urls 1–3, duration 4–15,
+ *                                               resolution 480p|720p|1080p|4k, aspect_ratio, generate_audio
+ *   minimax/hailuo-2.3/standard/image-to-video  prompt + image_url required, duration 6|10,
+ *                                               prompt_optimizer, output fixed at 768p
+ * Higgsfield's API has no "Seedance 2.0 Mini" endpoint; Seedance 2.0 is the closest model.
  */
 
 export type ParamSpec =
   | { key: string; label: string; type: "int"; min: number; max: number; default: number }
   | { key: string; label: string; type: "float"; min: number; max: number; step: number; default: number }
   | { key: string; label: string; type: "bool"; default: boolean }
-  | { key: string; label: string; type: "enum"; options: string[]; default: string }
+  /** `numeric` sends the chosen option as a number (e.g. duration 6 | 10). */
+  | { key: string; label: string; type: "enum"; options: string[]; default: string; numeric?: true }
   | { key: string; label: string; type: "text"; default: string; optional?: true };
 
 export type ModelSpec = {
@@ -23,55 +31,47 @@ export type ModelSpec = {
   params: ParamSpec[];
   /** Key of the parameter that is the clip length in seconds (for cost = price × seconds). */
   durationKey: string;
+  /** The endpoint rejects a request without a prompt. */
+  promptRequired?: true;
+  /** The endpoint rejects a request without at least one reference. */
+  refsRequired?: true;
+  /** Short note shown under the model picker (e.g. fixed output resolution). */
+  note?: string;
 };
 
 export const CATALOG: ModelSpec[] = [
   {
-    id: "kling-video/v3.0/std/image-to-video",
-    name: "Kling 3.0 Standard",
-    vendor: "Kling",
-    blurb: "이미지 1장(+마지막 프레임 1장)에서 영상. 사운드, 멀티샷 지원.",
-    images: { field: "image_url", max: 2 },
+    id: "bytedance/seedance-2.0/reference-to-video",
+    name: "Seedance 2.0",
+    vendor: "ByteDance",
+    blurb: "이미지 최대 6장·영상 최대 3개 레퍼런스에서 영상. 480p~4K, 화면비 선택, 오디오 생성.",
+    images: { field: "image_urls", max: 6 },
+    videos: { field: "video_urls", max: 3 },
+    durationKey: "duration",
+    refsRequired: true,
+    params: [
+      { key: "duration", label: "길이(초)", type: "int", min: 4, max: 15, default: 5 },
+      { key: "resolution", label: "해상도", type: "enum", options: ["480p", "720p", "1080p", "4k"], default: "480p" },
+      { key: "aspect_ratio", label: "화면비", type: "enum", options: ["16:9", "4:3", "1:1", "3:4", "9:16", "21:9"], default: "16:9" },
+      { key: "generate_audio", label: "오디오 생성", type: "bool", default: false },
+    ],
+    note: "비용은 해상도·길이에 비례합니다. 연습은 480p, 납품은 720p 이상을 권합니다.",
+  },
+  {
+    id: "minimax/hailuo-2.3/standard/image-to-video",
+    name: "Hailuo 2.3 Standard",
+    vendor: "MiniMax",
+    blurb: "연습용. 이미지 1장 + 프롬프트로 6초 또는 10초 영상. 출력 768p 고정, 가장 저렴.",
+    images: { field: "image_url", max: 1 },
     videos: null,
     durationKey: "duration",
+    promptRequired: true,
+    refsRequired: true,
     params: [
-      { key: "duration", label: "길이(초)", type: "int", min: 3, max: 15, default: 5 },
-      { key: "sound", label: "사운드", type: "enum", options: ["off", "on"], default: "off" },
-      { key: "cfg_scale", label: "CFG scale", type: "float", min: 0, max: 1, step: 0.05, default: 0.5 },
-      { key: "negative_prompt", label: "네거티브 프롬프트", type: "text", default: "", optional: true },
+      { key: "duration", label: "길이(초)", type: "enum", options: ["6", "10"], default: "6", numeric: true },
+      { key: "prompt_optimizer", label: "프롬프트 자동 보정", type: "bool", default: true },
     ],
-  },
-  {
-    id: "bytedance/seedance-2.5/reference-to-video",
-    name: "Seedance 2.5",
-    vendor: "ByteDance",
-    blurb: "이미지·영상·오디오 레퍼런스에서 영상. 해상도·비율·오디오 생성 선택.",
-    images: { field: "image_urls", max: 6 },
-    videos: { field: "video_urls", max: 3 },
-    durationKey: "duration",
-    params: [
-      { key: "duration", label: "길이(초)", type: "int", min: 4, max: 30, default: 5 },
-      { key: "resolution", label: "해상도", type: "enum", options: ["480p", "720p", "1080p"], default: "720p" },
-      { key: "aspect_ratio", label: "화면비", type: "enum", options: ["16:9", "4:3", "1:1", "3:4", "9:16", "21:9"], default: "16:9" },
-      { key: "bitrate_mode", label: "비트레이트", type: "enum", options: ["standard", "high"], default: "high" },
-      { key: "generate_audio", label: "오디오 생성", type: "bool", default: true },
-    ],
-  },
-  {
-    id: "alibaba/wan-3.0/reference-to-video",
-    name: "Wan 3.0",
-    vendor: "Alibaba",
-    blurb: "프롬프트 필수. 이미지·영상 레퍼런스, 시드 고정, 사고 모드.",
-    images: { field: "image_urls", max: 6 },
-    videos: { field: "video_urls", max: 3 },
-    durationKey: "duration",
-    params: [
-      { key: "duration", label: "길이(초)", type: "int", min: 2, max: 30, default: 5 },
-      { key: "resolution", label: "해상도", type: "enum", options: ["720p", "1080p"], default: "1080p" },
-      { key: "aspect_ratio", label: "화면비", type: "enum", options: ["adaptive", "16:9", "9:16", "1:1", "4:3", "3:4"], default: "adaptive" },
-      { key: "seed", label: "시드(-1=랜덤)", type: "int", min: -1, max: 2147483647, default: -1 },
-      { key: "enable_thinking", label: "사고 모드", type: "bool", default: false },
-    ],
+    note: "화면비 옵션이 없고 입력 이미지의 비율을 따릅니다. 출력은 768p로 고정입니다.",
   },
 ];
 
@@ -110,7 +110,7 @@ export function coerceParams(spec: ModelSpec, raw: Record<string, unknown>): Rec
       case "enum": {
         const s = v === undefined ? p.default : String(v);
         if (!p.options.includes(s)) throw new Error(`${p.label}: ${p.options.join(" | ")}`);
-        out[p.key] = s;
+        out[p.key] = p.numeric ? Number(s) : s;
         break;
       }
       case "text": {
@@ -123,7 +123,7 @@ export function coerceParams(spec: ModelSpec, raw: Record<string, unknown>): Rec
   return out;
 }
 
-/** The JSON body Higgsfield expects for this model. */
+/** Build the Higgsfield request body from validated params and uploaded reference URLs. */
 export function buildArguments(
   spec: ModelSpec,
   prompt: string,
@@ -134,9 +134,9 @@ export function buildArguments(
   const args: Record<string, unknown> = { ...params };
   if (prompt.trim()) args.prompt = prompt.trim();
 
+  if (imageUrls.length > spec.images.max) throw new Error(`이미지는 최대 ${spec.images.max}장`);
   if (spec.images.field === "image_url") {
-    if (imageUrls.length === 0) throw new Error("이 모델은 이미지가 최소 1장 필요합니다");
-    args.image_url = imageUrls[0];
+    if (imageUrls[0]) args.image_url = imageUrls[0];
     if (imageUrls[1]) args.last_image_url = imageUrls[1];
   } else if (imageUrls.length > 0) {
     args.image_urls = imageUrls;
@@ -144,11 +144,12 @@ export function buildArguments(
 
   if (videoUrls.length > 0) {
     if (!spec.videos) throw new Error("이 모델은 영상 레퍼런스를 받지 않습니다");
+    if (videoUrls.length > spec.videos.max) throw new Error(`영상은 최대 ${spec.videos.max}개`);
     args[spec.videos.field] = videoUrls;
   }
 
-  if (spec.id.startsWith("alibaba/") && !args.prompt) throw new Error("Wan 3.0은 프롬프트가 필수입니다");
-  if (spec.id.startsWith("bytedance/") && imageUrls.length + videoUrls.length === 0)
-    throw new Error("Seedance는 이미지 또는 영상 레퍼런스가 최소 1개 필요합니다");
+  if (spec.promptRequired && !args.prompt) throw new Error(`${spec.name}은(는) 프롬프트가 필수입니다`);
+  if (spec.refsRequired && imageUrls.length + videoUrls.length === 0)
+    throw new Error(`${spec.name}은(는) 이미지 또는 영상 레퍼런스가 최소 1개 필요합니다`);
   return args;
 }

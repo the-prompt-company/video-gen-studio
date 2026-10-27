@@ -612,17 +612,29 @@ export function Playground({ models, hasApiKey, largeUploads, galleryCount }: { 
 
           <section className="space-y-3">
             <h2 className="text-xs font-semibold tracking-wider text-muted">2 · 모델과 하이퍼파라미터</h2>
-            <div className="grid gap-2 sm:grid-cols-3">
-              {models.map((m) => {
-                const on = m.id === model.id;
-                return (
-                  <button key={m.id} type="button" aria-pressed={on} onClick={() => { setModelId(m.id); setParams(defaultParams(m)); setRefs([]); }} className={`rounded-md border p-3 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background ${on ? "border-foreground bg-foreground text-background" : "border-border bg-surface-2 hover:border-foreground/50"}`}>
-                    <div className="text-sm font-medium" title={m.blurb}>{m.name}</div>
-                    <div className={`mt-0.5 text-xs tabular-nums ${on ? "text-background/70" : "text-subtle"}`}>{m.vendor} · {m.pricePerSecUsd > 0 ? `${usd(m.pricePerSecUsd)}/s` : "단가 미설정"}</div>
-                  </button>
-                );
-              })}
-            </div>
+            <Field label="모델" hint={model.pricePerSecUsd > 0 ? `${usd(model.pricePerSecUsd)}/s` : "단가 미설정"}>
+              <Select
+                value={model.id}
+                onChange={(e) => {
+                  const m = models.find((x) => x.id === e.target.value);
+                  if (!m) return;
+                  setModelId(m.id);
+                  setParams(defaultParams(m));
+                  setRefs([]);
+                  setError(null);
+                }}
+              >
+                {models.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name} · {m.vendor}{m.pricePerSecUsd > 0 ? ` · ${usd(m.pricePerSecUsd)}/s` : ""}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <p className="text-xs leading-relaxed text-muted">
+              {model.blurb}
+              {model.note && <span className="block text-subtle">{model.note}</span>}
+            </p>
             <div className="space-y-1">
               <div className="flex items-baseline justify-between gap-3 text-xs font-medium text-muted">
                 <span>출력 화면비</span>

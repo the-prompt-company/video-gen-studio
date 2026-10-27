@@ -185,7 +185,7 @@ components:
 
 결과 영상 하나가 무대를 다 가진다. 화면은 검은 무대(void)와 그 위에 서 있는 흰 글리프뿐이고, 색은 영상이 가져온다. 왼쪽 서랍의 폼은 오른쪽 무대에 올라갈 한 편을 준비하는 자리이며, 다음 결과는 한 번 스냅하면 온다. 이 시스템은 전문 디자이너·영상 제작자가 매일 들어와 프롬프트를 넣고 모델과 파라미터를 고르고 비용을 확인하는 **도구**다. 장난스럽거나 가벼운 소비자 앱 느낌은 거부했고, 검정+네온 글로우+그라데이션으로 된 흔한 AI 도구 외형도 거부했다. 2026-10-27에 보라 강조색 세계("The Night Render Desk")를 걷어내고 이 세계로 교체했으며, 이 라운드는 컴프 없이 코드로 바로 지었다.
 
-강조색은 없다. 주 행동은 흰 채움에 검정 글자이고, 선택된 모델 카드도 흰 채움이다. 숫자(비용, 길이, 카운터, 경과 시간)만 Bebas Neue와 Sand로 따로 목소리를 낸다. 깊이는 그림자가 아니라 네 단계 무채색 표면과 미디어 위의 검은 스크림으로 만든다. 밀도는 서랍 안에서는 중간(필드 사이 16px, 안쪽 20px), 무대에서는 비어 있음에 가깝다. 모션은 150ms 색 전환과 ETA가 없어서 채워지지 않고 **지나가는** 2px 진행선 하나뿐이다.
+강조색은 없다. 주 행동은 흰 채움에 검정 글자이고, 모델은 표준 select로 고른다. 숫자(비용, 길이, 카운터, 경과 시간)만 Bebas Neue와 Sand로 따로 목소리를 낸다. 깊이는 그림자가 아니라 네 단계 무채색 표면과 미디어 위의 검은 스크림으로 만든다. 밀도는 서랍 안에서는 중간(필드 사이 16px, 안쪽 20px), 무대에서는 비어 있음에 가깝다. 모션은 150ms 색 전환과 ETA가 없어서 채워지지 않고 **지나가는** 2px 진행선 하나뿐이다.
 
 **Key Characteristics:**
 - 바탕 void 위에 ink, slate, mist 세 단계 무채색과 1px 헤어라인으로만 구조를 세운다. 색 있는 강조색은 없고 흰색이 강조색이다.
@@ -200,7 +200,7 @@ components:
 거의 완전한 무채색 위에 흰색이 행동을 말하고, Sand가 숫자를 말하며, 색은 영상과 상태 배지만 가져온다.
 
 ### Primary
-- **White** (`white`, --accent): 주 행동의 채움색이자 글자색이다. "생성하기" 알약, 활성 글리프, 선택된 모델 카드, 포커스 링 2px, 캐럿, 슬라이더·체크박스의 accent-color, 진행선. 바탕이 될 때는 글자가 void로 뒤집힌다.
+- **White** (`white`, --accent): 주 행동의 채움색이자 글자색이다. "생성하기" 알약, 활성 글리프, 포커스 링 2px, 캐럿, 슬라이더·체크박스의 accent-color, 진행선. 바탕이 될 때는 글자가 void로 뒤집힌다.
 - **White, Hover** (`white-hover`, --accent-hover): 흰 채움 요소의 hover에만. 살짝 가라앉는 정도로 충분하다.
 
 ### Secondary
@@ -209,11 +209,11 @@ components:
 ### Neutral
 - **Void** (`void`, --background): 페이지와 무대의 바탕. 내비는 이 색 85% + backdrop-blur, 서랍 하단 바는 90% + blur.
 - **Ink** (`ink`, --surface): 피드 항목의 바탕(영상은 object-contain이므로 레터박스가 이 색), 문서형 페이지의 카드, API 키 경고 상자.
-- **Slate** (`slate`, --surface-2): 입력·textarea·select, 비선택 모델 카드, 레퍼런스 썸네일 바탕. 서랍에서 한 단 올라온 것.
+- **Slate** (`slate`, --surface-2): 입력·textarea·select, 모델 select, 레퍼런스 썸네일 바탕. 서랍에서 한 단 올라온 것.
 - **Mist** (`mist`, --border): 모든 1px 테두리와 구분선. 내비 아래, 서랍과 무대 사이, 레일 왼쪽, 업로드 존의 점선.
 - **White, Dim** (`white-dim`, --foreground-2): 캡션 프롬프트, 카드 제목, 고스트 버튼과 prev/next 화살표, 내비의 사용자명, queued 배지 글자.
 - **Muted** (`muted`): 필드 라벨, 섹션 번호 헤딩, 설명문, 피크 스트립 프롬프트, 글리프 라벨, 내비 비활성 링크. void 위 7.9:1, ink 위 6.6:1.
-- **Subtle** (`subtle`): 힌트, 메타, 플레이스홀더, 모델 카드의 공급사·단가, 빈 상태 문구, Stat 라벨. 가장 어두운 글자이며 slate 위 4.8:1. 이보다 어두운 글자는 없다.
+- **Subtle** (`subtle`): 힌트, 메타, 플레이스홀더, 모델 select 힌트의 단가, 빈 상태 문구, Stat 라벨. 가장 어두운 글자이며 slate 위 4.8:1. 이보다 어두운 글자는 없다.
 
 ### Status
 - **Running** (`status-running`, sky-300 글자 + sky-500 15% 틴트 + 30% 링), **Done** (`status-done`, emerald), **Failed** (`status-failed`, rose), **Blocked/NSFW** (`status-blocked`, amber), **Queued/Canceled** (zinc-500 15% 틴트에 white-dim 또는 muted 글자). 배지 안에서만 쓴다. 오류 문구는 rose-500 10% 틴트 상자 안의 rose-300 글자, 위험 버튼은 rose-600 90%. API 키 경고의 점은 amber-400.
@@ -252,7 +252,7 @@ components:
 
 ## Layout
 
-플레이그라운드는 1024px 이상에서 내비 아래 전체 높이(`100dvh − 56px`)를 두 열로 나눈다. 왼쪽 480px 서랍(내부 스크롤, 안쪽 20px, 하단 고정 바), 오른쪽 나머지가 무대. 무대는 세로 스냅 피드와 그 오른쪽 96px 글리프 레일(왼쪽 1px Mist)로 나뉜다. 1024px 미만에서는 무대가 먼저(72dvh, 최소 480px), 레일이 그 아래 가로 바(위 1px Mist)로, 서랍이 그 아래로 온다. 서랍의 썸네일 판·업로드 존·파라미터는 640px 이상에서 2열, 모델 카드는 3열.
+플레이그라운드는 1024px 이상에서 내비 아래 전체 높이(`100dvh − 56px`)를 두 열로 나눈다. 왼쪽 480px 서랍(내부 스크롤, 안쪽 20px, 하단 고정 바), 오른쪽 나머지가 무대. 무대는 세로 스냅 피드와 그 오른쪽 96px 글리프 레일(왼쪽 1px Mist)로 나뉜다. 1024px 미만에서는 무대가 먼저(72dvh, 최소 480px), 레일이 그 아래 가로 바(위 1px Mist)로, 서랍이 그 아래로 온다. 서랍의 썸네일 판·업로드 존·파라미터는 640px 이상에서 2열.
 
 문서형 페이지(갤러리·대시보드·어드민)는 `PageContainer`: 최대 폭 1280px, 좌우 16px, 상하 32px. 로그인은 최대 폭 384px 가운데 정렬.
 
@@ -275,14 +275,14 @@ components:
 
 ## Shapes
 
-행동은 알약, 컨트롤은 6px, 면은 12px, 글리프는 원. 버튼(primary·outline·ghost·danger), 내비 링크, 로그아웃, 상태 배지, 랜딩의 모델 태그는 완전한 알약(9999px). 입력·textarea·select·모델 카드·업로드 존·썸네일·오류 상자·API 키 경고는 6px. 문서형 페이지의 Card, Stat, Empty는 12px. 레일 글리프는 1.5px 흰 선(80%)의 원, 활성이면 흰 채움. prev/next 화살표는 36px 원형 히트 영역, 위치 점은 6px 원(활성 흰색, 나머지 흰색 30%). ADMIN 태그만 4px. 업로드 존은 1px 점선 Mist로 "비어 있음"을 말하고 hover에서 흰색 60%, focus-within에서 흰 실선 + 흰색 40% 링. 썸네일은 16:9, 112px 너비. 영상은 크롭하지 않는다(object-contain, 레터박스는 ink).
+행동은 알약, 컨트롤은 6px, 면은 12px, 글리프는 원. 버튼(primary·outline·ghost·danger), 내비 링크, 로그아웃, 상태 배지, 랜딩의 모델 태그는 완전한 알약(9999px). 입력·textarea·select·업로드 존·썸네일·오류 상자·API 키 경고는 6px. 문서형 페이지의 Card, Stat, Empty는 12px. 레일 글리프는 1.5px 흰 선(80%)의 원, 활성이면 흰 채움. prev/next 화살표는 36px 원형 히트 영역, 위치 점은 6px 원(활성 흰색, 나머지 흰색 30%). ADMIN 태그만 4px. 업로드 존은 1px 점선 Mist로 "비어 있음"을 말하고 hover에서 흰색 60%, focus-within에서 흰 실선 + 흰색 40% 링. 썸네일은 16:9, 112px 너비. 영상은 크롭하지 않는다(object-contain, 레터박스는 ink).
 
 ## Components
 
 ### Buttons
 - **Shape:** 알약(9999px), 글자 500, 줄바꿈 없음. 높이 sm 36 / md 40 / lg 48px, 좌우 16 / 20 / 28px, 글자 12 / 14 / 16px.
 - **Primary:** 흰 채움에 void 글자. hover white-hover. 비활성 40% 투명 + not-allowed. "생성하기"(lg)와 "로그인"(lg, 꽉 찬 너비).
-- **Hover / Focus:** 150ms 색 전환. focus-visible에 흰 2px 링 + void 2px 오프셋(모든 버튼·글리프·모델 카드 공통). 입력의 링은 흰색 40%.
+- **Hover / Focus:** 150ms 색 전환. focus-visible에 흰 2px 링 + void 2px 오프셋(모든 버튼·글리프 공통). 입력의 링은 흰색 40%.
 - **Outline:** 투명, 흰색 40% 테두리, 흰 글자. hover 테두리 흰색 + 흰색 5% 틴트. 빈 상태의 "생성 설정으로 이동"(sm).
 - **Ghost:** 투명, white-dim 글자. hover 흰색 10% 틴트 + 흰 글자.
 - **Danger:** rose-600 90% 바탕, 흰 글자, hover rose-500. 삭제·비활성화에만.
@@ -306,8 +306,8 @@ components:
 ### Navigation
 - Sticky 56px, void 85% + blur, 아래 1px Mist. 워드마크 Bebas 22px 흰색. 링크는 알약 14px, 비활성 muted → hover 흰색, 활성 흰색 12% 틴트 + 흰 글자 + `aria-current="page"`. 사용자명 white-dim(먼저 잘림), ADMIN은 Bebas 12px Sand의 4px 테두리 태그, 로그아웃은 36px 알약 outline(Mist 테두리, 12px white-dim, hover 흰색). 모바일은 링크 줄이 가로 스크롤, 44px.
 
-### Model Card
-`aria-pressed` 토글 버튼, 6px, 12px 안쪽. 비선택은 slate + Mist, hover 테두리 흰색 50%. 선택은 **흰 채움 + void 글자**로 뒤집힌다. 이름 14px 500, 공급사·단가 12px tabular(비선택 subtle, 선택 void 70%). 모델을 바꾸면 파라미터와 레퍼런스가 초기화된다.
+### Model Select
+표준 `<select>`(Slate 바탕, Mist 1px, 6px, 40px). 라벨 "모델", 오른쪽 힌트에 단가(`$0.0985/s`, tabular). 옵션 텍스트는 "이름 · 공급사 · 단가". 아래에 모델 설명 한 줄(muted)과 고정 제약 한 줄(subtle, 예: "출력은 768p로 고정"). 모델을 바꾸면 파라미터와 레퍼런스가 초기화된다. 카드형 선택은 2026-10-27에 select로 교체했다.
 
 ### Stage Feed (signature)
 무대는 void 위의 세로 스냅 피드. 각 항목은 ink 바탕에 높이 `100% − 72px`, `overflow-hidden`. 세 층이 겹친다. (1) 위 72px 피크 스트립: `.scrim-top`, 왼쪽에 Bebas 14px Sand "01 / 04"와 프롬프트 한 줄(12px muted, 말줄임), 오른쪽에 StatusBadge. (2) 가운데: 완료면 `<video>` object-contain(활성 항목만 controls·autoPlay·preload), 진행 중이면 56px 2px 흰 스피너(1.4s) + Bebas 72/96px 경과 시간(`aria-live="polite"`) + "생성 중 · 경과 시간", 실패·취소면 Bebas 72/96px 상태 단어(white-dim) + 사유 한 줄. (3) 아래 캡션 `.scrim`(위 96px 패딩, 좌우 20px, 아래 20px 또는 영상 컨트롤을 피해 64px): 모델명 white-dim 12px + Bebas 14px Sand "5S · $0.2250", 상태 줄 14px 500 흰색 + muted 경과/소요, 프롬프트 14px white-dim 2줄 클램프, 진행 중이면 그 아래 2px 진행선(흰색 15% 트랙 위를 25% 너비 흰 선이 1.8s마다 지나감, `role="progressbar"` + "진행률을 알 수 없음"). 새 생성은 맨 위에 삽입되고 피드가 맨 위로 스냅하며 무대가 뷰포트에 들어온다. 피드는 최근 12개까지.

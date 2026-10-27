@@ -4,48 +4,312 @@
   "title": "Design System: Video Gen Studio",
   "extensions": {
     "colorMeta": {
-      "white": { "role": "primary", "displayName": "White", "canonical": "oklch(100% 0 0)", "tonalRamp": ["oklch(15% 0 0)", "oklch(18% 0.005 265)", "oklch(24% 0.01 270)", "oklch(30% 0.018 265)", "oklch(62% 0.018 250)", "oklch(70% 0.013 240)", "oklch(87% 0.005 265)", "oklch(100% 0 0)"] },
-      "white-hover": { "role": "primary", "displayName": "White, Hover", "canonical": "oklch(91% 0.003 286)", "tonalRamp": ["oklch(15% 0 0)", "oklch(18% 0.005 265)", "oklch(24% 0.01 270)", "oklch(30% 0.018 265)", "oklch(62% 0.018 250)", "oklch(70% 0.013 240)", "oklch(91% 0.003 286)", "oklch(100% 0 0)"] },
-      "sand": { "role": "secondary", "displayName": "Sand", "canonical": "oklch(78% 0.03 75)", "tonalRamp": ["oklch(20% 0.02 75)", "oklch(30% 0.025 75)", "oklch(42% 0.03 75)", "oklch(55% 0.03 75)", "oklch(66% 0.03 75)", "oklch(78% 0.03 75)", "oklch(88% 0.02 75)", "oklch(96% 0.01 75)"] },
-      "void": { "role": "neutral", "displayName": "Void", "canonical": "oklch(15% 0 0)", "tonalRamp": ["oklch(15% 0 0)", "oklch(18% 0.005 265)", "oklch(24% 0.01 270)", "oklch(30% 0.018 265)", "oklch(62% 0.018 250)", "oklch(70% 0.013 240)", "oklch(87% 0.005 265)", "oklch(100% 0 0)"] },
-      "ink": { "role": "neutral", "displayName": "Ink", "canonical": "oklch(18% 0.005 265)", "tonalRamp": ["oklch(15% 0 0)", "oklch(18% 0.005 265)", "oklch(24% 0.01 270)", "oklch(30% 0.018 265)", "oklch(62% 0.018 250)", "oklch(70% 0.013 240)", "oklch(87% 0.005 265)", "oklch(100% 0 0)"] },
-      "slate": { "role": "neutral", "displayName": "Slate", "canonical": "oklch(24% 0.01 270)", "tonalRamp": ["oklch(15% 0 0)", "oklch(18% 0.005 265)", "oklch(24% 0.01 270)", "oklch(30% 0.018 265)", "oklch(62% 0.018 250)", "oklch(70% 0.013 240)", "oklch(87% 0.005 265)", "oklch(100% 0 0)"] },
-      "mist": { "role": "neutral", "displayName": "Mist", "canonical": "oklch(30% 0.018 265)", "tonalRamp": ["oklch(15% 0 0)", "oklch(18% 0.005 265)", "oklch(24% 0.01 270)", "oklch(30% 0.018 265)", "oklch(62% 0.018 250)", "oklch(70% 0.013 240)", "oklch(87% 0.005 265)", "oklch(100% 0 0)"] },
-      "white-dim": { "role": "neutral", "displayName": "White, Dim", "canonical": "oklch(87% 0.005 265)", "tonalRamp": ["oklch(15% 0 0)", "oklch(18% 0.005 265)", "oklch(24% 0.01 270)", "oklch(30% 0.018 265)", "oklch(62% 0.018 250)", "oklch(70% 0.013 240)", "oklch(87% 0.005 265)", "oklch(100% 0 0)"] },
-      "muted": { "role": "neutral", "displayName": "Muted", "canonical": "oklch(70% 0.013 240)", "tonalRamp": ["oklch(15% 0 0)", "oklch(18% 0.005 265)", "oklch(24% 0.01 270)", "oklch(30% 0.018 265)", "oklch(62% 0.018 250)", "oklch(70% 0.013 240)", "oklch(87% 0.005 265)", "oklch(100% 0 0)"] },
-      "subtle": { "role": "neutral", "displayName": "Subtle", "canonical": "oklch(62% 0.018 250)", "tonalRamp": ["oklch(15% 0 0)", "oklch(18% 0.005 265)", "oklch(24% 0.01 270)", "oklch(30% 0.018 265)", "oklch(62% 0.018 250)", "oklch(70% 0.013 240)", "oklch(87% 0.005 265)", "oklch(100% 0 0)"] },
-      "status-running": { "role": "tertiary", "displayName": "Running Sky", "canonical": "oklch(85% 0.10 230)", "tonalRamp": ["oklch(25% 0.06 230)", "oklch(35% 0.09 230)", "oklch(45% 0.12 230)", "oklch(60% 0.14 230)", "oklch(70% 0.13 230)", "oklch(85% 0.10 230)", "oklch(92% 0.05 230)", "oklch(97% 0.02 230)"] },
-      "status-done": { "role": "tertiary", "displayName": "Done Emerald", "canonical": "oklch(88% 0.12 165)", "tonalRamp": ["oklch(25% 0.06 165)", "oklch(35% 0.09 165)", "oklch(45% 0.12 165)", "oklch(60% 0.15 165)", "oklch(70% 0.15 165)", "oklch(88% 0.12 165)", "oklch(93% 0.07 165)", "oklch(97% 0.03 165)"] },
-      "status-failed": { "role": "tertiary", "displayName": "Failed Rose", "canonical": "oklch(81% 0.10 10)", "tonalRamp": ["oklch(25% 0.08 10)", "oklch(35% 0.12 10)", "oklch(45% 0.16 10)", "oklch(60% 0.20 10)", "oklch(70% 0.17 10)", "oklch(81% 0.10 10)", "oklch(90% 0.05 10)", "oklch(97% 0.02 10)"] },
-      "status-blocked": { "role": "tertiary", "displayName": "Blocked Amber", "canonical": "oklch(88% 0.14 85)", "tonalRamp": ["oklch(25% 0.06 85)", "oklch(35% 0.09 85)", "oklch(45% 0.12 85)", "oklch(60% 0.15 85)", "oklch(75% 0.16 85)", "oklch(88% 0.14 85)", "oklch(93% 0.09 85)", "oklch(97% 0.04 85)"] }
+      "white": {
+        "role": "primary",
+        "displayName": "White",
+        "canonical": "oklch(100% 0 0)",
+        "tonalRamp": [
+          "oklch(15% 0 0)",
+          "oklch(18% 0.005 265)",
+          "oklch(24% 0.01 270)",
+          "oklch(30% 0.018 265)",
+          "oklch(62% 0.018 250)",
+          "oklch(70% 0.013 240)",
+          "oklch(87% 0.005 265)",
+          "oklch(100% 0 0)"
+        ]
+      },
+      "white-hover": {
+        "role": "primary",
+        "displayName": "White, Hover",
+        "canonical": "oklch(91% 0.003 286)",
+        "tonalRamp": [
+          "oklch(15% 0 0)",
+          "oklch(18% 0.005 265)",
+          "oklch(24% 0.01 270)",
+          "oklch(30% 0.018 265)",
+          "oklch(62% 0.018 250)",
+          "oklch(70% 0.013 240)",
+          "oklch(91% 0.003 286)",
+          "oklch(100% 0 0)"
+        ]
+      },
+      "sand": {
+        "role": "secondary",
+        "displayName": "Sand",
+        "canonical": "oklch(78% 0.03 75)",
+        "tonalRamp": [
+          "oklch(20% 0.02 75)",
+          "oklch(30% 0.025 75)",
+          "oklch(42% 0.03 75)",
+          "oklch(55% 0.03 75)",
+          "oklch(66% 0.03 75)",
+          "oklch(78% 0.03 75)",
+          "oklch(88% 0.02 75)",
+          "oklch(96% 0.01 75)"
+        ]
+      },
+      "void": {
+        "role": "neutral",
+        "displayName": "Void",
+        "canonical": "oklch(15% 0 0)",
+        "tonalRamp": [
+          "oklch(15% 0 0)",
+          "oklch(18% 0.005 265)",
+          "oklch(24% 0.01 270)",
+          "oklch(30% 0.018 265)",
+          "oklch(62% 0.018 250)",
+          "oklch(70% 0.013 240)",
+          "oklch(87% 0.005 265)",
+          "oklch(100% 0 0)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "oklch(18% 0.005 265)",
+        "tonalRamp": [
+          "oklch(15% 0 0)",
+          "oklch(18% 0.005 265)",
+          "oklch(24% 0.01 270)",
+          "oklch(30% 0.018 265)",
+          "oklch(62% 0.018 250)",
+          "oklch(70% 0.013 240)",
+          "oklch(87% 0.005 265)",
+          "oklch(100% 0 0)"
+        ]
+      },
+      "slate": {
+        "role": "neutral",
+        "displayName": "Slate",
+        "canonical": "oklch(24% 0.01 270)",
+        "tonalRamp": [
+          "oklch(15% 0 0)",
+          "oklch(18% 0.005 265)",
+          "oklch(24% 0.01 270)",
+          "oklch(30% 0.018 265)",
+          "oklch(62% 0.018 250)",
+          "oklch(70% 0.013 240)",
+          "oklch(87% 0.005 265)",
+          "oklch(100% 0 0)"
+        ]
+      },
+      "mist": {
+        "role": "neutral",
+        "displayName": "Mist",
+        "canonical": "oklch(30% 0.018 265)",
+        "tonalRamp": [
+          "oklch(15% 0 0)",
+          "oklch(18% 0.005 265)",
+          "oklch(24% 0.01 270)",
+          "oklch(30% 0.018 265)",
+          "oklch(62% 0.018 250)",
+          "oklch(70% 0.013 240)",
+          "oklch(87% 0.005 265)",
+          "oklch(100% 0 0)"
+        ]
+      },
+      "white-dim": {
+        "role": "neutral",
+        "displayName": "White, Dim",
+        "canonical": "oklch(87% 0.005 265)",
+        "tonalRamp": [
+          "oklch(15% 0 0)",
+          "oklch(18% 0.005 265)",
+          "oklch(24% 0.01 270)",
+          "oklch(30% 0.018 265)",
+          "oklch(62% 0.018 250)",
+          "oklch(70% 0.013 240)",
+          "oklch(87% 0.005 265)",
+          "oklch(100% 0 0)"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted",
+        "canonical": "oklch(70% 0.013 240)",
+        "tonalRamp": [
+          "oklch(15% 0 0)",
+          "oklch(18% 0.005 265)",
+          "oklch(24% 0.01 270)",
+          "oklch(30% 0.018 265)",
+          "oklch(62% 0.018 250)",
+          "oklch(70% 0.013 240)",
+          "oklch(87% 0.005 265)",
+          "oklch(100% 0 0)"
+        ]
+      },
+      "subtle": {
+        "role": "neutral",
+        "displayName": "Subtle",
+        "canonical": "oklch(62% 0.018 250)",
+        "tonalRamp": [
+          "oklch(15% 0 0)",
+          "oklch(18% 0.005 265)",
+          "oklch(24% 0.01 270)",
+          "oklch(30% 0.018 265)",
+          "oklch(62% 0.018 250)",
+          "oklch(70% 0.013 240)",
+          "oklch(87% 0.005 265)",
+          "oklch(100% 0 0)"
+        ]
+      },
+      "status-running": {
+        "role": "tertiary",
+        "displayName": "Running Sky",
+        "canonical": "oklch(85% 0.10 230)",
+        "tonalRamp": [
+          "oklch(25% 0.06 230)",
+          "oklch(35% 0.09 230)",
+          "oklch(45% 0.12 230)",
+          "oklch(60% 0.14 230)",
+          "oklch(70% 0.13 230)",
+          "oklch(85% 0.10 230)",
+          "oklch(92% 0.05 230)",
+          "oklch(97% 0.02 230)"
+        ]
+      },
+      "status-done": {
+        "role": "tertiary",
+        "displayName": "Done Emerald",
+        "canonical": "oklch(88% 0.12 165)",
+        "tonalRamp": [
+          "oklch(25% 0.06 165)",
+          "oklch(35% 0.09 165)",
+          "oklch(45% 0.12 165)",
+          "oklch(60% 0.15 165)",
+          "oklch(70% 0.15 165)",
+          "oklch(88% 0.12 165)",
+          "oklch(93% 0.07 165)",
+          "oklch(97% 0.03 165)"
+        ]
+      },
+      "status-failed": {
+        "role": "tertiary",
+        "displayName": "Failed Rose",
+        "canonical": "oklch(81% 0.10 10)",
+        "tonalRamp": [
+          "oklch(25% 0.08 10)",
+          "oklch(35% 0.12 10)",
+          "oklch(45% 0.16 10)",
+          "oklch(60% 0.20 10)",
+          "oklch(70% 0.17 10)",
+          "oklch(81% 0.10 10)",
+          "oklch(90% 0.05 10)",
+          "oklch(97% 0.02 10)"
+        ]
+      },
+      "status-blocked": {
+        "role": "tertiary",
+        "displayName": "Blocked Amber",
+        "canonical": "oklch(88% 0.14 85)",
+        "tonalRamp": [
+          "oklch(25% 0.06 85)",
+          "oklch(35% 0.09 85)",
+          "oklch(45% 0.12 85)",
+          "oklch(60% 0.15 85)",
+          "oklch(75% 0.16 85)",
+          "oklch(88% 0.14 85)",
+          "oklch(93% 0.09 85)",
+          "oklch(97% 0.04 85)"
+        ]
+      }
     },
     "typographyMeta": {
-      "display": { "displayName": "Display", "purpose": "무대 가운데의 경과 시간과 실패·취소 상태 한 단어. 72px, 640px 이상 96px. 무대에만." },
-      "numeral": { "displayName": "Numeral", "purpose": "서랍 하단 바의 예상 비용. Sand." },
-      "wordmark": { "displayName": "Wordmark", "purpose": "내비·로그인·랜딩의 Video Gen Studio. 흰색." },
-      "counter": { "displayName": "Counter", "purpose": "레일 글리프 카운터 16px. 14px 변형은 피크 번호·캡션 길이·비용·썸네일 번호, 12px은 ADMIN 태그. Sand." },
-      "headline": { "displayName": "Headline", "purpose": "문서형 페이지와 로그인의 h1. 아래 muted 14px 설명 한 줄." },
-      "title": { "displayName": "Title", "purpose": "서랍의 h1, 48px 주 버튼 글자." },
-      "section": { "displayName": "Section", "purpose": "서랍의 번호 헤딩. 순서가 정보일 때만 번호." },
-      "body": { "displayName": "Body", "purpose": "본문, 입력, 버튼, 캡션, 내비 링크." },
-      "label": { "displayName": "Label", "purpose": "필드 라벨(muted)과 힌트(subtle tabular), sm 버튼." },
-      "meta": { "displayName": "Meta", "purpose": "글리프 라벨, 상태 배지, 계산식, 썸네일 제거. 11px 바닥." }
+      "display": {
+        "displayName": "Display",
+        "purpose": "무대 가운데의 경과 시간과 실패·취소 상태 한 단어. 72px, 640px 이상 96px. 무대에만."
+      },
+      "numeral": {
+        "displayName": "Numeral",
+        "purpose": "서랍 하단 바의 예상 비용. Sand."
+      },
+      "wordmark": {
+        "displayName": "Wordmark",
+        "purpose": "내비·로그인·랜딩의 Video Gen Studio. 흰색."
+      },
+      "counter": {
+        "displayName": "Counter",
+        "purpose": "레일 글리프 카운터 16px. 14px 변형은 피크 번호·캡션 길이·비용·썸네일 번호, 12px은 ADMIN 태그. Sand."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "문서형 페이지와 로그인의 h1. 아래 muted 14px 설명 한 줄."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "서랍의 h1, 48px 주 버튼 글자."
+      },
+      "section": {
+        "displayName": "Section",
+        "purpose": "서랍의 번호 헤딩. 순서가 정보일 때만 번호."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "본문, 입력, 버튼, 캡션, 내비 링크."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "필드 라벨(muted)과 힌트(subtle tabular), sm 버튼."
+      },
+      "meta": {
+        "displayName": "Meta",
+        "purpose": "글리프 라벨, 상태 배지, 계산식, 썸네일 제거. 11px 바닥."
+      }
     },
     "shadows": [
-      { "name": "thumbnail-numeral", "value": "drop-shadow(0 1px 2px rgba(0,0,0,.1)) drop-shadow(0 1px 1px rgba(0,0,0,.06))", "purpose": "레퍼런스 썸네일 위 Bebas 번호에만. 면에는 그림자가 없다." },
-      { "name": "scrim-caption", "value": "linear-gradient(180deg, rgba(10,10,10,0) 0%, rgba(10,10,10,0.55) 40%, rgba(10,10,10,0.94) 100%)", "purpose": "피드 항목 아래 캡션을 받치는 검은 스크림(.scrim). 그림자 대신 쓰는 깊이." },
-      { "name": "scrim-peek", "value": "linear-gradient(180deg, rgba(10,10,10,0.9) 0%, rgba(10,10,10,0) 100%)", "purpose": "피드 항목 위 72px 피크 스트립(.scrim-top)." }
+      {
+        "name": "thumbnail-numeral",
+        "value": "drop-shadow(0 1px 2px rgba(0,0,0,.1)) drop-shadow(0 1px 1px rgba(0,0,0,.06))",
+        "purpose": "레퍼런스 썸네일 위 Bebas 번호에만. 면에는 그림자가 없다."
+      },
+      {
+        "name": "scrim-caption",
+        "value": "linear-gradient(180deg, rgba(10,10,10,0) 0%, rgba(10,10,10,0.55) 40%, rgba(10,10,10,0.94) 100%)",
+        "purpose": "피드 항목 아래 캡션을 받치는 검은 스크림(.scrim). 그림자 대신 쓰는 깊이."
+      },
+      {
+        "name": "scrim-peek",
+        "value": "linear-gradient(180deg, rgba(10,10,10,0.9) 0%, rgba(10,10,10,0) 100%)",
+        "purpose": "피드 항목 위 72px 피크 스트립(.scrim-top)."
+      }
     ],
     "motion": [
-      { "name": "ease-state", "value": "150ms cubic-bezier(0.4, 0, 0.2, 1)", "purpose": "hover/focus 색·테두리·투명도 전환(Tailwind transition). reduced-motion이면 0s." },
-      { "name": "travel", "value": "1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite, translateX(-100%) → translateX(400%)", "purpose": "ETA 없는 진행선. 25% 너비 흰 선이 트랙을 지나간다. reduced-motion이면 정지한 50% 투명 전체 선." },
-      { "name": "spin", "value": "1.4s linear infinite", "purpose": "무대 가운데 56px 스피너(생성 중)." },
-      { "name": "pulse", "value": "2s cubic-bezier(0.4, 0, 0.6, 1) infinite", "purpose": "queued/in_progress 배지의 점. reduced-motion이면 정지." },
-      { "name": "snap-scroll", "value": "scroll-behavior: smooth; scroll-snap-type: y mandatory; scroll-snap-stop: always", "purpose": "피드 이동과 새 생성 삽입 시 맨 위로 스냅. reduced-motion이면 auto." }
+      {
+        "name": "ease-state",
+        "value": "150ms cubic-bezier(0.4, 0, 0.2, 1)",
+        "purpose": "hover/focus 색·테두리·투명도 전환(Tailwind transition). reduced-motion이면 0s."
+      },
+      {
+        "name": "travel",
+        "value": "1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite, translateX(-100%) → translateX(400%)",
+        "purpose": "ETA 없는 진행선. 25% 너비 흰 선이 트랙을 지나간다. reduced-motion이면 정지한 50% 투명 전체 선."
+      },
+      {
+        "name": "spin",
+        "value": "1.4s linear infinite",
+        "purpose": "무대 가운데 56px 스피너(생성 중)."
+      },
+      {
+        "name": "pulse",
+        "value": "2s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+        "purpose": "queued/in_progress 배지의 점. reduced-motion이면 정지."
+      },
+      {
+        "name": "snap-scroll",
+        "value": "scroll-behavior: smooth; scroll-snap-type: y mandatory; scroll-snap-stop: always",
+        "purpose": "피드 이동과 새 생성 삽입 시 맨 위로 스냅. reduced-motion이면 auto."
+      }
     ],
     "breakpoints": [
-      { "name": "sm", "value": "640px" },
-      { "name": "lg", "value": "1024px" }
+      {
+        "name": "sm",
+        "value": "640px"
+      },
+      {
+        "name": "lg",
+        "value": "1024px"
+      }
     ]
   },
   "components": [
@@ -98,12 +362,12 @@
       "css": ".ds-chip { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 9999px; font: 500 11px/1.4 var(--font-inter), system-ui, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; white-space: nowrap; box-shadow: inset 0 0 0 1px var(--chip-ring); background: var(--chip-bg); color: var(--chip-fg); } .ds-chip-dot { width: 6px; height: 6px; margin-right: 6px; border-radius: 9999px; background: currentColor; animation: ds-pulse 2s cubic-bezier(.4,0,.6,1) infinite; } @keyframes ds-pulse { 50% { opacity: .5; } } .ds-chip-queued { --chip-bg: rgba(113,113,122,.15); --chip-ring: rgba(113,113,122,.3); --chip-fg: var(--foreground-2, #d4d6db); } .ds-chip-running { --chip-bg: rgba(14,165,233,.15); --chip-ring: rgba(14,165,233,.3); --chip-fg: #7dd3fc; } .ds-chip-done { --chip-bg: rgba(16,185,129,.15); --chip-ring: rgba(16,185,129,.3); --chip-fg: #6ee7b7; } .ds-chip-failed { --chip-bg: rgba(244,63,94,.15); --chip-ring: rgba(244,63,94,.3); --chip-fg: #fda4af; } .ds-chip-blocked { --chip-bg: rgba(245,158,11,.15); --chip-ring: rgba(245,158,11,.3); --chip-fg: #fcd34d; } @media (prefers-reduced-motion: reduce) { .ds-chip-dot { animation: none; } }"
     },
     {
-      "name": "Model Card",
-      "kind": "custom",
+      "name": "Model Select",
+      "kind": "input",
       "refersTo": "model-card-selected",
-      "description": "aria-pressed 토글. 비선택 slate + Mist, 선택은 흰 채움 + void 글자로 뒤집힌다.",
-      "html": "<div class=\"ds-models\"><button class=\"ds-model\" aria-pressed=\"true\"><div class=\"ds-model-name\">Kling 3.0 Standard</div><div class=\"ds-model-meta\">Kling · $0.0450/s</div></button><button class=\"ds-model\" aria-pressed=\"false\"><div class=\"ds-model-name\">Seedance 2.5</div><div class=\"ds-model-meta\">ByteDance · 단가 미설정</div></button><button class=\"ds-model\" aria-pressed=\"false\"><div class=\"ds-model-name\">Wan 3.0</div><div class=\"ds-model-meta\">Alibaba · 단가 미설정</div></button></div>",
-      "css": ".ds-models { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; font-family: var(--font-inter), system-ui, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; } .ds-model { padding: 12px; border: 1px solid var(--border, #2a2f39); border-radius: 6px; background: var(--surface-2, #1e2026); color: var(--foreground, #ffffff); text-align: left; cursor: pointer; transition: border-color 150ms, background-color 150ms, color 150ms; } .ds-model:hover { border-color: rgba(255,255,255,.5); } .ds-model[aria-pressed=\"true\"] { border-color: var(--foreground, #ffffff); background: var(--foreground, #ffffff); color: var(--background, #0a0a0a); } .ds-model:focus-visible { outline: 2px solid var(--accent, #ffffff); outline-offset: 2px; } .ds-model-name { font-size: 14px; font-weight: 500; line-height: 1.43; } .ds-model-meta { margin-top: 2px; font-size: 12px; line-height: 1.33; color: var(--subtle, #838c98); font-variant-numeric: tabular-nums; } .ds-model[aria-pressed=\"true\"] .ds-model-meta { color: rgba(10,10,10,.7); }"
+      "description": "표준 select로 모델을 고른다. 라벨 오른쪽에 단가 힌트, 아래에 설명·제약 한 줄.",
+      "html": "<label class=\"ds-field\"><span class=\"ds-field-label\"><span>모델</span><span class=\"ds-field-hint\">$0.0985/s</span></span><select class=\"ds-select\"><option>Seedance 2.0 · ByteDance · $0.0985/s</option><option>Hailuo 2.3 Standard · MiniMax · $0.0117/s</option></select></label>",
+      "css": ".ds-field { display: block; font-family: Inter, system-ui, sans-serif; } .ds-field-label { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 6px; font: 500 12px/1.33 inherit; color: var(--muted, #9aa3ad); } .ds-field-hint { font-weight: 400; color: var(--subtle, #838c98); font-variant-numeric: tabular-nums; } .ds-select { width: 100%; height: 40px; padding: 0 12px; border: 1px solid var(--border, #2a2f39); border-radius: 6px; background: var(--surface-2, #1e2026); color: var(--foreground, #fff); font: 400 14px/1.5 inherit; } .ds-select:focus { border-color: rgba(255,255,255,.6); outline: 0; } .ds-select:focus-visible { box-shadow: 0 0 0 2px rgba(255,255,255,.4); }"
     },
     {
       "name": "Glyph Rail",
@@ -142,13 +406,41 @@
       "그림자 없음. 깊이는 표면 단계와 스크림. reduced-motion이면 스냅·진행선·펄스·색 전환이 모두 정지한다."
     ],
     "rules": [
-      { "name": "The White Is The Accent Rule", "body": "강조색은 흰색 하나다. 행동·선택·포커스·진행은 흰 채움 또는 흰 선으로 말하고, 색상(hue)을 가진 면은 상태 배지와 오류 상자 외에는 없다. 보라·시안·네온 글로우는 2026-10-27에 걷어냈고 다시 들이지 않는다.", "section": "colors" },
-      { "name": "The Sand Numeral Rule", "body": "Sand는 Bebas Neue 숫자 위에만 얹는다. 본문, 라벨, 아이콘, 테두리에 Sand를 쓰면 숫자의 목소리가 사라진다.", "section": "colors" },
-      { "name": "The Four Tiers Rule", "body": "글자 색은 white, white-dim, muted, subtle 네 토큰(text-foreground, text-foreground-2, text-muted, text-subtle)만 쓴다. text-zinc-*와 임의 rgba 글자색은 쓰지 않는다. 유일한 예외는 흰 채움 위의 text-background 와 text-background/70.", "section": "colors" },
-      { "name": "The Bebas Is A Numeral Rule", "body": "Bebas Neue는 숫자와 라틴 한 단어에만 쓴다. 한글 본문·라벨·버튼에 .font-display를 얹지 않는다. Bebas에는 한글이 없어 시스템 글꼴로 떨어진다.", "section": "typography" },
-      { "name": "The Tabular Rule", "body": "비용, 길이, 횟수, 개수 등 Inter로 쓴 숫자는 모두 tabular-nums. 비용은 usd()로 소수 자릿수를 맞춘다(≥100은 정수, ≥1은 2자리, 그 아래는 4자리).", "section": "typography" },
-      { "name": "The One Snap Rule", "body": "피드는 scroll-snap-type: y mandatory, 항목은 scroll-snap-stop: always. 한 번에 하나의 결과만 무대를 가지며, 중간에 멈추지 않는다. 항목 높이는 무대 높이 − 72px이라 다음 항목의 피크 스트립(번호 · 프롬프트 · 배지)이 항상 아래에 비친다. 무대의 60% 이상이 보이는 항목이 활성(aria-current)이고 레일의 카운터는 그 항목을 따른다.", "section": "layout" },
-      { "name": "The Scrim Not Shadow Rule", "body": "면은 뜨지 않는다. 글자가 미디어 위에 놓여야 하면 검은 스크림으로 받치고, 면이 면 위에 놓여야 하면 톤 한 단계와 1px Mist로 구분한다. box-shadow와 색 있는 글로우는 어디에도 없다.", "section": "elevation" }
+      {
+        "name": "The White Is The Accent Rule",
+        "body": "강조색은 흰색 하나다. 행동·선택·포커스·진행은 흰 채움 또는 흰 선으로 말하고, 색상(hue)을 가진 면은 상태 배지와 오류 상자 외에는 없다. 보라·시안·네온 글로우는 2026-10-27에 걷어냈고 다시 들이지 않는다.",
+        "section": "colors"
+      },
+      {
+        "name": "The Sand Numeral Rule",
+        "body": "Sand는 Bebas Neue 숫자 위에만 얹는다. 본문, 라벨, 아이콘, 테두리에 Sand를 쓰면 숫자의 목소리가 사라진다.",
+        "section": "colors"
+      },
+      {
+        "name": "The Four Tiers Rule",
+        "body": "글자 색은 white, white-dim, muted, subtle 네 토큰(text-foreground, text-foreground-2, text-muted, text-subtle)만 쓴다. text-zinc-*와 임의 rgba 글자색은 쓰지 않는다. 유일한 예외는 흰 채움 위의 text-background 와 text-background/70.",
+        "section": "colors"
+      },
+      {
+        "name": "The Bebas Is A Numeral Rule",
+        "body": "Bebas Neue는 숫자와 라틴 한 단어에만 쓴다. 한글 본문·라벨·버튼에 .font-display를 얹지 않는다. Bebas에는 한글이 없어 시스템 글꼴로 떨어진다.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tabular Rule",
+        "body": "비용, 길이, 횟수, 개수 등 Inter로 쓴 숫자는 모두 tabular-nums. 비용은 usd()로 소수 자릿수를 맞춘다(≥100은 정수, ≥1은 2자리, 그 아래는 4자리).",
+        "section": "typography"
+      },
+      {
+        "name": "The One Snap Rule",
+        "body": "피드는 scroll-snap-type: y mandatory, 항목은 scroll-snap-stop: always. 한 번에 하나의 결과만 무대를 가지며, 중간에 멈추지 않는다. 항목 높이는 무대 높이 − 72px이라 다음 항목의 피크 스트립(번호 · 프롬프트 · 배지)이 항상 아래에 비친다. 무대의 60% 이상이 보이는 항목이 활성(aria-current)이고 레일의 카운터는 그 항목을 따른다.",
+        "section": "layout"
+      },
+      {
+        "name": "The Scrim Not Shadow Rule",
+        "body": "면은 뜨지 않는다. 글자가 미디어 위에 놓여야 하면 검은 스크림으로 받치고, 면이 면 위에 놓여야 하면 톤 한 단계와 1px Mist로 구분한다. box-shadow와 색 있는 글로우는 어디에도 없다.",
+        "section": "elevation"
+      }
     ],
     "dos": [
       "Do 행동은 흰색으로. 주 버튼·활성 글리프·선택 카드는 흰 채움 + void 글자, 포커스는 흰 2px 링 + 2px 오프셋.",
