@@ -231,6 +231,111 @@ function FeedItem({ g, index, total, active, now, modelName }: { g: PublicGenera
   );
 }
 
+function RefThumbs({ refs, images, videos, onRemove, size = "w-28" }: { refs: Ref[]; images: Ref[]; videos: Ref[]; onRemove: (id: string) => void; size?: string }) {
+  return (
+    <ul className="flex flex-wrap gap-2" aria-label="첨부한 레퍼런스">
+      {refs.map((r) => {
+        const i = (r.kind === "image" ? images : videos).findIndex((x) => x.id === r.id);
+        const tag = r.kind === "image" ? String(i + 1) : `V${i + 1}`;
+        return (
+          <li key={r.id} className={`group relative aspect-video ${size} overflow-hidden rounded-md border border-border bg-background`}>
+            {r.kind === "image" ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={r.local ?? r.url} alt={r.name} className="h-full w-full object-contain" />
+            ) : (
+              <video src={r.local ?? r.url} className="h-full w-full object-contain" muted playsInline aria-label={r.name} />
+            )}
+            <span aria-hidden className="font-display absolute left-1.5 top-1 text-[14px] text-foreground drop-shadow">{tag}</span>
+            {r.w && r.h && <span aria-hidden className="absolute bottom-1 right-1.5 text-[10px] tabular-nums text-foreground-2 drop-shadow">{orientation(r.w, r.h)}</span>}
+            <button type="button" aria-label={`${r.kind === "image" ? "이미지" : "영상"} 레퍼런스 ${tag} ${r.name} 제거`} onClick={() => onRemove(r.id)} className="absolute inset-x-0 bottom-0 min-h-7 bg-background/80 text-[11px] text-rose-300 opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100">
+              제거
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/* Drop zone: click opens the picker, files can also be dragged in. */
+function DropZone({ kind, max, count, disabled, uploading, hint, accept, onFiles }: { kind: "image" | "video"; max: number; count: number; disabled: boolean; uploading: boolean; hint: string; accept: string; onFiles: (files: FileList | null) => void }) {
+  const [over, setOver] = useState(false);
+  const full = count >= max;
+  const label = kind === "image" ? "이미지" : "영상";
+  return (
+    <label
+      onDragOver={(e) => { if (!disabled && !full) { e.preventDefault(); setOver(true); } }}
+      onDragLeave={() => setOver(false)}
+      onDrop={(e) => { e.preventDefault(); setOver(false); if (!disabled && !full) onFiles(e.dataTransfer.files); }}
+      className={`flex min-h-36 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-md border border-dashed px-4 text-center transition focus-within:ring-2 focus-within:ring-accent/40 ${
+        disabled ? "cursor-not-allowed border-border opacity-50" : over ? "border-foreground bg-white/5" : "border-border hover:border-foreground/60"
+      }`}
+    >
+      <span className="font-display text-2xl leading-none text-sand">{count}/{max}</span>
+      <span className="text-sm text-foreground-2">{disabled ? `${label} 레퍼런스를 받지 않는 모델` : uploading ? "업로드 중…" : full ? `${label} ${max}개 모두 추가됨` : `${label} 파일을 끌어다 놓거나 클릭해서 선택`}</span>
+      <span className="text-[11px] text-subtle">{hint}</span>
+      <input type="file" accept={accept} multiple={kind === "image"} className="sr-only" aria-label={`${label} 레퍼런스 추가`} disabled={disabled || uploading || full} onChange={(e) => { onFiles(e.target.files); e.target.value = ""; }} />
+    </label>
+  );
+}
+
+function RefDialog({ model, refs, images, videos, imageMax, videoMax, uploading, largeUploads, error, onAdd, onRemove, onClose }: {
+  model: ModelWithPrice; refs: Ref[]; images: Ref[]; videos: Ref[]; imageMax: number; videoMax: number; uploading: boolean; largeUploads: boolean; error: string | null;
+  onAdd: (files: FileList | null, kind: "image" | "video") => void; onRemove: (id: string) => void; onClose: () => void;
+}) {
+  const panel = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    panel.current?.focus();
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  const first = images[0];
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-background/85 p-0 backdrop-blur-sm sm:items-center sm:p-4" onClick={onClose}>
+      <div ref={panel} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="ref-dialog-title" className="flex max-h-[92dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-xl border border-border bg-surface focus:outline-none sm:rounded-xl" onClick={(e) => e.stopPropagation()}>
+        <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-3">
+          <div>
+            <h2 id="ref-dialog-title" className="text-base font-semibold">레퍼런스 추가</h2>
+            <p className="text-xs text-muted">{model.name} · 이미지 최대 {imageMax}장{videoMax > 0 ? ` · 영상 최대 ${videoMax}개` : " · 영상 미지원"}</p>
+          </div>
+          <Button variant="ghost" size="sm" onClick={onClose} aria-label="닫기">닫기</Button>
+        </header>
+
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <DropZone kind="image" max={imageMax} count={images.length} disabled={false} uploading={uploading} hint="jpeg · png · webp · gif · 4 MB 이하" accept="image/jpeg,image/png,image/webp,image/gif" onFiles={(f) => onAdd(f, "image")} />
+            <DropZone kind="video" max={videoMax} count={videos.length} disabled={videoMax === 0} uploading={uploading} hint={videoMax === 0 ? "" : largeUploads ? "mp4 · 최대 200 MB" : "mp4 · 4 MB 이하"} accept="video/mp4" onFiles={(f) => onAdd(f, "video")} />
+          </div>
+
+          <p className="text-xs leading-relaxed text-muted">
+            {model.images.field === "image_url" ? (
+              <>이 모델은 1번 이미지를 첫 프레임, 2번 이미지를 마지막 프레임으로 씁니다. 화면비 옵션이 없어 영상은 1번 이미지의 비율을 따릅니다{first?.w && first.h ? <>: 지금은 <span className="font-medium text-foreground">{orientation(first.w, first.h)}</span>({first.w}×{first.h}).</> : "."}</>
+            ) : (
+              <>이미지와 영상은 올린 순서대로 번호가 붙고 그 순서로 모델에 전달됩니다. 출력 화면비는 서랍의 ‘출력 화면비’에서 따로 고릅니다.</>
+            )}
+          </p>
+
+          {error && <ErrorText>{error}</ErrorText>}
+
+          {refs.length > 0 ? (
+            <div>
+              <h3 className="mb-2 text-xs font-medium text-muted">첨부됨 · 이미지 {images.length} · 영상 {videos.length}</h3>
+              <RefThumbs refs={refs} images={images} videos={videos} onRemove={onRemove} size="w-36" />
+            </div>
+          ) : (
+            <p className="text-xs text-subtle">아직 첨부한 레퍼런스가 없습니다.</p>
+          )}
+        </div>
+
+        <footer className="flex items-center justify-end gap-2 border-t border-border px-5 py-3">
+          <Button onClick={onClose} disabled={uploading}>{uploading ? "업로드 중…" : "완료"}</Button>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
 export function Playground({ models, hasApiKey, largeUploads, galleryCount }: { models: ModelWithPrice[]; hasApiKey: boolean; largeUploads: boolean; galleryCount: number }) {
   const [modelId, setModelId] = useState(models[0]?.id ?? "");
   const model = useMemo(() => models.find((m) => m.id === modelId) ?? models[0], [models, modelId]);
@@ -241,6 +346,8 @@ export function Playground({ models, hasApiKey, largeUploads, galleryCount }: { 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [refsOpen, setRefsOpen] = useState(false);
+  const refsButtonRef = useRef<HTMLButtonElement>(null);
   const [items, setItems] = useState<PublicGeneration[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -490,51 +597,17 @@ export function Playground({ models, hasApiKey, largeUploads, galleryCount }: { 
             <Field label="프롬프트" hint={prompt.length > 0 ? `${prompt.length}자` : undefined}>
               <Textarea id="prompt" rows={3} placeholder="장면, 카메라 움직임, 분위기를 적어 주세요…" value={prompt} onChange={(e) => setPrompt(e.target.value)} />
             </Field>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <div className="mb-2 flex items-baseline justify-between gap-3 text-xs text-muted">
-                  <span>이미지 레퍼런스</span>
-                  <span className="tabular-nums">{images.length}/{imageMax}</span>
-                </div>
-                <label className="flex min-h-20 cursor-pointer items-center justify-center rounded-md border border-dashed border-border px-3 text-center text-sm text-subtle transition hover:border-foreground/60 hover:text-foreground-2 focus-within:border-foreground focus-within:text-foreground-2 focus-within:ring-2 focus-within:ring-accent/40 has-disabled:cursor-not-allowed has-disabled:opacity-60">
-                  {uploading ? "업로드 중…" : images.length >= imageMax ? `이미지 ${imageMax}장 모두 추가됨` : model.images.field === "image_url" ? "클릭해서 이미지 추가 · 1번 첫 프레임, 2번 마지막 프레임" : "클릭해서 이미지 추가"}
-                  <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple className="sr-only" aria-label="이미지 레퍼런스 추가" disabled={uploading || images.length >= imageMax} onChange={(e) => addFiles(e.target.files, "image")} />
-                </label>
-              </div>
-              <div>
-                <div className="mb-2 flex items-baseline justify-between gap-3 text-xs text-muted">
-                  <span>영상 레퍼런스</span>
-                  <span className="tabular-nums">{videoMax === 0 ? "이 모델은 미지원" : `${videos.length}/${videoMax}`}</span>
-                </div>
-                <label className={`flex min-h-20 items-center justify-center rounded-md border border-dashed border-border px-3 text-center text-sm text-subtle transition ${videoMax === 0 ? "opacity-50" : "cursor-pointer hover:border-foreground/60 hover:text-foreground-2 focus-within:border-foreground focus-within:text-foreground-2 focus-within:ring-2 focus-within:ring-accent/40"}`}>
-                  {videoMax === 0 ? "영상 레퍼런스를 받지 않는 모델" : uploading ? "업로드 중…" : largeUploads ? "mp4 추가 (최대 200 MB)" : "mp4 추가 (최대 4 MB)"}
-                  <input type="file" accept="video/mp4" className="sr-only" aria-label="영상 레퍼런스 추가" disabled={uploading || videoMax === 0 || videos.length >= videoMax} onChange={(e) => addFiles(e.target.files, "video")} />
-                </label>
-              </div>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+              <Button ref={refsButtonRef} variant="outline" size="sm" onClick={() => setRefsOpen(true)} disabled={uploading} aria-haspopup="dialog" aria-expanded={refsOpen}>
+                {uploading ? "업로드 중…" : "레퍼런스 추가"}
+              </Button>
+              <span className="text-xs tabular-nums text-muted">
+                이미지 {images.length}/{imageMax}
+                <span className="mx-1.5 text-subtle">·</span>
+                영상 {videoMax === 0 ? "미지원" : `${videos.length}/${videoMax}`}
+              </span>
             </div>
-            {refs.length > 0 && (
-              <ul className="flex flex-wrap gap-2">
-                {refs.map((r) => {
-                  const i = (r.kind === "image" ? images : videos).findIndex((x) => x.id === r.id);
-                  const tag = r.kind === "image" ? String(i + 1) : `V${i + 1}`;
-                  return (
-                  <li key={r.id} className="group relative aspect-video w-28 overflow-hidden rounded-md border border-border bg-background">
-                    {r.kind === "image" ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={r.local ?? r.url} alt={r.name} className="h-full w-full object-contain" />
-                    ) : (
-                      <video src={r.local ?? r.url} className="h-full w-full object-contain" muted playsInline aria-label={r.name} />
-                    )}
-                    <span aria-hidden className="font-display absolute left-1.5 top-1 text-[14px] text-foreground drop-shadow">{tag}</span>
-                    {r.w && r.h && <span aria-hidden className="absolute bottom-1 right-1.5 text-[10px] tabular-nums text-foreground-2 drop-shadow">{orientation(r.w, r.h)}</span>}
-                    <button type="button" aria-label={`${r.kind === "image" ? "이미지" : "영상"} 레퍼런스 ${tag} ${r.name} 제거`} onClick={() => setRefs((list) => list.filter((x) => x.id !== r.id))} className="absolute inset-x-0 bottom-0 min-h-7 bg-background/80 text-[11px] text-rose-300 opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100">
-                      제거
-                    </button>
-                  </li>
-                  );
-                })}
-              </ul>
-            )}
+            {refs.length > 0 && <RefThumbs refs={refs} images={images} videos={videos} onRemove={(id) => setRefs((list) => list.filter((x) => x.id !== id))} />}
           </section>
 
           <section className="space-y-3">
@@ -610,6 +683,26 @@ export function Playground({ models, hasApiKey, largeUploads, galleryCount }: { 
           </Button>
         </div>
       </aside>
+
+      {refsOpen && (
+        <RefDialog
+          model={model}
+          refs={refs}
+          images={images}
+          videos={videos}
+          imageMax={imageMax}
+          videoMax={videoMax}
+          uploading={uploading}
+          largeUploads={largeUploads}
+          error={error}
+          onAdd={addFiles}
+          onRemove={(id) => setRefs((list) => list.filter((x) => x.id !== id))}
+          onClose={() => {
+            setRefsOpen(false);
+            refsButtonRef.current?.focus();
+          }}
+        />
+      )}
     </div>
   );
 }
