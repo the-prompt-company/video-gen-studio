@@ -8,6 +8,7 @@
  * Without HIGGSFIELD_BASE_URL it starts its own fake (scripts/fake-higgsfield.ts). The rows it creates belong to
  * ADMIN_USERNAME, whose Higgsfield key must be set (the fake accepts any key), carry prompts starting with "GP-3 ",
  * and are deleted before it exits. It exits non-zero at the first failed check.
+ * If the test model's price is 0 it sets 0.0123 USD/s for the cost check and restores the stored price afterwards.
  *
  * --measure <base> inserts 15 live rows, keeps /playground of the app at <base> open for 60 s in a headless browser
  * (Playwright from the verify-video-gen-studio skill), and prints the app requests and the fake's status calls.
@@ -46,6 +47,7 @@ type Chromium = {
 const TAG = "GP-3 ";
 const MODEL = "minimax/hailuo-2.3/standard/image-to-video";
 const CHECK_GAP_MS = 15_000;
+const TEST_PRICE = "0.0123";
 const created: string[] = [];
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -117,6 +119,23 @@ function startProxy(target: string) {
 function recorder() {
   const tasks: Promise<void>[] = [];
   return { tasks, schedule: (task: () => Promise<void>) => void tasks.push(task()) };
+}
+
+/**
+ * price × duration proves nothing at price 0, and the shared models table starts at 0 for every model. When the
+ * model's price is 0, run with TEST_PRICE and put the stored value back afterwards.
+ */
+async function withKnownPrice<T>(modelId: string, run: () => Promise<T>): Promise<T> {
+  const m = schema.models;
+  const [row] = await getDb().select().from(m).where(eq(m.modelId, modelId)).limit(1);
+  if (!row) throw new Error(`FAIL models row for ${modelId} missing; run npm run db:seed`);
+  if (Number(row.pricePerSecUsd) > 0) return run();
+  await getDb().update(m).set({ pricePerSecUsd: TEST_PRICE }).where(eq(m.modelId, modelId));
+  try {
+    return await run();
+  } finally {
+    await getDb().update(m).set({ pricePerSecUsd: row.pricePerSecUsd }).where(eq(m.modelId, modelId));
+  }
 }
 
 async function stats(upstream: string): Promise<Stats> {
@@ -197,7 +216,7 @@ async function fiftyCallers(owner: Owner, admin: User, upstream: string) {
   const costs = new Set([...seen, final].filter((g) => g.status === "completed").map((g) => g.costUsd));
   const price = await owner.priceFor(final.modelId);
   check(stamps.size === 1, "completed_at was written once", [...stamps].join(","));
-  check(costs.size === 1 && final.costUsd === (price * final.durationS).toFixed(4), "cost_usd was written once as price × duration", `${final.costUsd} = ${price} × ${final.durationS}`);
+  check(price > 0 && costs.size === 1 && final.costUsd === (price * final.durationS).toFixed(4), "cost_usd was written once as a non-zero price × duration", `${final.costUsd} = ${price} × ${final.durationS}`);
   await Promise.all(rec.tasks);
   check(rec.tasks.length === 1, "the terminal follow-up was scheduled once", `${rec.tasks.length}`);
 }
@@ -371,7 +390,7 @@ async function main() {
     if (!proxy) {
       await measure(owner, admin, upstream, base ?? "");
     } else {
-      await fiftyCallers(owner, admin, upstream);
+      await withKnownPrice(MODEL, () => fiftyCallers(owner, admin, upstream));
       await reversedObservations(owner, admin, upstream, proxy);
       await cancelRaces(owner, admin, upstream);
       await cancelAfterAnotherCallerFinished(owner, admin, upstream);
