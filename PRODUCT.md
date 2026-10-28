@@ -30,9 +30,9 @@ Higgsfield 웹사이트를 직접 쓰는 것과 다른 점은 셋이며, 사용�
 
 ## Operating Context
 
-- 생성 흐름: 제출 → Higgsfield `request_id` 저장 → 세 트리거가 같은 함수(`src/lib/generations.ts`)로 행을 움직인다. 열린 탭의 폴링(2초에서 1.5배씩 최대 10초), Higgsfield 완료 웹훅(본문은 믿지 않고 상태를 다시 조회), Vercel Cron sweep(놓친 웹훅, 피드 밖의 live 행, 실패한 복사 정리). 탭을 닫아도 웹훅이 완료와 비용 기록, 영상 복사까지 끝낸다. 크론 주기는 플랜이 정한다. Pro는 매분이고, Hobby는 하루 1회라 웹훅까지 놓친 행은 다음 방문이나 다음 날 정리된다. 함수는 DB 옆 서울(`icn1`)에서 돈다.
+- 생성 흐름: 제출 → Higgsfield `request_id` 저장 → 세 트리거가 같은 함수(`src/lib/generations.ts`)로 행을 움직인다. 열린 탭의 폴링(2초에서 1.5배씩 최대 10초), Higgsfield 완료 웹훅(본문은 믿지 않고 상태를 다시 조회), Vercel Cron sweep(놓친 웹훅, 피드 밖의 live 행, 실패한 복사 정리). 탭을 닫아도 웹훅이 완료와 비용 기록, 영상 복사까지 끝낸다. Vercel Pro라 크론은 매분 돌고, 웹훅까지 놓친 행도 1분 안에 정리된다. 함수는 DB 옆 서울(`icn1`)에서 돈다.
 - 레퍼런스 업로드: 4 MB 이하는 서버를 거쳐 Higgsfield 업로드 스토리지로. 그보다 큰 mp4는 Vercel Blob이 연결돼 있을 때만 브라우저에서 직접 올리고, 생성이 끝나면 지운다.
-- 결과 보관: Higgsfield가 결과를 **7일 뒤 삭제**한다. 갤러리는 남은 일수를 보여 주고 다운로드를 권한다. 영구 보관(Blob 미러링)은 기본으로 끈다.
+- 결과 보관: 완료 영상은 완료 직후 Supabase Storage 공개 버킷에 `<생성 id>.mp4`로 복사돼 계속 남는다(갤러리 보관 "영구"). Higgsfield는 원본을 7일 뒤 지우므로 복사가 끝나기 전 몇 초 동안만 Higgsfield URL로 재생한다. Storage env가 없는 환경에서는 복사하지 않고 갤러리가 남은 일수를 보여 준다.
 - 로그인: scrypt 해시 검증, 7일 HttpOnly 세션 쿠키, 10회 실패 시 15분 잠금. ID는 이메일 형식을 허용한다.
 - 운영 주체: 소유자 1인이 Vercel 개인 계정과 Supabase 프로젝트를 관리한다. 팀원은 Vercel·DB에 접근하지 않는다.
 - 이 저장소 밖에 같은 목적의 Colab 노트북 + Google Sheets + Apps Script 게이트웨이 버전이 먼저 있었다. 이 웹 사이트가 그것을 대체한다.
@@ -47,7 +47,7 @@ Higgsfield 웹사이트를 직접 쓰는 것과 다른 점은 셋이며, 사용�
 
 **기술 제약**
 - Next.js 16 App Router + Supabase Postgres(Drizzle, postgres-js, Transaction pooler) + 선택적 Vercel Blob.
-- **Vercel Hobby(무료)로 운영한다.** 사용자가 확정했다. 함수 300초, 본문 4.5 MB, cron 하루 1회, Blob 1 GB, 대역폭 100 GB 안에서 설계한다. 한도 초과 시 구매가 불가능하고 서비스가 멈출 수 있다. Hobby는 비상업 용도 약관이므로 회사 업무용이면 Pro 전환이 맞다는 점은 README에 기록돼 있고, 전환 여부는 **미결**이다. `vercel.json`은 Pro 기준 매분 크론이라 Hobby에 배포하려면 스케줄을 `0 18 * * *`로 바꿔야 한다(README).
+- **Vercel Pro로 운영한다.** 팀 "jj-tpc's projects"가 Pro 플랜이다(운영자 확인 2026-10-28). 함수 최대 300초(`maxDuration = 300`), 본문 4.5 MB 안에서 설계하고, `vercel.json`의 매분 크론이 그대로 배포된다. Hobby로 돌아가면 스케줄을 `0 18 * * *`로 바꿔야 배포된다(README).
 - `AUTH_SECRET`을 바꾸면 저장된 API 키를 복호화할 수 없다.
 - Supabase Free는 7일 미사용 시 일시정지된다.
 
@@ -56,8 +56,6 @@ Higgsfield 웹사이트를 직접 쓰는 것과 다른 점은 셋이며, 사용�
 
 **미결 사항**
 - UI 언어: 현재 한국어 전용이며, 다국어 지원은 결정되지 않았다. 영어 UI가 필요한지 확인 전까지 한국어만 설계한다.
-- 결과 영구 보관 방식(다운로드 운영 vs 외부 스토리지).
-- Vercel Pro 전환 여부와 시점.
 
 ## Brand Commitments
 
