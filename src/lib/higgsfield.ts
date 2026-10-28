@@ -8,10 +8,16 @@
  * Outputs are deleted 7 days after the request finishes (`expires_at`).
  */
 
-const BASE = process.env.HIGGSFIELD_BASE_URL || "https://api.higgsfield.ai";
+const REAL_BASE = "https://api.higgsfield.ai";
+const BASE = process.env.HIGGSFIELD_BASE_URL || REAL_BASE;
 const SUBMIT_TIMEOUT_MS = 20_000;
 const STATUS_TIMEOUT_MS = 8_000;
 const DEFAULT_RETRY_AFTER_S = 30;
+
+/** True when this process talks to the real Higgsfield: HIGGSFIELD_BASE_URL is unset or names the real API. */
+export function talksToRealHiggsfield(): boolean {
+  return new URL(BASE).origin === new URL(REAL_BASE).origin;
+}
 
 export type ApiKey = string & { readonly __brand: "HiggsfieldApiKey" };
 export type RequestId = string & { readonly __brand: "HiggsfieldRequestId" };

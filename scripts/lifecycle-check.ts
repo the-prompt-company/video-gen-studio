@@ -1118,6 +1118,39 @@ async function crashAfterAccept(owner: Owner, admin: User, upstream: string, pro
   );
 }
 
+/**
+ * The cron route, called the way Vercel Cron calls it. This process talks to a fake, so the route must refuse to sweep
+ * the shared database and ask Higgsfield nothing, until SWEEP_ALLOW_NONPROD=1 opens it.
+ */
+async function cronRouteGuard(owner: Owner, admin: User, proxy: Proxy) {
+  const route = await import("../src/app/api/cron/settle/route");
+  const saved = { secret: process.env.CRON_SECRET, allow: process.env.SWEEP_ALLOW_NONPROD };
+  process.env.CRON_SECRET = "lifecycle-check";
+  delete process.env.SWEEP_ALLOW_NONPROD;
+  try {
+    const call = () => route.GET(new Request("http://local/api/cron/settle", { headers: { authorization: "Bearer lifecycle-check" } }));
+    await submitWithoutHook(owner, admin, "fake 기준 크론");
+    const before = proxy.requests();
+    const refused = await call();
+    const body = (await refused.json()) as { error?: string };
+    check(
+      refused.status === 409 && /SWEEP_ALLOW_NONPROD/.test(body.error ?? "") && proxy.requests() === before,
+      "the cron route answers 409 and sweeps nothing while HIGGSFIELD_BASE_URL is not the real Higgsfield",
+      body.error,
+    );
+    process.env.SWEEP_ALLOW_NONPROD = "1";
+    await assertSweepScope();
+    const allowed = await call();
+    const report = (await allowed.json()) as { checked?: number };
+    check(allowed.status === 200 && (report.checked ?? 0) >= 1, "with SWEEP_ALLOW_NONPROD=1 the same call sweeps", JSON.stringify(report));
+  } finally {
+    if (saved.secret === undefined) delete process.env.CRON_SECRET;
+    else process.env.CRON_SECRET = saved.secret;
+    if (saved.allow === undefined) delete process.env.SWEEP_ALLOW_NONPROD;
+    else process.env.SWEEP_ALLOW_NONPROD = saved.allow;
+  }
+}
+
 async function triggerChecks(owner: Owner, admin: User, upstream: string, proxy: Proxy, hooks: Hooks) {
   await hookRefusals(owner, admin, proxy);
   await withKnownPrice(MODEL, () => oneWebhookNoPoll(owner, admin, upstream, hooks));
@@ -1125,6 +1158,7 @@ async function triggerChecks(owner: Owner, admin: User, upstream: string, proxy:
   await hookAfterAnotherCallerFinished(owner, admin, upstream);
   await redeliveryAfter503(owner, admin, upstream, hooks);
   await pollAnsweredAfterHook(owner, admin, upstream, proxy);
+  await cronRouteGuard(owner, admin, proxy);
   console.log(`removed ${await removeCreated()} ${TAG.trim()} rows before the sweep checks, so every due row is this run's`);
   await sweepTicks(owner, admin, upstream);
   await hookPollSweepRace(owner, admin, upstream);
