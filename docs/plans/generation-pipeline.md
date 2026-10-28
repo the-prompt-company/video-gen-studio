@@ -503,7 +503,7 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
 
 ## Appendix D. Links and reading list
 
-- 설계 후보 2개와 그라운딩. `C:\Users\a\AppData\Local\Temp\claude\C--Users-a-project-tpc-video-generation-workflow-page\f668dad7-d0a9-4be9-9891-868032cf443c\scratchpad\arena\` (grounding.md, candidate-1/design.md, candidate-2/design.md). 세션 임시 폴더라 보존이 필요하면 `docs/plans/`로 옮긴다.
+- 설계 후보 2개와 그라운딩. `docs/plans/generation-pipeline/grounding.md`, `docs/plans/generation-pipeline/candidate-1.md`(base), `docs/plans/generation-pipeline/candidate-2.md`.
 - Higgsfield 문서. `https://docs.higgsfield.ai/docs/how-to/webhooks.md`, `https://docs.higgsfield.ai/docs/concepts/requests.md`, `https://docs.higgsfield.ai/docs/concepts/idempotency.md`.
 - Vercel 문서. `https://vercel.com/docs/functions/limitations`, `https://vercel.com/docs/cron-jobs/usage-and-pricing`, `https://vercel.com/docs/workflows`.
 - Supabase 문서. `https://supabase.com/pricing`, `https://supabase.com/docs/guides/storage/uploads/standard-uploads`.
