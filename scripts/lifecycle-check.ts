@@ -694,10 +694,19 @@ async function duplicateWebhooks(owner: Owner, admin: User, upstream: string, ho
   await withKnobs(upstream, { dupWebhooks: true }, { dupWebhooks: false }, async () => {
     const before = hooks.rec.tasks.length;
     const row = await submit(owner, admin, "중복 웹훅");
-    const codes = await deliveries(upstream, row.requestId ?? "", 2, 20_000);
+    const until = Date.now() + 30_000;
+    let codes = await deliveries(upstream, row.requestId ?? "", 2, 20_000);
+    while (codes.filter((c) => c === 204).length < 2 && Date.now() < until) {
+      await sleep(250);
+      codes = (await stats(upstream)).webhooks.byRequest[row.requestId ?? ""] ?? [];
+    }
     await Promise.all(hooks.rec.tasks);
     const final = await readRow(row.id);
-    check(codes.join() === "204,204", "both deliveries of a duplicated webhook get 204", codes.join(","));
+    check(
+      codes.filter((c) => c === 204).length === 2 && statusCalls(await stats(upstream), row.requestId) === 1,
+      "both deliveries of a duplicated webhook end in 204 and share one status call (a loser of the 1 s floor gets 503 and comes again)",
+      codes.join(","),
+    );
     check(
       hooks.rec.tasks.length - before === 1 && final.mirrorAttempts === 1 && (await writesOf(upstream, row.id)) === 1,
       "the two webhooks made one transition: one follow-up, one copy claim, one upload",
@@ -789,6 +798,7 @@ async function pollAnsweredAfterHook(owner: Owner, admin: User, upstream: string
     const held = proxy.hold(requestId);
     const late = owner.settle(row, rec.schedule);
     await held.arrival;
+    await sleep(1100);
     const hook = await owner.onProviderHook(hookUrlFor(row.id), rec.schedule);
     held.release();
     const polled = await late;
@@ -821,8 +831,8 @@ async function hookPollSweepRace(owner: Owner, admin: User, upstream: string) {
     const final = await readRow(row.id);
     const stamps = new Set([polled, final].filter((g) => g.status === "completed").map((g) => g.completedAt?.toISOString()));
     check(
-      hook === "done" && final.status === "completed" && stamps.size === 1,
-      "a webhook, a poll and a sweep on the same finished row end completed with one completed_at",
+      final.status === "completed" && stamps.size === 1 && (hook === "done" || statusCalls(await stats(upstream), row.requestId) >= 1),
+      "a webhook, a poll and a sweep on the same finished row end completed with one completed_at (a hook that lost the check to them asks for redelivery)",
       `hook ${hook}, poll returned ${polled.status}, sweep moved ${report.moved}`,
     );
     check(
@@ -1151,8 +1161,45 @@ async function cronRouteGuard(owner: Owner, admin: User, proxy: Proxy) {
   }
 }
 
+/**
+ * Replays of one valid hook URL while the row is live: 40 at once, then one every 100 ms. The forced claim's floor lets
+ * at most one status call through per second, and the row still makes one transition and one upload.
+ */
+async function replayedHooks(owner: Owner, admin: User, upstream: string) {
+  await withKnobs(upstream, { dropWebhooks: 1 }, { dropWebhooks: 0 }, async () => {
+    const row = await submit(owner, admin, "같은 웹훅 URL 재생");
+    const requestId = row.requestId ?? "";
+    await providerReaches(upstream, requestId, "in_progress", 10_000);
+    const rec = recorder();
+    const url = hookUrlFor(row.id);
+    const before = statusCalls(await stats(upstream), requestId);
+    const t0 = Date.now();
+    const answers = await Promise.all(Array.from({ length: 40 }, () => owner.onProviderHook(url, rec.schedule)));
+    while (Date.now() - t0 < 2000 && (await readRow(row.id)).status !== "completed") answers.push(await owner.onProviderHook(url, rec.schedule));
+    const windowS = (Date.now() - t0) / 1000;
+    const calls = statusCalls(await stats(upstream), requestId) - before;
+    check(
+      calls >= 1 && calls <= Math.ceil(windowS),
+      `${answers.length} replays of one hook URL over ${windowS.toFixed(1)} s made at most one status call per second`,
+      `${calls} calls`,
+    );
+    await providerReaches(upstream, requestId, "completed", 12_000);
+    await sleep(1100);
+    const last = await Promise.all(Array.from({ length: 10 }, () => owner.onProviderHook(url, rec.schedule)));
+    await Promise.all(rec.tasks);
+    const again = await owner.onProviderHook(url, rec.schedule);
+    const final = await readRow(row.id);
+    check(
+      last.includes("done") && again === "done" && final.status === "completed" && rec.tasks.length === 1 && (await writesOf(upstream, row.id)) === 1,
+      "after completion one of 10 parallel replays completes the row, the others ask for redelivery until it lands, a later replay answers done, and there is one transition and one upload",
+      `${last.filter((a) => a === "done").length} done, ${last.filter((a) => a === "retry").length} retry`,
+    );
+  });
+}
+
 async function triggerChecks(owner: Owner, admin: User, upstream: string, proxy: Proxy, hooks: Hooks) {
   await hookRefusals(owner, admin, proxy);
+  await replayedHooks(owner, admin, upstream);
   await withKnownPrice(MODEL, () => oneWebhookNoPoll(owner, admin, upstream, hooks));
   await duplicateWebhooks(owner, admin, upstream, hooks);
   await hookAfterAnotherCallerFinished(owner, admin, upstream);

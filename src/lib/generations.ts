@@ -27,6 +27,8 @@ export type PublicVideo =
 
 /** A live row is asked about at most once per CHECK_GAP_S, whoever asks. */
 const CHECK_GAP_S = 15;
+/** A forced check (a webhook, a refused cancel) skips the gap but not this floor, so replayed hooks share one call. */
+const FORCED_CHECK_FLOOR_S = 1;
 /** A submit claim holds this long, longer than the 20 s submit timeout, so an expired lease means the submitter died. */
 const SUBMIT_LEASE_S = 30;
 /** Higgsfield's Retry-After, clamped, is how long a deferred submit waits before anyone sends it again. */
@@ -486,6 +488,12 @@ function notSubmitting() {
   return or(lte(g.nextCheckAt, sql`now()`), isNotNull(g.error));
 }
 
+/** A checkable row nobody claimed a check for within the last FORCED_CHECK_FLOOR_S. */
+function forcedCheckDue() {
+  const floor = sql`now() + make_interval(secs => ${CHECK_GAP_S - FORCED_CHECK_FLOOR_S})`;
+  return and(checkable(), lte(schema.generations.nextCheckAt, floor));
+}
+
 /** A checkable row whose check clock has run out. The unforced check claim and the sweep read the same rule. */
 function checkDue() {
   return and(checkable(), lte(schema.generations.nextCheckAt, sql`now()`));
@@ -566,14 +574,16 @@ async function claimSubmit(id: string): Promise<Generation | null> {
 
 /**
  * Push next_check_at CHECK_GAP_S ahead. Unforced, it matches only when the row is due, so of any number of concurrent
- * callers exactly one wins per gap. Forced (the hook, or a cancel Higgsfield refused) it always wins and resets the gap.
+ * callers exactly one wins per gap. Forced (the hook, or a cancel Higgsfield refused) it skips the gap but not the
+ * floor: next_check_at more than CHECK_GAP_S - FORCED_CHECK_FLOOR_S ahead means a check was claimed within the last
+ * FORCED_CHECK_FLOOR_S, so duplicated or replayed webhooks for a live row make at most one status call per second.
  */
 async function claimCheck(id: string, force: boolean): Promise<boolean> {
   const g = schema.generations;
   const claimed = await getDb()
     .update(g)
     .set({ nextCheckAt: sql`now() + make_interval(secs => ${CHECK_GAP_S})` })
-    .where(and(eq(g.id, id), force ? checkable() : checkDue()))
+    .where(and(eq(g.id, id), force ? forcedCheckDue() : checkDue()))
     .returning({ id: g.id });
   return claimed.length > 0;
 }
