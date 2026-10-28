@@ -30,7 +30,7 @@ Higgsfield 웹사이트를 직접 쓰는 것과 다른 점은 셋이며, 사용�
 
 ## Operating Context
 
-- 생성 흐름: 제출 → Higgsfield `request_id` 저장 → 브라우저가 2초에서 1.5배씩 늘어 최대 10초 간격으로 폴링 → 서버가 그때마다 Higgsfield 상태를 조회해 DB 갱신. 서버 측 폴링이나 cron은 없다(Hobby 제약).
+- 생성 흐름: 제출 → Higgsfield `request_id` 저장 → 세 트리거가 같은 함수(`src/lib/generations.ts`)로 행을 움직인다. 열린 탭의 폴링(2초에서 1.5배씩 최대 10초), Higgsfield 완료 웹훅(본문은 믿지 않고 상태를 다시 조회), Vercel Cron sweep(놓친 웹훅, 피드 밖의 live 행, 실패한 복사 정리). 탭을 닫아도 웹훅이 완료와 비용 기록, 영상 복사까지 끝낸다. 크론 주기는 플랜이 정한다. Pro는 매분이고, Hobby는 하루 1회라 웹훅까지 놓친 행은 다음 방문이나 다음 날 정리된다. 함수는 DB 옆 서울(`icn1`)에서 돈다.
 - 레퍼런스 업로드: 4 MB 이하는 서버를 거쳐 Higgsfield 업로드 스토리지로. 그보다 큰 mp4는 Vercel Blob이 연결돼 있을 때만 브라우저에서 직접 올리고, 생성이 끝나면 지운다.
 - 결과 보관: Higgsfield가 결과를 **7일 뒤 삭제**한다. 갤러리는 남은 일수를 보여 주고 다운로드를 권한다. 영구 보관(Blob 미러링)은 기본으로 끈다.
 - 로그인: scrypt 해시 검증, 7일 HttpOnly 세션 쿠키, 10회 실패 시 15분 잠금. ID는 이메일 형식을 허용한다.
@@ -47,7 +47,7 @@ Higgsfield 웹사이트를 직접 쓰는 것과 다른 점은 셋이며, 사용�
 
 **기술 제약**
 - Next.js 16 App Router + Supabase Postgres(Drizzle, postgres-js, Transaction pooler) + 선택적 Vercel Blob.
-- **Vercel Hobby(무료)로 운영한다.** 사용자가 확정했다. 함수 300초, 본문 4.5 MB, cron 하루 1회, Blob 1 GB, 대역폭 100 GB 안에서 설계한다. 한도 초과 시 구매가 불가능하고 서비스가 멈출 수 있다. Hobby는 비상업 용도 약관이므로 회사 업무용이면 Pro 전환이 맞다는 점은 README에 기록돼 있고, 전환 여부는 **미결**이다.
+- **Vercel Hobby(무료)로 운영한다.** 사용자가 확정했다. 함수 300초, 본문 4.5 MB, cron 하루 1회, Blob 1 GB, 대역폭 100 GB 안에서 설계한다. 한도 초과 시 구매가 불가능하고 서비스가 멈출 수 있다. Hobby는 비상업 용도 약관이므로 회사 업무용이면 Pro 전환이 맞다는 점은 README에 기록돼 있고, 전환 여부는 **미결**이다. `vercel.json`은 Pro 기준 매분 크론이라 Hobby에 배포하려면 스케줄을 `0 18 * * *`로 바꿔야 한다(README).
 - `AUTH_SECRET`을 바꾸면 저장된 API 키를 복호화할 수 없다.
 - Supabase Free는 7일 미사용 시 일시정지된다.
 
