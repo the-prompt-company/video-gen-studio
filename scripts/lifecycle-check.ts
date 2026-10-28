@@ -674,14 +674,46 @@ async function sweepTicks(owner: Owner, admin: User, upstream: string) {
     const tick2 = await owner.sweep(sweepDeadline());
     const final = await Promise.all(rows.map((r) => readRow(r.id)));
     const dropped = (await stats(upstream)).webhooks.dropped;
+    const writes = await Promise.all(rows.map((r) => writesOf(upstream, r.id)));
     check(
       final.every((g) => g.status === "completed" && g.storagePath === `${g.id}.mp4`) && dropped >= rows.length,
       "with every webhook dropped, the next sweep completes and stores every row",
       JSON.stringify(tick2),
     );
+    check(writes.every((n) => n === 1), "each row was uploaded once", `writes ${writes.join(",")}`);
     check(
       tick2.checked === live && tick2.moved === live && tick2.stored === live && a.failures + b.failures + tick2.failures === 0 && !tick2.truncated,
       `that sweep reports checked, moved and stored ${live}, no failure, and truncated false`,
+    );
+  });
+}
+
+/**
+ * The poll claims the check and asks first, but its answer is held until the webhook has completed the row, so the
+ * poll's apply matches zero rows. Only the caller that moved the row may schedule the follow-up.
+ */
+async function pollAnsweredAfterHook(owner: Owner, admin: User, upstream: string, proxy: Proxy) {
+  await withKnobs(upstream, { dropWebhooks: 1 }, { dropWebhooks: 0 }, async () => {
+    const row = await submit(owner, admin, "웹훅 뒤에 도착한 폴링 답");
+    const requestId = row.requestId ?? "";
+    await providerReaches(upstream, requestId, "completed", 12_000);
+    const rec = recorder();
+    const held = proxy.hold(requestId);
+    const late = owner.settle(row, rec.schedule);
+    await held.arrival;
+    const hook = await owner.onProviderHook(hookUrlFor(row.id), rec.schedule);
+    held.release();
+    const polled = await late;
+    await Promise.all(rec.tasks);
+    const final = await readRow(row.id);
+    check(
+      hook === "done" && polled.status === "completed" && polled.completedAt?.getTime() === final.completedAt?.getTime(),
+      "a poll answer that arrives after the webhook completed the row returns the row as it stands, completed_at unchanged",
+    );
+    check(
+      rec.tasks.length === 1 && final.mirrorAttempts === 1 && (await writesOf(upstream, row.id)) === 1,
+      "only the webhook, which moved the row, scheduled the follow-up: one follow-up, one copy claim, one upload",
+      `${rec.tasks.length} follow-ups`,
     );
   });
 }
@@ -740,6 +772,7 @@ async function sweepCopies(owner: Owner, admin: User, upstream: string) {
     created.push(mock.id);
     await assertSweepScope();
     const [, report] = await Promise.all([owner.storeVideo(raced), owner.sweep(sweepDeadline())]);
+    await owner.storeVideo(mock);
     const [a, r, f, m] = await Promise.all([alone, raced, failing, mock].map((g) => readRow(g.id)));
     check(a.storagePath === `${a.id}.mp4` && a.mirrorAttempts === 1, "the sweep copies a completed row whose after() copy never ran");
     check(
@@ -750,7 +783,12 @@ async function sweepCopies(owner: Owner, admin: User, upstream: string) {
       f.storagePath === `${f.id}.mp4` && f.mirrorError === null && f.mirrorAttempts === 2,
       "the sweep retries a failed copy once its lease ran out, and clears mirror_error",
     );
-    check(m.storagePath === null && m.mirrorAttempts === 0, "a completed row without request_id (the mock shape) is never copied");
+    const mockVideo = owner.publicGeneration(m).video;
+    check(
+      m.storagePath === null && m.mirrorAttempts === 0 && m.mirrorError === null && (await writesOf(upstream, m.id)) === 0,
+      "a completed row without request_id (the mock shape) is claimed by neither the sweep nor a direct storeVideo",
+    );
+    check(mockVideo?.kind === "provider" && !mockVideo.storing, "and it promises no copy, so the playground does not keep polling it");
     check(report.failures === 0 && report.stored >= 2 && !report.truncated, "the sweep reports the copies and no failure", JSON.stringify(report));
   });
 }
@@ -773,6 +811,7 @@ async function triggerChecks(owner: Owner, admin: User, upstream: string, proxy:
   await withKnownPrice(MODEL, () => oneWebhookNoPoll(owner, admin, upstream, hooks));
   await duplicateWebhooks(owner, admin, upstream, hooks);
   await redeliveryAfter503(owner, admin, upstream, hooks);
+  await pollAnsweredAfterHook(owner, admin, upstream, proxy);
   console.log(`removed ${await removeCreated()} ${TAG.trim()} rows before the sweep checks, so every due row is this run's`);
   await sweepTicks(owner, admin, upstream);
   await hookPollSweepRace(owner, admin, upstream);
