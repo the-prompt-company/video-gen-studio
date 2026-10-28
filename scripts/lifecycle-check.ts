@@ -252,6 +252,20 @@ async function cancelRaces(owner: Owner, admin: User, upstream: string) {
   check(ends.includes("canceled") && ends.includes("completed"), "the races covered both a winning and a refused cancel", ends.join(", "));
 }
 
+async function cancelAfterAnotherCallerFinished(owner: Owner, admin: User, upstream: string) {
+  const snapshot = await submit(owner, admin, "끝난 뒤 취소");
+  const rec = recorder();
+  await providerReaches(upstream, snapshot.requestId ?? "", "completed", 12_000);
+  await settleUntilDone(owner, snapshot.id, rec.schedule, 20_000);
+  const answer = await owner.cancelGeneration(snapshot, rec.schedule);
+  check(
+    answer.status === "completed",
+    "a refused cancel returns the row as it stands now, not the queued row the route read before another caller finished it",
+    `returned ${answer.status}`,
+  );
+  await Promise.all(rec.tasks);
+}
+
 async function rowWithoutRequestId(owner: Owner, admin: User, proxy: Proxy) {
   const [row] = await getDb()
     .insert(schema.generations)
@@ -360,6 +374,7 @@ async function main() {
       await fiftyCallers(owner, admin, upstream);
       await reversedObservations(owner, admin, upstream, proxy);
       await cancelRaces(owner, admin, upstream);
+      await cancelAfterAnotherCallerFinished(owner, admin, upstream);
       await rowWithoutRequestId(owner, admin, proxy);
       console.log(`all checks passed (${proxy.requests()} Higgsfield requests went through the counter)`);
     }

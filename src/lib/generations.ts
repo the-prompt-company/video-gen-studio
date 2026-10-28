@@ -94,7 +94,10 @@ export async function cancelGeneration(gen: Generation, schedule: Scheduler): Pr
     throw e;
   }
   if (answer === "canceled") return apply(gen, decide(gen, { source: "cancel" }, { now: new Date(), pricePerSecUsd: 0 }), schedule);
-  return refresh(gen, { ...POLICY.poll, forceCheck: true }, schedule);
+  const looked = await refresh(gen, { ...POLICY.poll, forceCheck: true }, schedule);
+  // refresh returns the row it was given when it could not look (another caller already finished it, no key, or the
+  // provider is down). The caller still needs the row as it stands now.
+  return looked === gen ? current(gen) : looked;
 }
 
 /** Shape sent to the browser (never the request id or anything secret). */
@@ -184,12 +187,15 @@ async function apply(gen: Generation, step: Step, schedule: Scheduler): Promise<
     .set({ status: step.to, ...step.patch })
     .where(and(eq(g.id, gen.id), inArray(g.status, predecessorsOf(step.to))))
     .returning();
-  if (!row) {
-    const [current] = await db.select().from(g).where(eq(g.id, gen.id)).limit(1);
-    return current ?? gen;
-  }
+  if (!row) return current(gen);
   if (!isLive(row.status)) schedule(() => onTerminal(row));
   return row;
+}
+
+async function current(gen: Generation): Promise<Generation> {
+  const g = schema.generations;
+  const [row] = await getDb().select().from(g).where(eq(g.id, gen.id)).limit(1);
+  return row ?? gen;
 }
 
 function settleAs(gen: Generation, reason: SettleReason, schedule: Scheduler): Promise<Generation> {
