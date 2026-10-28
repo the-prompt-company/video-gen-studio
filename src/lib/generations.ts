@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, inArray, isNotNull, lte, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 import { del } from "@vercel/blob";
 import { getDb, schema } from "@/db";
 import type { Generation, User } from "@/db/schema";
@@ -8,6 +8,7 @@ import { buildArguments, type ModelSpec } from "@/lib/catalog";
 import { decrypt } from "@/lib/crypto";
 import { isLive, LIVE_STATUSES, predecessorsOf, RANK, type GenerationStatus } from "@/lib/generation-status";
 import * as hf from "@/lib/higgsfield";
+import * as storage from "@/lib/storage";
 
 /** Runs slow follow-up work after the caller has its answer. Routes pass `after` from next/server. */
 export type Scheduler = (task: () => Promise<void>) => void;
@@ -22,6 +23,11 @@ export type GenerationRequest = {
 
 /** A live row is asked about at most once per CHECK_GAP_S, whoever asks. */
 const CHECK_GAP_S = 15;
+/** A copy claim holds at least this long, longer than the 300 s maxDuration of every route that copies. */
+const MIRROR_LEASE_S = 360;
+const MIRROR_BACKOFF_CAP_S = 6 * 3600;
+const COPY_TIMEOUT_MS = 240_000;
+const MAX_COPY_BYTES = 1024 ** 3;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const NO_KEY = "API 키가 아직 할당되지 않았습니다. 관리자에게 문의하세요";
 
@@ -95,6 +101,40 @@ export async function cancelGeneration(gen: Generation, schedule: Scheduler): Pr
   }
   if (answer === "canceled") return apply(gen, decide(gen, { source: "cancel" }, { now: new Date(), pricePerSecUsd: 0 }), schedule);
   return refresh(gen, { ...POLICY.poll, forceCheck: true }, schedule);
+}
+
+/**
+ * Copy the completed result into our bucket. Any number of actors may call this: one conditional UPDATE on
+ * mirror_next_at picks the single copier per lease, and an expired lease means that copier died, so the next
+ * claimant uploads the same bytes to the same key again. Writes only the media columns, never status.
+ */
+export async function storeVideo(gen: Generation): Promise<Generation> {
+  if (!storage.storageEnabled()) return gen;
+  const claimed = await claimCopy(gen.id);
+  if (!claimed?.resultUrl) return claimed ?? (await reread(gen.id)) ?? gen;
+  const g = schema.generations;
+  const attempt = claimed.mirrorAttempts;
+  try {
+    const t0 = Date.now();
+    const { bytes, contentType } = await fetchResult(claimed.resultUrl);
+    const fetchMs = Date.now() - t0;
+    const key = storage.videoKey(claimed.id);
+    const t1 = Date.now();
+    await storage.putVideo(key, bytes, contentType);
+    const uploadMs = Date.now() - t1;
+    console.info(JSON.stringify({ evt: "video_stored", id: claimed.id, bytes: bytes.byteLength, fetchMs, uploadMs, attempt }));
+    const [row] = await getDb()
+      .update(g)
+      .set({ storagePath: key, sizeBytes: bytes.byteLength, mirrorError: null })
+      .where(eq(g.id, claimed.id))
+      .returning();
+    return row ?? claimed;
+  } catch (e) {
+    const error = e instanceof Error ? e.message : String(e);
+    console.warn(JSON.stringify({ evt: "video_store_failed", id: claimed.id, attempt, error }));
+    const [row] = await getDb().update(g).set({ mirrorError: error }).where(eq(g.id, claimed.id)).returning();
+    return row ?? claimed;
+  }
 }
 
 /** Shape sent to the browser (never the request id or anything secret). */
@@ -177,17 +217,13 @@ function decide(gen: Generation, obs: Observation, ctx: { now: Date; pricePerSec
  */
 async function apply(gen: Generation, step: Step, schedule: Scheduler): Promise<Generation> {
   if (step.kind === "none") return gen;
-  const db = getDb();
   const g = schema.generations;
-  const [row] = await db
+  const [row] = await getDb()
     .update(g)
     .set({ status: step.to, ...step.patch })
     .where(and(eq(g.id, gen.id), inArray(g.status, predecessorsOf(step.to))))
     .returning();
-  if (!row) {
-    const [current] = await db.select().from(g).where(eq(g.id, gen.id)).limit(1);
-    return current ?? gen;
-  }
+  if (!row) return (await reread(gen.id)) ?? gen;
   if (!isLive(row.status)) schedule(() => onTerminal(row));
   return row;
 }
@@ -239,8 +275,62 @@ async function claimCheck(id: string, force: boolean): Promise<boolean> {
   return claimed.length > 0;
 }
 
+/**
+ * The copy claim. It matches only a completed, unstored, unexpired row whose lease has run out, counts the attempt,
+ * and pushes the lease max(MIRROR_LEASE_S, 60·2^attempts, capped at 6 h) ahead. Of any number of concurrent callers
+ * exactly one gets the row back.
+ */
+async function claimCopy(id: string): Promise<Generation | null> {
+  const g = schema.generations;
+  const backoff = sql.raw(`greatest(${MIRROR_LEASE_S}, least(60 * power(2, mirror_attempts), ${MIRROR_BACKOFF_CAP_S}))`);
+  const [row] = await getDb()
+    .update(g)
+    .set({ mirrorAttempts: sql`${g.mirrorAttempts} + 1`, mirrorNextAt: sql`now() + make_interval(secs => ${backoff})` })
+    .where(
+      and(
+        eq(g.id, id),
+        eq(g.status, "completed"),
+        isNotNull(g.resultUrl),
+        isNull(g.storagePath),
+        or(isNull(g.mirrorNextAt), lte(g.mirrorNextAt, sql`now()`)),
+        or(isNull(g.expiresAt), gt(g.expiresAt, sql`now()`)),
+      ),
+    )
+    .returning();
+  return row ?? null;
+}
+
+/** Buffer the result, refusing anything over MAX_COPY_BYTES before or while it streams in. */
+async function fetchResult(url: string): Promise<{ bytes: Uint8Array; contentType: string }> {
+  const res = await fetch(url, { signal: AbortSignal.timeout(COPY_TIMEOUT_MS) });
+  if (!res.ok || !res.body) throw new Error(`result fetch failed: HTTP ${res.status}`);
+  const declared = Number(res.headers.get("content-length") ?? 0);
+  if (declared > MAX_COPY_BYTES) throw new Error(`result too large: ${declared} bytes`);
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  const reader = res.body.getReader();
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > MAX_COPY_BYTES) {
+      await reader.cancel();
+      throw new Error(`result too large: over ${MAX_COPY_BYTES} bytes`);
+    }
+    chunks.push(value);
+  }
+  return { bytes: Buffer.concat(chunks), contentType: res.headers.get("content-type") ?? "video/mp4" };
+}
+
+async function reread(id: string): Promise<Generation | null> {
+  const [row] = await getDb().select().from(schema.generations).where(eq(schema.generations.id, id)).limit(1);
+  return row ?? null;
+}
+
+/** Runs once per terminal move, by the caller that made it: ref cleanup, then the copy for a completed row. */
 async function onTerminal(row: Generation): Promise<void> {
   await cleanupRefs(row);
+  if (row.status === "completed") await storeVideo(row);
 }
 
 function isBlobUrl(u: string): boolean {

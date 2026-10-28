@@ -6,6 +6,9 @@ import { requireUser, errorResponse, HttpError } from "@/lib/auth";
 import { findModel, coerceParams } from "@/lib/catalog";
 import { isGenerationId, priceFor, publicGeneration, settle, submitGeneration } from "@/lib/generations";
 
+/** The copy a settle schedules with `after` runs inside this budget. MIRROR_LEASE_S in generations.ts outlasts it. */
+export const maxDuration = 300;
+
 const MAX_IMAGES = 6;
 const MAX_VIDEOS = 3;
 const MAX_IDS = 24;
