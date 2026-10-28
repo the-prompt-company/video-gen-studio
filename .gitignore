@@ -46,3 +46,6 @@ next-env.d.ts
 
 # verification runs (verify-video-gen-studio skill): server state + evidence
 .verify/
+
+# local agent worktrees (Claude Code): full copies of the repo, never committed
+/.claude/worktrees/
