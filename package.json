@@ -16,6 +16,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@supabase/storage-js": "^2.118.0",
     "@vercel/blob": "^2.8.2",
     "drizzle-orm": "^0.45.4",
     "jose": "^6.2.13",
