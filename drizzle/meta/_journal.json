@@ -15,6 +15,13 @@
       "when": 1793157529022,
       "tag": "0001_next_check_at",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793162118601,
+      "tag": "0002_storage",
+      "breakpoints": true
     }
   ]
 }

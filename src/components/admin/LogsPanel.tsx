@@ -125,7 +125,7 @@ export function LogsPanel() {
               <StatusBadge status={open.status} />
               <span className="text-xs text-subtle">{open.username} · {fmtDate(open.createdAt)}</span>
             </div>
-            {open.resultUrl && open.status === "completed" && <video src={open.resultUrl} controls className="w-full rounded-lg bg-black" />}
+            {open.video && <video src={open.video.url} controls className="w-full rounded-lg bg-black" />}
             <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs text-muted">
               <dt>모델</dt><dd className="font-mono text-foreground-2">{open.modelId}</dd>
               <dt>프롬프트</dt><dd className="text-foreground-2">{open.prompt || "—"}</dd>

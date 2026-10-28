@@ -5,6 +5,9 @@ import type { User } from "@/db/schema";
 import { requireUser, errorResponse, HttpError } from "@/lib/auth";
 import { cancelGeneration, isGenerationId, publicGeneration, settle } from "@/lib/generations";
 
+/** The copy a settle schedules with `after` runs inside this budget. MIRROR_LEASE_S in generations.ts outlasts it. */
+export const maxDuration = 300;
+
 type Ctx = { params: Promise<{ id: string }> };
 
 async function ownRow(id: string, user: User) {

@@ -2,6 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createServer, type Server } from "node:http";
 import { once } from "node:events";
+import { createHash } from "node:crypto";
+import { StorageClient } from "@supabase/storage-js";
 import { createFakeHiggsfield, configFromEnv, type Config } from "./fake-higgsfield";
 
 const KEY = "fake:key";
@@ -172,6 +174,43 @@ test("reference upload: ticket, PUT bytes, then GET public_url returns them", as
     const got = await fetch(ticket.public_url);
     assert.equal(got.headers.get("content-type"), "image/png");
     assert.equal(await got.text(), "png-bytes");
+  } finally {
+    f.close();
+  }
+});
+
+test("the Supabase Storage subset answers the real storage-js client", async () => {
+  const f = await fake();
+  const bucket = new StorageClient(`${f.base}/storage/v1`, { apikey: "k", Authorization: "Bearer k" }).from("videos");
+  const opts = { contentType: "video/mp4", cacheControl: "31536000" };
+  const first = Buffer.from("first bytes");
+  const second = Buffer.from("second, longer bytes");
+  try {
+    assert.equal((await bucket.upload("a.mp4", first, opts)).error, null);
+    assert.ok((await bucket.upload("a.mp4", second, opts)).error, "a second write without upsert is refused");
+    assert.equal((await bucket.upload("a.mp4", second, { ...opts, upsert: true })).error, null);
+    const s = (await (await fetch(`${f.base}/_stats`)).json()) as {
+      storage: { byKey: Record<string, { writes: number; size: number; sha256: string; cacheControl: string; upsert: boolean }> };
+    };
+    assert.deepEqual(s.storage.byKey["videos/a.mp4"], {
+      writes: 2,
+      size: second.length,
+      sha256: createHash("sha256").update(second).digest("hex"),
+      contentType: "video/mp4",
+      cacheControl: "max-age=31536000",
+      upsert: true,
+    });
+    const download = await fetch(bucket.getPublicUrl("a.mp4", { download: "a.mp4" }).data.publicUrl);
+    assert.equal(download.status, 200);
+    assert.equal(download.headers.get("content-disposition"), 'attachment; filename="a.mp4"');
+    assert.deepEqual(Buffer.from(await download.arrayBuffer()), second);
+    const part = await fetch(bucket.getPublicUrl("a.mp4").data.publicUrl, { headers: { Range: "bytes=0-4" } });
+    assert.equal(part.status, 206, "a <video> range request gets a partial answer, as from a CDN");
+    assert.equal(part.headers.get("content-range"), `bytes 0-4/${second.length}`);
+    assert.deepEqual(Buffer.from(await part.arrayBuffer()), second.subarray(0, 5));
+    await fetch(`${f.base}/_config`, { method: "POST", body: JSON.stringify({ storageFailN: 1 }) });
+    assert.match((await bucket.upload("b.mp4", first, { ...opts, upsert: true })).error?.message ?? "", /refused/);
+    assert.equal((await bucket.upload("b.mp4", first, { ...opts, upsert: true })).error, null, "only the next N writes fail");
   } finally {
     f.close();
   }

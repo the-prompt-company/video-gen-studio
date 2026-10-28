@@ -12,6 +12,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { GENERATION_STATUSES } from "../lib/generation-status";
 import type { RequestId } from "../lib/higgsfield";
+import type { ObjectKey } from "../lib/storage";
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -52,6 +53,13 @@ export const generations = pgTable(
     nextCheckAt: timestamp("next_check_at", { withTimezone: true }).notNull().defaultNow(),
     resultUrl: text("result_url"),
     blobUrl: text("blob_url"),
+    /** Object key in the videos bucket, set only after the upload finished. Non-null means playable from storage. */
+    storagePath: text("storage_path").$type<ObjectKey>(),
+    sizeBytes: integer("size_bytes"),
+    mirrorAttempts: integer("mirror_attempts").notNull().default(0),
+    /** Copy lease and back-off in one column. A claim pushes it at least 360 s ahead, past every copying route's maxDuration. */
+    mirrorNextAt: timestamp("mirror_next_at", { withTimezone: true }),
+    mirrorError: text("mirror_error"),
     expiresAt: timestamp("expires_at", { withTimezone: true }),
     durationS: integer("duration_s").notNull().default(0),
     costUsd: numeric("cost_usd", { precision: 10, scale: 4 }).notNull().default("0"),
