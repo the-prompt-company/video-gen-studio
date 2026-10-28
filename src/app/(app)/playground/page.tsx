@@ -2,6 +2,7 @@ import { and, count, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { getCurrentUser } from "@/lib/auth";
 import { CATALOG } from "@/lib/catalog";
+import { refPrefix } from "@/lib/storage";
 import { Playground } from "@/components/Playground";
 
 export const metadata = { title: "플레이그라운드" };
@@ -23,7 +24,7 @@ export default async function PlaygroundPage() {
     <Playground
       models={models}
       hasApiKey={Boolean(user?.apiKeyEnc)}
-      largeUploads={Boolean(process.env.BLOB_READ_WRITE_TOKEN)}
+      largeUploadPrefix={user && process.env.BLOB_READ_WRITE_TOKEN ? refPrefix(user.id) : null}
       galleryCount={Number(completed)}
     />
   );

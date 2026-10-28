@@ -43,6 +43,22 @@ export function videoKey(generationId: string): ObjectKey {
   return `${VIDEO_PREFIX}${generationId}.mp4` as ObjectKey;
 }
 
+/** Where a member's reference uploads go. deleteRefs deletes a row's references only under its owner's prefix. */
+export function refPrefix(userId: number): string {
+  return `refs/${userId}/`;
+}
+
+/**
+ * The upload route's pathname rule: one file name directly under the uploader's refPrefix, so an upload never lands
+ * under videos/ or under another member's prefix.
+ */
+export function isRefPathname(pathname: string, userId: number): boolean {
+  const prefix = refPrefix(userId);
+  if (!pathname.startsWith(prefix)) return false;
+  const name = pathname.slice(prefix.length);
+  return name !== "" && name !== "." && name !== ".." && !/[/\\]/.test(name);
+}
+
 /**
  * Upload public under the exact key, overwriting what an earlier attempt left, with a one-year cache. Keys are
  * immutable, so a repeat writes the same bytes. The token is passed, not left to the SDK's OIDC lookup, so the store
@@ -231,15 +247,16 @@ export function videoUrls(key: ObjectKey): { url: string; downloadUrl: string } 
 }
 
 /**
- * Delete temporary reference uploads, and return the URLs it deleted. imageRefs and videoRefs hold whatever URLs the
- * browser sent, so only URLs in this store are deleted, and never one whose pathname could name a stored video.
+ * Delete the row owner's reference uploads, and return the URLs it deleted. imageRefs and videoRefs hold whatever URLs
+ * the browser sent, so a URL is deleted only when it names a pathname in this store under refPrefix(ownerId), never a
+ * stored video or another member's upload.
  */
-export async function deleteRefs(urls: string[]): Promise<string[]> {
+export async function deleteRefs(urls: string[], ownerId: number): Promise<string[]> {
   const c = config();
   if (!c) return [];
   const doomed = urls.filter((u) => {
     const key = keyIn(c, u);
-    return key !== null && !mayNameVideo(key);
+    return key !== null && ownsRef(key, ownerId);
   });
   if (doomed.length > 0) await del(doomed, { token: c.token });
   return doomed;
@@ -259,22 +276,23 @@ function keyIn(c: Config, url: string): string | null {
 }
 
 /**
- * True when the key, or any percent-decoding of it, contains videos/ (in any case, with either slash) or a .. segment,
- * or does not decode. A reference this refuses is left in the store, which costs a few MB, never a video.
+ * True when the key and every percent-decoding of it start with the owner's refPrefix and hold no backslash and no ..
+ * segment, and the key decodes. A reference this refuses is left in the store, which costs a few MB, never another
+ * member's file.
  */
-function mayNameVideo(key: string): boolean {
+function ownsRef(key: string, ownerId: number): boolean {
+  const prefix = refPrefix(ownerId);
   let k = key;
   for (let i = 0; i < 4; i++) {
-    const plain = k.toLowerCase().replace(/\\/g, "/");
-    if (plain.includes(VIDEO_PREFIX) || /(^|\/)\.\.(\/|$)/.test(plain)) return true;
+    if (!k.startsWith(prefix) || k.includes("\\") || /(^|\/)\.\.(\/|$)/.test(k)) return false;
     let next: string;
     try {
       next = decodeURIComponent(k);
     } catch {
-      return true;
+      return false;
     }
-    if (next === k) return false;
+    if (next === k) return true;
     k = next;
   }
-  return true;
+  return false;
 }

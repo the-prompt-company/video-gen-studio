@@ -634,12 +634,13 @@ async function onTerminal(row: Generation): Promise<void> {
 }
 
 /**
- * Delete temporary reference uploads from Vercel Blob once the request is finished. They share the store with stored
- * videos, and a ref can be any URL the browser sent, so storage.deleteRefs refuses anything that could name a video.
+ * Delete the owner's temporary reference uploads from Vercel Blob once the request is finished. A ref can be any URL
+ * the browser sent, including a stored video or another member's upload, so storage.deleteRefs deletes only what sits
+ * under the row owner's refs/<user id>/.
  */
 async function cleanupRefs(gen: Generation) {
   try {
-    await storage.deleteRefs([...gen.imageRefs, ...gen.videoRefs]);
+    await storage.deleteRefs([...gen.imageRefs, ...gen.videoRefs], gen.userId);
   } catch (e) {
     console.warn("blob cleanup failed", e);
   }
