@@ -4,9 +4,11 @@
  *
  *   npm run db:mock            # insert rows for MOCK_USERNAME (default: ADMIN_USERNAME)
  *   npm run db:mock -- --clear # delete every mock row (prompt starts with "[목업]")
+ *   MOCK_LIVE=3 npm run db:mock # how many in_progress rows to insert (default 1)
  *
  * Media lives in public/mock/ (generated locally, labelled 목업). Rows never get a
- * request_id, so nothing ever calls Higgsfield for them.
+ * request_id, so nothing ever calls Higgsfield for them. The in_progress rows stay
+ * in_progress forever, which is what lets the playground's polling be observed.
  */
 import { eq, like, and } from "drizzle-orm";
 import { getDb, schema } from "../src/db";
@@ -14,6 +16,7 @@ import { getDb, schema } from "../src/db";
 const TAG = "[목업]";
 const username = process.env.MOCK_USERNAME ?? process.env.ADMIN_USERNAME ?? "admin";
 const clear = process.argv.includes("--clear");
+const liveCount = Number(process.env.MOCK_LIVE ?? 1);
 
 const h = (n: number) => n * 3600_000;
 const d = (n: number) => n * 86400_000;
@@ -27,7 +30,15 @@ function rows(userId: number): Row[] {
     completedAt: took ? new Date(now - ago + took) : null,
     expiresAt: new Date(now - ago + d(7)),
   });
+  const live: Row[] = Array.from({ length: liveCount }, (_, i) => ({
+    userId, modelId: "bytedance/seedance-2.0/reference-to-video", status: "in_progress",
+    prompt: `${TAG} 생성 중 ${i + 1}: 새벽 안개 속 등대, 파도가 바위에 부딪히고, 카메라가 천천히 상승`,
+    params: { duration: 8, resolution: "720p", aspect_ratio: "16:9", generate_audio: false },
+    imageRefs: ["/mock/ref-landscape-1.jpg"], videoRefs: [],
+    durationS: 8, costUsd: "0.4800", ...at(40_000 + i * 15_000), expiresAt: null,
+  }));
   return [
+    ...live,
     {
       userId, modelId: "minimax/hailuo-2.3/standard/image-to-video", status: "completed",
       prompt: `${TAG} 비 내리는 서울 밤거리, 네온 간판이 젖은 아스팔트에 비치고, 카메라가 천천히 앞으로 돌리한다`,

@@ -1,11 +1,51 @@
-/** Feature: playground — drawer, model select, aspect pills, reference dialog, generate gate. See features/playground.md. */
+/** Feature: playground — drawer, model select, aspect pills, reference dialog, generate gate, live polling. See features/playground.md. */
+import { writeFileSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const webDir = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "..");
+const LIVE = new Set(["queued", "in_progress"]);
+
+/** Group poll requests into ticks: requests less than 500 ms apart belong to one tick. */
+function ticks(polls) {
+  const out = [];
+  for (const p of [...polls].sort((a, b) => a.t - b.t)) {
+    const last = out[out.length - 1];
+    if (last && p.t - last.t < 500) last.n += 1;
+    else out.push({ t: p.t, n: 1 });
+  }
+  return out;
+}
 
 export default async function playground({ page, ev, env }) {
+  // Every GET /api/generations/<id> the page makes, with its response, so pg-poll can judge them.
+  const polls = [];
+  const lists = [];
+  // One batched GET /api/generations?ids=a,b per tick: each id becomes one poll entry with the batch's start time,
+  // so a batch groups into one tick and an id missing from the returned items still counts as bad.
+  page.on("response", async (res) => {
+    const req = res.request();
+    if (req.method() !== "GET") return;
+    const { pathname, searchParams } = new URL(res.url());
+    const batch = pathname === "/api/generations" ? searchParams.get("ids") : null;
+    if (pathname === "/api/generations" && batch === null) lists.push(req.timing().startTime);
+    const m = /^\/api\/generations\/([^/]+)$/.exec(pathname);
+    if (!m && batch === null) return;
+    const body = await res.json().catch(() => null);
+    if (m) return polls.push({ t: req.timing().startTime, path: pathname, id: m[1], status: res.status(), itemId: body?.item?.id ?? null });
+    const returned = new Set((body?.items ?? []).map((i) => i.id));
+    for (const id of batch.split(",")) polls.push({ t: req.timing().startTime, path: `${pathname}?ids=`, id, status: res.status(), itemId: returned.has(id) ? id : null });
+  });
+
   await ev.login("/playground");
+  // A live item can finish, or another process can replace mock rows, while the journey runs. An id counts as
+  // live when it was live at the start or at the end of the run.
+  const liveIds = new Set();
+  const readLive = async () => {
+    const feed = await ev.api("/api/generations?limit=12");
+    for (const i of feed.body?.items ?? []) if (LIVE.has(i.status)) liveIds.add(i.id);
+  };
+  await readLive();
   const drawer = page.getByRole("complementary", { name: "생성 설정" });
   if (!(await drawer.isVisible())) ev.fail("drawer aside[aria-label=생성 설정] not visible");
   await ev.shot("drawer");
@@ -80,4 +120,63 @@ export default async function playground({ page, ev, env }) {
     ev.note("generation submitted (VGS_ALLOW_SPEND=1); a queued item is on the stage");
   } else ev.note("API key present; paid submit skipped (set VGS_ALLOW_SPEND=1 to exercise it)");
   await ev.shot("generate-gate");
+
+  // pg-poll: each live item on the stage is polled by its own uuid, every poll is a 200, and the body is that item.
+  // VGS_POLL_WAIT_MS keeps the page open longer so the backoff schedule can be read; VGS_POLL_NAV=1 leaves for 갤러리 and comes back.
+  await readLive();
+  const waitMs = Number(env.VGS_POLL_WAIT_MS ?? 0);
+  if (waitMs > 0) {
+    ev.note(`waiting ${waitMs} ms on /playground for polls`);
+    await page.waitForTimeout(waitMs);
+  } else {
+    const until = Date.now() + 8_000;
+    while (liveIds.size > 0 && ticks(polls).length < 2 && Date.now() < until) await page.waitForTimeout(250);
+  }
+  if (env.VGS_POLL_NAV === "1" && liveIds.size > 0) {
+    const before = polls.length;
+    const nav = page.getByRole("navigation", { name: "주 메뉴" });
+    await nav.getByRole("link", { name: "갤러리" }).click();
+    await page.waitForURL("**/gallery**");
+    await page.waitForTimeout(3_000);
+    const away = polls.length - before;
+    await nav.getByRole("link", { name: "플레이그라운드" }).click();
+    await page.waitForURL("**/playground**");
+    const back = Date.now();
+    const until = back + 6_000;
+    while (polls.length === before + away && Date.now() < until) await page.waitForTimeout(100);
+    const listAt = lists.filter((t) => t >= back - 500).at(-1);
+    const first = polls.filter((p) => p.t >= back).sort((a, b) => a.t - b.t)[0];
+    ev.note(`navigate: ${away} polls while on /gallery; first poll ${first ? Math.round(first.t - (listAt ?? back)) : "none"} ms after the feed reloaded on return`);
+    if (away > 0) ev.fail(`${away} poll requests went out while on /gallery`);
+    if (!first) ev.fail("no poll request within 6 s of returning to /playground");
+  }
+
+  const bad = polls.filter((p) => p.status !== 200 || !liveIds.has(p.id) || p.itemId !== p.id);
+  const schedule = ticks(polls);
+  const gaps = schedule.slice(1).map((k, i) => Math.round(k.t - schedule[i].t));
+  writeFileSync(join(ev.dir, "poll.json"), JSON.stringify({ liveIds: [...liveIds], polls, ticks: schedule, gaps }, null, 2));
+  for (const p of polls) ev.note(`poll GET ${p.path} → ${p.status}${p.itemId === p.id ? "" : ` (body item.id ${p.itemId})`}`);
+  // The overlay puts the request log in the screenshot; it is removed right after.
+  await page.getByRole("region", { name: "결과 무대" }).scrollIntoViewIfNeeded();
+  const lines = polls.length ? polls.map((p) => `GET ${p.path} → ${p.status}`) : ["no poll requests"];
+  await page.evaluate((text) => {
+    const el = document.createElement("pre");
+    el.id = "vgs-poll-overlay";
+    el.textContent = text;
+    el.style.cssText = "position:fixed;right:12px;top:64px;z-index:9999;max-height:70vh;overflow:hidden;padding:10px 12px;font:12px/1.4 monospace;color:#fff;background:rgba(0,0,0,.82);border:1px solid #999;border-radius:6px;white-space:pre";
+    document.body.appendChild(el);
+  }, ["vgs harness overlay · poll requests this run", ...lines].join("\n"));
+  await ev.shot("poll");
+  await page.evaluate(() => document.getElementById("vgs-poll-overlay")?.remove());
+  if (liveIds.size === 0) {
+    if (polls.length > 0) ev.fail(`${polls.length} poll requests with no live item on the feed`);
+    ev.note("poll requests 0 (no live item on the feed)");
+  } else {
+    if (polls.length === 0) ev.fail(`live items ${[...liveIds].join(",")} on the feed but no poll request within 8 s`);
+    if (bad.length) ev.fail(`poll requests not matching a live uuid with a 200 and its own item: ${bad.map((p) => `${p.path} → ${p.status}`).join("; ")}`);
+    ev.note(`poll requests ${polls.length}, all 200`);
+    ev.note(`poll ticks ${schedule.length} (${schedule.map((k) => k.n).join(",")} requests each), gaps ${gaps.join(", ")} ms`);
+    const bar = page.getByRole("progressbar", { name: "생성 진행 중" }).first();
+    if (!(await bar.isVisible())) ev.fail("live item on the feed but no 생성 진행 중 progress bar on the stage");
+  }
 }

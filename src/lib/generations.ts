@@ -105,7 +105,10 @@ export async function cancelGeneration(gen: Generation, schedule: Scheduler): Pr
     throw e;
   }
   if (answer === "canceled") return apply(gen, decide(gen, { source: "cancel" }, { now: new Date(), pricePerSecUsd: 0 }), schedule);
-  return refresh(gen, { ...POLICY.poll, forceCheck: true }, schedule);
+  const looked = await refresh(gen, { ...POLICY.poll, forceCheck: true }, schedule);
+  // refresh returns the row it was given when it could not look (another caller already finished it, no key, or the
+  // provider is down). The caller still needs the row as it stands now.
+  return looked === gen ? current(gen) : looked;
 }
 
 /**
@@ -116,7 +119,7 @@ export async function cancelGeneration(gen: Generation, schedule: Scheduler): Pr
 export async function storeVideo(gen: Generation): Promise<Generation> {
   if (!storage.storageEnabled()) return gen;
   const claimed = await claimCopy(gen.id);
-  if (!claimed?.resultUrl) return claimed ?? (await reread(gen.id)) ?? gen;
+  if (!claimed?.resultUrl) return claimed ?? current(gen);
   const g = schema.generations;
   const attempt = claimed.mirrorAttempts;
   try {
@@ -237,9 +240,15 @@ async function apply(gen: Generation, step: Step, schedule: Scheduler): Promise<
     .set({ status: step.to, ...step.patch })
     .where(and(eq(g.id, gen.id), inArray(g.status, predecessorsOf(step.to))))
     .returning();
-  if (!row) return (await reread(gen.id)) ?? gen;
+  if (!row) return current(gen);
   if (!isLive(row.status)) schedule(() => onTerminal(row));
   return row;
+}
+
+async function current(gen: Generation): Promise<Generation> {
+  const g = schema.generations;
+  const [row] = await getDb().select().from(g).where(eq(g.id, gen.id)).limit(1);
+  return row ?? gen;
 }
 
 function settleAs(gen: Generation, reason: SettleReason, schedule: Scheduler): Promise<Generation> {
@@ -334,11 +343,6 @@ async function fetchResult(url: string): Promise<{ bytes: Uint8Array; contentTyp
     chunks.push(value);
   }
   return { bytes: Buffer.concat(chunks), contentType: res.headers.get("content-type") ?? "video/mp4" };
-}
-
-async function reread(id: string): Promise<Generation | null> {
-  const [row] = await getDb().select().from(schema.generations).where(eq(schema.generations.id, id)).limit(1);
-  return row ?? null;
 }
 
 /** Runs once per terminal move, by the caller that made it: ref cleanup, then the copy for a completed row. */

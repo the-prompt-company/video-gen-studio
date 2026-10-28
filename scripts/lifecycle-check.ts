@@ -10,6 +10,7 @@
  * The rows it creates belong to ADMIN_USERNAME, whose Higgsfield key must be set (the fake accepts any key), carry
  * prompts starting with "GP-4 ", and are deleted before it exits. It exits non-zero at the first failed check.
  * The stalled-copy check waits out the 240 s fetch timeout, so a full run takes about six minutes.
+ * If the test model's price is 0 it sets 0.0123 USD/s for the cost check and restores the stored price afterwards.
  *
  * --measure <base> inserts 15 live rows, keeps /playground of the app at <base> open for 60 s in a headless browser
  * (Playwright from the verify-video-gen-studio skill), and prints the app requests and the fake's status calls.
@@ -57,6 +58,7 @@ const CHECK_GAP_MS = 15_000;
 const MIRROR_LEASE_S = 360;
 const COPY_TIMEOUT_MS = 240_000;
 const STORAGE_ENV = ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"] as const;
+const TEST_PRICE = "0.0123";
 const created: string[] = [];
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -128,6 +130,23 @@ function startProxy(target: string) {
 function recorder() {
   const tasks: Promise<void>[] = [];
   return { tasks, schedule: (task: () => Promise<void>) => void tasks.push(task()) };
+}
+
+/**
+ * price × duration proves nothing at price 0, and the shared models table starts at 0 for every model. When the
+ * model's price is 0, run with TEST_PRICE and put the stored value back afterwards.
+ */
+async function withKnownPrice<T>(modelId: string, run: () => Promise<T>): Promise<T> {
+  const m = schema.models;
+  const [row] = await getDb().select().from(m).where(eq(m.modelId, modelId)).limit(1);
+  if (!row) throw new Error(`FAIL models row for ${modelId} missing; run npm run db:seed`);
+  if (Number(row.pricePerSecUsd) > 0) return run();
+  await getDb().update(m).set({ pricePerSecUsd: TEST_PRICE }).where(eq(m.modelId, modelId));
+  try {
+    return await run();
+  } finally {
+    await getDb().update(m).set({ pricePerSecUsd: row.pricePerSecUsd }).where(eq(m.modelId, modelId));
+  }
 }
 
 async function stats(upstream: string): Promise<Stats> {
@@ -231,7 +250,7 @@ async function fiftyCallers(owner: Owner, admin: User, upstream: string) {
   const costs = new Set([...seen, final].filter((g) => g.status === "completed").map((g) => g.costUsd));
   const price = await owner.priceFor(final.modelId);
   check(stamps.size === 1, "completed_at was written once", [...stamps].join(","));
-  check(costs.size === 1 && final.costUsd === (price * final.durationS).toFixed(4), "cost_usd was written once as price × duration", `${final.costUsd} = ${price} × ${final.durationS}`);
+  check(price > 0 && costs.size === 1 && final.costUsd === (price * final.durationS).toFixed(4), "cost_usd was written once as a non-zero price × duration", `${final.costUsd} = ${price} × ${final.durationS}`);
   await Promise.all(rec.tasks);
   check(rec.tasks.length === 1, "the terminal follow-up was scheduled once", `${rec.tasks.length}`);
 }
@@ -284,6 +303,20 @@ async function cancelRaces(owner: Owner, admin: User, upstream: string) {
     race("at completion", (id) => providerReaches(upstream, id, "completed", 12_000)),
   ]);
   check(ends.includes("canceled") && ends.includes("completed"), "the races covered both a winning and a refused cancel", ends.join(", "));
+}
+
+async function cancelAfterAnotherCallerFinished(owner: Owner, admin: User, upstream: string) {
+  const snapshot = await submit(owner, admin, "끝난 뒤 취소");
+  const rec = recorder();
+  await providerReaches(upstream, snapshot.requestId ?? "", "completed", 12_000);
+  await settleUntilDone(owner, snapshot.id, rec.schedule, 20_000);
+  const answer = await owner.cancelGeneration(snapshot, rec.schedule);
+  check(
+    answer.status === "completed",
+    "a refused cancel returns the row as it stands now, not the queued row the route read before another caller finished it",
+    `returned ${answer.status}`,
+  );
+  await Promise.all(rec.tasks);
 }
 
 async function rowWithoutRequestId(owner: Owner, admin: User, proxy: Proxy) {
@@ -528,9 +561,10 @@ async function main() {
     if (!proxy) {
       await measure(owner, admin, upstream, base ?? "");
     } else {
-      await fiftyCallers(owner, admin, upstream);
+      await withKnownPrice(MODEL, () => fiftyCallers(owner, admin, upstream));
       await reversedObservations(owner, admin, upstream, proxy);
       await cancelRaces(owner, admin, upstream);
+      await cancelAfterAnotherCallerFinished(owner, admin, upstream);
       await rowWithoutRequestId(owner, admin, proxy);
       await copyOnCompletion(owner, admin, upstream);
       await tenConcurrentCopies(owner, admin, upstream);
