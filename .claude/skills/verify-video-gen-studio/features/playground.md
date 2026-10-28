@@ -12,6 +12,7 @@ The playground is where a member writes a prompt, attaches reference images or v
 - `pg-refs-dialog` 레퍼런스 추가 opens a modal with image/video drop zones; picking a file uploads (with a key) or explains why not; Esc closes and focus returns.
 - `pg-generate-gate` without an API key a status banner shows and 생성하기 is disabled; with one, 생성하기 submits and a queued item appears on the stage.
 - `pg-stage` results snap one per viewport with rail glyphs 생성/취소/다운로드/갤러리/다시 and prev/next.
+- `pg-poll` while an item on the feed is 대기 or 생성 중, the page sends one `GET /api/generations?ids=<uuid>,<uuid>` per tick for every live item with backoff (2 s, then ×1.5 up to 10 s, ±200 ms jitter that does not compound); every poll is a 200 whose `items` contain each requested uuid, the stage shows the 생성 진행 중 progress bar, and no poll goes out when nothing is live.
 
 ## How to get to it (user POV)
 
@@ -27,6 +28,7 @@ Preconditions:
 - At least one model is enabled in 어드민 → 모델 · 단가 (both ship enabled).
 - `public/mock/ref-landscape-1.jpg` exists (committed).
 - Set `VGS_ALLOW_SPEND=1` only when a paid submit is wanted; the account then needs a Higgsfield key.
+- For `pg-poll`, a live row must exist for the account: `npm run db:mock` inserts one `[목업] 생성 중` row (`MOCK_LIVE=3` inserts three). It has no request id, so no Higgsfield call ever happens for it.
 
 - **Open drawer.** Sign in to `/playground`. Run `vgs run playground`; `01-drawer` shows the complementary region 생성 설정.
 - **List models.** Read the 모델 select options; the note in `log.md` lists them (Seedance 2.0 · ByteDance, Hailuo 2.3 Standard · MiniMax when both enabled).
@@ -37,7 +39,8 @@ Preconditions:
 - **Pick an image.** Set the image file input to `public/mock/ref-landscape-1.jpg`. Either a thumbnail appears in list 첨부한 레퍼런스 (key present) or a `role=alert` explains the refusal (no key). The note records which (`05-refs-dialog-after-pick`).
 - **Close with Esc.** The dialog disappears and focus is on 레퍼런스 추가 again.
 - **Generate gate.** If the `role=status` banner (`API 키가 아직 할당되지 않았습니다`) is visible, 생성하기 is disabled. With a key and `VGS_ALLOW_SPEND=1`, 생성하기 is clicked and an article appears in region 결과 무대 (`06-generate-gate`).
-- **Proof.** `result.json` `ok: true`; `02-seedance-portrait.aria.txt` shows one pressed pill; `05-*.aria.txt` shows the thumbnail or the alert text.
+- **Watch the polling.** With a `[목업] 생성 중` row on the feed, the journey waits for two poll ticks and checks every id in every `GET /api/generations?ids=` batch it saw: the id is a live uuid from `GET /api/generations?limit=12`, the status is 200, and the id is among the returned `items`. A single-row `GET /api/generations/<id>` is still accepted and checked the same way. `log.md` gets `poll requests N, all 200` and the tick gaps; `poll.json` keeps every request. Without a live row it records `poll requests 0`. `07-poll` shows the stage with the request log overlaid by the harness. `VGS_POLL_WAIT_MS=30000` holds the page for 30 s so the backoff gaps can be read; `VGS_POLL_NAV=1` leaves for 갤러리 and returns, and the note records that no poll went out while away and how soon the first poll came back.
+- **Proof.** `result.json` `ok: true`; `02-seedance-portrait.aria.txt` shows one pressed pill; `05-*.aria.txt` shows the thumbnail or the alert text; `log.md` has `poll requests N, all 200` (or `poll requests 0` when nothing is live).
 
 ## Gotchas
 
@@ -47,3 +50,6 @@ Preconditions:
 - A real 생성하기 costs money and takes minutes; Higgsfield gives no ETA, the rail shows elapsed time. Cancel (취소) only works while the item is `queued`.
 - The price hint reads `단가 미설정` and the cost bar `미정` until an admin enters a price; that is expected, not a defect.
 - On the 390px layout the stage is above the drawer; the empty state offers 생성 설정으로 이동 to scroll down.
+- The poll backoff adds up to 500 ms of random jitter per tick and the next tick is scheduled only after the previous responses arrive, so observed gaps run longer than 2000, 3000, 4500, 6750, 10000 ms; judge the shape, not exact values.
+- A `[목업] 생성 중` row never completes. Clear it with `npm run db:mock -- --clear` when done, or every later playground run keeps polling it.
+- The page polls every live row of the account, including rows another lane or person submitted. A live row with a request id makes the server call Higgsfield on each poll, and when that call fails the poll is a 500 and `pg-poll` fails. The failure names the id; check whose row it is before blaming the polling path.
