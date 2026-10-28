@@ -2,22 +2,25 @@
  * Checks the promises of src/lib/generations.ts against a fake Higgsfield and the .env.local database.
  *
  *   npx dotenv -e .env.local -- tsx scripts/lifecycle-check.ts
- *   HIGGSFIELD_BASE_URL=http://localhost:4010 npx dotenv -e .env.local -- tsx scripts/lifecycle-check.ts
+ *   HIGGSFIELD_BASE_URL=http://localhost:4010 SUPABASE_URL=http://localhost:4010 SUPABASE_SERVICE_ROLE_KEY=fake npx dotenv -e .env.local -- tsx scripts/lifecycle-check.ts
  *   HIGGSFIELD_BASE_URL=http://localhost:4010 npx dotenv -e .env.local -- tsx scripts/lifecycle-check.ts --measure http://localhost:3100
  *
- * Without HIGGSFIELD_BASE_URL it starts its own fake (scripts/fake-higgsfield.ts). The rows it creates belong to
- * ADMIN_USERNAME, whose Higgsfield key must be set (the fake accepts any key), carry prompts starting with "GP-3 ",
- * and are deleted before it exits. It exits non-zero at the first failed check.
+ * Without HIGGSFIELD_BASE_URL it starts its own fake (scripts/fake-higgsfield.ts). The copy checks upload to the same
+ * fake's Supabase Storage subset: SUPABASE_URL is set to the fake when unset and refused when it points anywhere else.
+ * The rows it creates belong to ADMIN_USERNAME, whose Higgsfield key must be set (the fake accepts any key), carry
+ * prompts starting with "GP-4 ", and are deleted before it exits. It exits non-zero at the first failed check.
+ * The stalled-copy check waits out the 240 s fetch timeout, so a full run takes about six minutes.
  *
  * --measure <base> inserts 15 live rows, keeps /playground of the app at <base> open for 60 s in a headless browser
  * (Playwright from the verify-video-gen-studio skill), and prints the app requests and the fake's status calls.
  * The app at <base> must use the same HIGGSFIELD_BASE_URL, and the fake's FAKE_HF_DURATION_MS must outlast the window.
  */
+import { createHash } from "node:crypto";
 import { createServer, type IncomingHttpHeaders, type IncomingMessage, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { getDb, schema } from "../src/db";
 import type { Generation, User } from "../src/db/schema";
 import { coerceParams, findModel } from "../src/lib/catalog";
@@ -26,7 +29,12 @@ import { configFromEnv, createFakeHiggsfield } from "./fake-higgsfield";
 
 type Owner = typeof import("../src/lib/generations");
 type Proxy = ReturnType<typeof startProxy>;
-type Stats = { statusPolls: { byRequest: Record<string, { total: number; perSecondMax: number }>; byApiKey: Record<string, number> } };
+type Stats = {
+  statusPolls: { byRequest: Record<string, { total: number; perSecondMax: number }>; byApiKey: Record<string, number> };
+  media: { downloads: number };
+  storage: { byKey: Record<string, { writes: number; size: number; sha256: string }> };
+};
+type Schedule = (task: () => Promise<void>) => void;
 type BrowserResponse = { url(): string; status(): number; request(): { method(): string } };
 type BrowserPage = {
   goto(url: string): Promise<unknown>;
@@ -43,9 +51,12 @@ type Chromium = {
   }>;
 };
 
-const TAG = "GP-3 ";
+const TAG = "GP-4 ";
 const MODEL = "minimax/hailuo-2.3/standard/image-to-video";
 const CHECK_GAP_MS = 15_000;
+const MIRROR_LEASE_S = 360;
+const COPY_TIMEOUT_MS = 240_000;
+const STORAGE_ENV = ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"] as const;
 const created: string[] = [];
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -136,6 +147,29 @@ async function providerReaches(upstream: string, requestId: string, want: string
   }
 }
 
+async function setFake(upstream: string, knobs: { mediaDelayMs?: number }): Promise<void> {
+  await fetch(`${upstream}/_config`, { method: "POST", body: JSON.stringify(knobs) });
+}
+
+function objectName(id: string): string {
+  return `${process.env.SUPABASE_VIDEO_BUCKET || "videos"}/${id}.mp4`;
+}
+
+async function writesOf(upstream: string, id: string): Promise<number> {
+  return (await stats(upstream)).storage.byKey[objectName(id)]?.writes ?? 0;
+}
+
+function sha256(bytes: ArrayBuffer): string {
+  return createHash("sha256").update(new Uint8Array(bytes)).digest("hex");
+}
+
+async function secondsUntilLeaseEnds(id: string): Promise<number> {
+  const [row] = await getDb().execute<{ s: string }>(
+    sql`select extract(epoch from mirror_next_at - now()) as s from generations where id = ${id}`,
+  );
+  return Number(row.s);
+}
+
 async function readRow(id: string): Promise<Generation> {
   const [row] = await getDb().select().from(schema.generations).where(eq(schema.generations.id, id)).limit(1);
   if (!row) throw new Error(`FAIL row ${id} disappeared`);
@@ -165,7 +199,7 @@ async function submit(owner: Owner, admin: User, label: string): Promise<Generat
 }
 
 /** Settle the row once a second, like an open tab, until it is terminal. */
-async function settleUntilDone(owner: Owner, id: string, schedule: (t: () => Promise<void>) => void, withinMs: number): Promise<Generation> {
+async function settleUntilDone(owner: Owner, id: string, schedule: Schedule, withinMs: number): Promise<Generation> {
   const until = Date.now() + withinMs;
   for (;;) {
     const row = await owner.settle(await readRow(id), schedule);
@@ -281,6 +315,134 @@ async function rowWithoutRequestId(owner: Owner, admin: User, proxy: Proxy) {
   check(cancel?.status === 409 && rec.tasks.length === 0, "its cancel is refused with 409 and nothing is scheduled");
 }
 
+/** A completed row whose terminal follow-up never ran, as when the process dies before its after() task starts. */
+async function completedWithoutCopy(owner: Owner, admin: User, label: string): Promise<Generation> {
+  const row = await submit(owner, admin, label);
+  const dropped: Schedule = () => {};
+  const done = await settleUntilDone(owner, row.id, dropped, 30_000);
+  if (done.status !== "completed" || done.storagePath || done.mirrorAttempts !== 0) {
+    throw new Error(`FAIL setup: ${label} ended ${done.status}, storage_path ${done.storagePath}, attempts ${done.mirrorAttempts}`);
+  }
+  return done;
+}
+
+async function copyOnCompletion(owner: Owner, admin: User, upstream: string) {
+  const row = await submit(owner, admin, "완료한 호출자가 복사");
+  const rec = recorder();
+  const until = Date.now() + 30_000;
+  for (;;) {
+    const settled = await Promise.all(Array.from({ length: 5 }, async () => owner.settle(await readRow(row.id), rec.schedule)));
+    if (settled.some((g) => !isLive(g.status))) break;
+    if (Date.now() > until) throw new Error(`FAIL row ${row.id} still live after 30 s`);
+    await sleep(1000);
+  }
+  await Promise.all(rec.tasks);
+  const final = await readRow(row.id);
+  const video = owner.publicGeneration(final).video;
+  check(
+    rec.tasks.length === 1 && (await writesOf(upstream, row.id)) === 1,
+    "of 5 settle calls per second, only the one that completed the row copied it, once",
+    `${rec.tasks.length} task`,
+  );
+  check(final.storagePath === `${row.id}.mp4` && final.mirrorAttempts === 1 && final.mirrorError === null, "storage_path is the object key <id>.mp4 after one attempt");
+  check(
+    video?.kind === "stored" && video.url === `${process.env.SUPABASE_URL}/storage/v1/object/public/${objectName(row.id)}`,
+    "the next read returns video.kind stored with the public object URL",
+    video?.url,
+  );
+}
+
+async function tenConcurrentCopies(owner: Owner, admin: User, upstream: string) {
+  const row = await completedWithoutCopy(owner, admin, "storeVideo 10개 동시");
+  const before = owner.publicGeneration(row).video;
+  check(
+    before?.kind === "provider" && before.storing && before.url.endsWith(`/media/${row.requestId}.mp4`),
+    "before the copy the row plays the provider URL and says a copy is coming",
+  );
+  await Promise.all(Array.from({ length: 10 }, () => owner.storeVideo(row)));
+  const final = await readRow(row.id);
+  check(
+    (await writesOf(upstream, row.id)) === 1 && final.mirrorAttempts === 1,
+    "10 concurrent storeVideo calls claim once and write the key once",
+    `attempts ${final.mirrorAttempts}`,
+  );
+
+  const media = await (await fetch(`${upstream}/media/${row.requestId}.mp4`)).arrayBuffer();
+  const object = (await stats(upstream)).storage.byKey[objectName(row.id)];
+  check(
+    object.sha256 === sha256(media) && object.size === media.byteLength && final.sizeBytes === media.byteLength,
+    "the stored object has the media's sha256 and size_bytes matches it",
+    `${final.sizeBytes} bytes`,
+  );
+  const video = owner.publicGeneration(final).video;
+  if (video?.kind !== "stored") throw new Error("FAIL the copied row does not report video.kind stored");
+  const served = await fetch(video.url);
+  check(served.ok && sha256(await served.arrayBuffer()) === object.sha256, "the public URL serves those bytes");
+  const download = await fetch(video.downloadUrl);
+  await download.arrayBuffer();
+  check(
+    video.downloadUrl.endsWith(`?download=${row.id}.mp4`) && /attachment/.test(download.headers.get("content-disposition") ?? ""),
+    "downloadUrl asks for <id>.mp4 and is served as an attachment",
+  );
+}
+
+async function storageOff(owner: Owner, admin: User, upstream: string) {
+  const saved = STORAGE_ENV.map((k) => [k, process.env[k]] as const);
+  for (const k of STORAGE_ENV) delete process.env[k];
+  try {
+    const row = await submit(owner, admin, "스토리지 env 없음");
+    const rec = recorder();
+    await settleUntilDone(owner, row.id, rec.schedule, 30_000);
+    await Promise.all(rec.tasks);
+    await owner.storeVideo(await readRow(row.id));
+    const final = await readRow(row.id);
+    const video = owner.publicGeneration(final).video;
+    check(
+      final.status === "completed" && final.storagePath === null && final.mirrorAttempts === 0,
+      "without the storage env the copy never runs: storage_path stays null and no attempt is counted",
+    );
+    check((await writesOf(upstream, row.id)) === 0, "and nothing reaches the storage endpoint");
+    check(video?.kind === "provider" && !video.storing && video.expiresAt !== null, "video.kind is provider with its expiry, and no copy is promised");
+  } finally {
+    for (const [k, v] of saved) if (v !== undefined) process.env[k] = v;
+  }
+}
+
+async function stalledCopy(owner: Owner, admin: User, upstream: string) {
+  const row = await completedWithoutCopy(owner, admin, "멈춘 미디어");
+  await setFake(upstream, { mediaDelayMs: 250_000 });
+  const t0 = Date.now();
+  let failed: Generation;
+  try {
+    const first = owner.storeVideo(row);
+    await sleep(3000);
+    const leased = await readRow(row.id);
+    const ahead = await secondsUntilLeaseEnds(row.id);
+    check(leased.mirrorAttempts === 1 && ahead > MIRROR_LEASE_S - 10, "the claim counts the attempt and holds the lease at least 360 s", `${ahead.toFixed(0)} s left after 3 s`);
+    const downloads = (await stats(upstream)).media.downloads;
+    const second = await owner.storeVideo(leased);
+    check(second.mirrorAttempts === 1 && (await stats(upstream)).media.downloads === downloads, "a second caller during the lease neither claims nor downloads");
+    failed = await first;
+  } finally {
+    await setFake(upstream, { mediaDelayMs: 0 });
+  }
+  const took = Date.now() - t0;
+  check(
+    failed.storagePath === null && /timeout|abort/i.test(failed.mirrorError ?? "") && took >= COPY_TIMEOUT_MS - 1000 && took < 250_000,
+    "a 250 s media stall fails at the 240 s fetch timeout and leaves mirror_error",
+    `${(took / 1000).toFixed(1)} s, mirror_error "${failed.mirrorError}"`,
+  );
+  check(failed.status === "completed" && failed.resultUrl === row.resultUrl, "the failure writes only media columns");
+  await owner.storeVideo(failed);
+  check((await readRow(row.id)).mirrorAttempts === 1, "no retry is claimed before the lease runs out");
+  await getDb().execute(sql`update generations set mirror_next_at = now() where id = ${row.id}`);
+  const retried = await owner.storeVideo(await readRow(row.id));
+  check(
+    retried.storagePath === `${row.id}.mp4` && retried.mirrorError === null && retried.mirrorAttempts === 2 && (await writesOf(upstream, row.id)) === 1,
+    "after the lease runs out (mirror_next_at moved to now instead of waiting 360 s) the retry copies it and clears mirror_error",
+  );
+}
+
 async function measure(owner: Owner, admin: User, upstream: string, base: string) {
   const rows = Number(process.env.MEASURE_ROWS ?? 15);
   const seconds = Number(process.env.MEASURE_SECONDS ?? 60);
@@ -349,6 +511,15 @@ async function main() {
     upstream = await listen(ownFake);
   }
   const proxy = base ? null : startProxy(upstream);
+  if (proxy) {
+    const storageUrl = process.env.SUPABASE_URL;
+    if (!storageUrl) {
+      process.env.SUPABASE_URL = upstream;
+      process.env.SUPABASE_SERVICE_ROLE_KEY ||= "fake";
+    } else if (new URL(storageUrl).origin !== new URL(upstream).origin) {
+      throw new Error(`FAIL SUPABASE_URL is ${new URL(storageUrl).origin}; the copy checks write test objects, so point it at the fake ${upstream}`);
+    }
+  }
   process.env.HIGGSFIELD_BASE_URL = proxy ? await listen(proxy.server) : upstream;
   const owner: Owner = await import("../src/lib/generations");
   const admin = await adminUser();
@@ -361,6 +532,10 @@ async function main() {
       await reversedObservations(owner, admin, upstream, proxy);
       await cancelRaces(owner, admin, upstream);
       await rowWithoutRequestId(owner, admin, proxy);
+      await copyOnCompletion(owner, admin, upstream);
+      await tenConcurrentCopies(owner, admin, upstream);
+      await storageOff(owner, admin, upstream);
+      await stalledCopy(owner, admin, upstream);
       console.log(`all checks passed (${proxy.requests()} Higgsfield requests went through the counter)`);
     }
   } finally {
