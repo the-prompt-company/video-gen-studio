@@ -42,7 +42,7 @@ Higgsfield 웹사이트를 직접 쓰는 것과 다른 점은 셋이며, 사용�
 **확정된 기능**
 - 경로: `/`(랜딩), `/login`, `/playground`, `/gallery`, `/dashboard`, `/admin`.
 - 모델 3종과 각 모델의 레퍼런스 규칙·파라미터는 `src/lib/catalog.ts`가 단일 출처다. 클라이언트 폼과 서버 생성 라우트가 같은 정의를 쓴다.
-- 상태 어휘: 대기(queued), 생성 중(in_progress), 완료(completed), 실패(failed), NSFW 차단(nsfw), 취소(canceled). 실패·NSFW·취소는 과금하지 않는다.
+- 상태 어휘: 제출 대기(pending, Higgsfield가 아직 받지 않아 스스로 다시 제출함), 대기(queued), 생성 중(in_progress), 완료(completed), 실패(failed), NSFW 차단(nsfw), 취소(canceled). 제출 대기·실패·NSFW·취소는 과금하지 않는다.
 - 어드민: 사용자 추가, API 키 할당, 비밀번호·역할·활성 변경, 모델 단가·활성, 전체 로그 필터와 CSV.
 
 **기술 제약**
