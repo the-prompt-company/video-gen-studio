@@ -1,6 +1,7 @@
 @import "tailwindcss";
 /* Keep Tailwind's source scan (and Turbopack's file watcher) out of design artifacts. */
 @source not "../../.impeccable";
+@source not "../../.claude";
 
 /* World: full-bleed vertical media surface. Media owns the stage; the interface
    is white glyphs on a void. No accent hue: the primary action is white fill. */
