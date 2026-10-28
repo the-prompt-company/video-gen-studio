@@ -1,0 +1,1 @@
+ALTER TABLE "generations" ADD COLUMN "next_check_at" timestamp with time zone DEFAULT now() NOT NULL;

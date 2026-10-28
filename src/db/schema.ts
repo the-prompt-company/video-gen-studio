@@ -47,6 +47,8 @@ export const generations = pgTable(
     videoRefs: jsonb("video_refs").$type<string[]>().notNull().default([]),
     status: text("status", { enum: GENERATION_STATUSES }).notNull().default("queued"),
     requestId: text("request_id"),
+    /** Earliest time any caller may ask Higgsfield about this row. A conditional UPDATE on it is the per-row check claim. */
+    nextCheckAt: timestamp("next_check_at", { withTimezone: true }).notNull().defaultNow(),
     resultUrl: text("result_url"),
     blobUrl: text("blob_url"),
     expiresAt: timestamp("expires_at", { withTimezone: true }),
