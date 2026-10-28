@@ -359,7 +359,8 @@ export function Playground({ models, hasApiKey, largeUploadPrefix, galleryCount 
 
   const [refsOpen, setRefsOpen] = useState(false);
   const refsButtonRef = useRef<HTMLButtonElement>(null);
-  const [items, setItems] = useState<PublicGeneration[]>([]);
+  // The 갤러리 count shares the list's state so one pure update moves both; React may run an updater twice.
+  const [{ items, galleryTotal }, setFeed] = useState({ items: [] as PublicGeneration[], galleryTotal: galleryCount });
   const [loaded, setLoaded] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -369,13 +370,13 @@ export function Playground({ models, hasApiKey, largeUploadPrefix, galleryCount 
   const feedRef = useRef<HTMLDivElement>(null);
   const pollDelay = useRef(POLL_FIRST_MS);
 
-  const [galleryTotal, setGalleryTotal] = useState(galleryCount);
-
   function upsert(item: PublicGeneration) {
-    setItems((list) => {
-      const prev = list.find((x) => x.id === item.id);
-      if (item.status === "completed" && prev && prev.status !== "completed") setGalleryTotal((n) => n + 1);
-      return prev ? list.map((x) => (x.id === item.id ? item : x)) : [item, ...list].slice(0, FEED_LIMIT);
+    setFeed(({ items, galleryTotal }) => {
+      const prev = items.find((x) => x.id === item.id);
+      return {
+        items: prev ? items.map((x) => (x.id === item.id ? item : x)) : [item, ...items].slice(0, FEED_LIMIT),
+        galleryTotal: galleryTotal + (item.status === "completed" && prev && prev.status !== "completed" ? 1 : 0),
+      };
     });
   }
 
@@ -392,7 +393,7 @@ export function Playground({ models, hasApiKey, largeUploadPrefix, galleryCount 
       .then((r) => r.json())
       .then((b: FeedAnswer) => {
         syncClock(sentAt, b.now);
-        setItems(b.items ?? []);
+        setFeed((feed) => ({ ...feed, items: b.items ?? [] }));
         setActiveId(b.items?.[0]?.id ?? null);
       })
       .catch(() => {})
