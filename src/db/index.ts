@@ -30,8 +30,14 @@ function createDb() {
   // With max_pipeline 0, sql.begin() sends BEGIN but never reserves its connection
   // (porsager/postgres#1189), so transactions get their own connection with the default.
   // The pooler keeps the server connection until COMMIT, so pipelining inside one is safe.
-  client.begin = postgres(url, { ...options, max: 1 }).begin;
-  return drizzle(client, { schema });
+  const transactions = postgres(url, { ...options, max: 1 });
+  client.begin = transactions.begin;
+  const db = drizzle(client, { schema });
+  // drizzle registers its pass-through json, jsonb and date handlers only on the client it wraps.
+  // Without them a jsonb parameter inside a transaction is stringified twice and stored as a JSON string.
+  Object.assign(transactions.options.parsers, client.options.parsers);
+  Object.assign(transactions.options.serializers, client.options.serializers);
+  return db;
 }
 
 // Cached on globalThis so Next dev HMR reuses one pool instead of leaking
