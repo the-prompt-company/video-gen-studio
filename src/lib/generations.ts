@@ -5,7 +5,7 @@ import { getDb, schema } from "@/db";
 import type { Generation, User } from "@/db/schema";
 import { HttpError } from "@/lib/auth";
 import { buildArguments, type ModelSpec } from "@/lib/catalog";
-import { decrypt } from "@/lib/crypto";
+import { decrypt, signToken, verifyToken } from "@/lib/crypto";
 import { isLive, LIVE_STATUSES, predecessorsOf, RANK, type GenerationStatus } from "@/lib/generation-status";
 import * as hf from "@/lib/higgsfield";
 import * as storage from "@/lib/storage";
@@ -62,7 +62,8 @@ export async function submitGeneration(user: User, req: GenerationRequest): Prom
     throw new HttpError(400, e instanceof Error ? e.message : String(e));
   }
   const id = randomUUID();
-  const outcome = await hf.submit(apiKeyFor(user), spec.id, args, { idempotencyKey: id, webhookUrl: null });
+  const webhookUrl = hookUrl(id);
+  const outcome = await hf.submit(apiKeyFor(user), spec.id, args, { idempotencyKey: id, webhookUrl });
   if (outcome.kind === "deferred") {
     const hint = outcome.cause === "rate_limited" ? ` (큐가 가득 참, ${outcome.retryAfterS}초 후 재시도)` : "";
     throw new HttpError(502, outcome.detail + hint);
@@ -84,6 +85,7 @@ export async function submitGeneration(user: User, req: GenerationRequest): Prom
       costUsd: "0",
     })
     .returning();
+  console.info(JSON.stringify({ evt: "generation_submitted", id, hookHost: webhookUrl && new URL(webhookUrl).host }));
   return row;
 }
 
@@ -107,6 +109,28 @@ export async function cancelGeneration(gen: Generation, schedule: Scheduler): Pr
   if (answer === "canceled") return apply(gen, decide(gen, { source: "cancel" }, { now: new Date(), pricePerSecUsd: 0 }), schedule);
   const look = await refresh(gen, { forceCheck: true }, schedule);
   return look.call === "answered" ? look.row : current(gen);
+}
+
+export type HookOutcome = "done" | "unauthorized" | "retry";
+
+/**
+ * Higgsfield's webhook is a doorbell and its body is never read. The token in the URL proves we issued the URL for
+ * this row, and a forced status check with the owner's key decides what happened. Done means the row is terminal.
+ * Anything else asks Higgsfield to deliver again: the row is not inserted yet (submit inserts after Higgsfield
+ * accepts), it has no request id, or Higgsfield gave no usable answer.
+ */
+export async function onProviderHook(url: URL, schedule: Scheduler): Promise<HookOutcome> {
+  const id = url.searchParams.get("g") ?? "";
+  if (!verifyToken("hf-hook", id, url.searchParams.get("t") ?? "")) {
+    console.warn(JSON.stringify({ evt: "hook_unauthorized", id: id.slice(0, 36) }));
+    return "unauthorized";
+  }
+  const g = schema.generations;
+  const [row] = await getDb().select().from(g).where(eq(g.id, id)).limit(1);
+  const look = row ? await settleAs(row, "hook", schedule) : null;
+  if (look && !isLive(look.row.status)) return "done";
+  console.warn(JSON.stringify({ evt: "hook_retry", id, status: look?.row.status ?? "missing", call: look?.call ?? "none" }));
+  return "retry";
 }
 
 /**
@@ -175,11 +199,13 @@ function publicVideo(g: Generation): PublicVideo | null {
   return { kind: "provider", url: g.resultUrl, downloadUrl: g.resultUrl, expiresAt: g.expiresAt, storing: storage.storageEnabled() && unexpired };
 }
 
-type SettleReason = "poll";
+/** Who asks a row to move. The webhook forces a check, because it rings only once Higgsfield has an answer. */
+type SettleReason = "poll" | "hook";
 type Policy = { forceCheck: boolean };
 
 const POLICY = {
   poll: { forceCheck: false },
+  hook: { forceCheck: true },
 } as const satisfies Record<SettleReason, Policy>;
 
 type LifecyclePatch = Partial<
@@ -371,6 +397,20 @@ async function cleanupRefs(gen: Generation) {
   } catch (e) {
     console.warn("blob cleanup failed", e);
   }
+}
+
+/**
+ * Where Higgsfield rings for this row. Always the production host, because preview deployments sit behind Vercel's
+ * deployment protection and cannot receive it. Null in local dev, where Higgsfield cannot reach this machine.
+ */
+function hookUrl(id: string): string | null {
+  const host = process.env.VERCEL_PROJECT_PRODUCTION_URL;
+  const base = process.env.PUBLIC_BASE_URL || (host && `https://${host}`);
+  if (!base) return null;
+  const url = new URL("/api/hooks/higgsfield", base);
+  url.searchParams.set("g", id);
+  url.searchParams.set("t", signToken("hf-hook", id));
+  return url.href;
 }
 
 async function ownerKey(userId: number): Promise<hf.ApiKey | null> {
