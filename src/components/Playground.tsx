@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import type { ModelSpec, ParamSpec } from "@/lib/catalog";
 import { defaultParams } from "@/lib/catalog";
 import type { PublicGeneration } from "@/lib/generations";
@@ -485,10 +486,14 @@ export function Playground({ models, hasApiKey, largeUploads, galleryCount }: { 
         body: JSON.stringify({ modelId: model.id, prompt, params, imageUrls: images.map((r) => r.url), videoUrls: videos.map((r) => r.url) }),
       });
       const body = (await res.json().catch(() => ({}))) as { item?: PublicGeneration; error?: string };
-      if (body.item) {
+      const item = body.item;
+      if (item) {
         pollDelay.current = POLL_FIRST_MS;
-        upsert(body.item);
-        setActiveId(body.item.id);
+        // The new item must be in the DOM before the scroll, or scroll anchoring keeps the previous item on the stage.
+        flushSync(() => {
+          upsert(item);
+          setActiveId(item.id);
+        });
         feedRef.current?.scrollTo({ top: 0, behavior: prefersReducedMotion() ? "auto" : "smooth" });
         feedRef.current?.closest("section")?.scrollIntoView({ block: "start", behavior: prefersReducedMotion() ? "auto" : "smooth" });
       }
