@@ -21,6 +21,11 @@ export type GenerationRequest = {
   videoUrls: string[];
 };
 
+/** Where the browser plays the result from. `storing` says a copy into our bucket is still expected. */
+export type PublicVideo =
+  | { kind: "stored"; url: string; downloadUrl: string }
+  | { kind: "provider"; url: string; downloadUrl: string; expiresAt: Date | null; storing: boolean };
+
 /** A live row is asked about at most once per CHECK_GAP_S, whoever asks. */
 const CHECK_GAP_S = 15;
 /** A copy claim holds at least this long, longer than the 300 s maxDuration of every route that copies. */
@@ -148,8 +153,7 @@ export function publicGeneration(g: Generation, username?: string) {
     imageRefs: g.imageRefs,
     videoRefs: g.videoRefs,
     status: g.status,
-    resultUrl: g.blobUrl ?? g.resultUrl,
-    expiresAt: g.expiresAt,
+    video: publicVideo(g),
     durationS: g.durationS,
     costUsd: Number(g.costUsd),
     error: g.error,
@@ -159,6 +163,16 @@ export function publicGeneration(g: Generation, username?: string) {
 }
 
 export type PublicGeneration = ReturnType<typeof publicGeneration>;
+
+/** Stored once the copy landed and storage is still configured. Provider until then, or for good when storage is off. */
+function publicVideo(g: Generation): PublicVideo | null {
+  if (g.status !== "completed") return null;
+  const stored = g.storagePath && storage.videoUrls(g.storagePath, `${g.id}.mp4`);
+  if (stored) return { kind: "stored", ...stored };
+  if (!g.resultUrl) return null;
+  const unexpired = g.expiresAt === null || g.expiresAt.getTime() > Date.now();
+  return { kind: "provider", url: g.resultUrl, downloadUrl: g.resultUrl, expiresAt: g.expiresAt, storing: storage.storageEnabled() && unexpired };
+}
 
 type SettleReason = "poll";
 type Policy = { forceCheck: boolean };

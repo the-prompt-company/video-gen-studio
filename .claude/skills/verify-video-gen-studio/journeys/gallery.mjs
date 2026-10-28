@@ -20,7 +20,8 @@ export default async function gallery({ page, ev }) {
   ev.note(`detail video ${src} loaded at ${size}`);
   const download = dialog.getByRole("link", { name: "다운로드" });
   if (!(await download.isVisible())) ev.fail("download link missing in detail");
-  if ((await download.getAttribute("href")) !== src) ev.fail("download href differs from the video src");
+  const href = await download.getAttribute("href");
+  if (href !== src && !href?.startsWith(`${src}?download=`)) ev.fail("download href differs from the video src");
   await ev.shot("detail");
 
   // gallery-close: Esc closes the dialog.

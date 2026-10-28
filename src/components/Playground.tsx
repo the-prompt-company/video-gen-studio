@@ -46,6 +46,7 @@ const FEED_LIMIT = 12;
 const POLL_FIRST_MS = 2000;
 const POLL_MAX_MS = 10000;
 const POLL_JITTER_MS = 400;
+const STORE_WAIT_MS = 120_000;
 
 async function uploadFile(file: File, largeUploads: boolean): Promise<string> {
   if (file.size <= SMALL) {
@@ -170,9 +171,9 @@ function FeedItem({ g, index, total, active, now, modelName }: { g: PublicGenera
         <StatusBadge status={g.status} />
       </div>
 
-      {g.status === "completed" && g.resultUrl ? (
+      {g.video ? (
         <div className="min-h-0 flex-1 pt-[72px] lg:h-full lg:pt-0">
-          <video src={g.resultUrl} controls={active} autoPlay={active} loop muted playsInline preload={active ? "auto" : "metadata"} className="h-full w-full object-contain" aria-label="생성된 영상" />
+          <video src={g.video.url} controls={active} autoPlay={active} loop muted playsInline preload={active ? "auto" : "metadata"} className="h-full w-full object-contain" aria-label="생성된 영상" />
         </div>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-6 pt-[72px] text-center lg:h-full lg:pt-0">
@@ -379,7 +380,15 @@ export function Playground({ models, hasApiKey, largeUploads, galleryCount }: { 
       .finally(() => setLoaded(true));
   }, []);
 
-  const liveIds = useMemo(() => items.filter((i) => isLive(i.status)).map((i) => i.id), [items]);
+  // A finished row stays in the poll set while the server still expects to copy it, so the stored URL replaces the
+  // provider URL without a reload. The window bounds a copy that keeps failing.
+  const liveIds = useMemo(
+    () =>
+      items
+        .filter((i) => isLive(i.status) || (i.video?.kind === "provider" && i.video.storing && now - new Date(i.completedAt ?? i.createdAt).getTime() < STORE_WAIT_MS))
+        .map((i) => i.id),
+    [items, now],
+  );
   const liveKey = liveIds.join(",");
 
   // The delay lives in a ref so a change in the live set does not restart the backoff; only this tab's own submit
@@ -577,7 +586,7 @@ export function Playground({ models, hasApiKey, largeUploads, galleryCount }: { 
           )}
           <Glyph label="생성" counter={model.pricePerSecUsd > 0 ? usd(estimate) : "—"} icon={I.play} active={canGenerate} disabled={!canGenerate} onClick={generate} />
           <Glyph label="취소" counter={canCancel ? fmtElapsed(now - activeStarted) : "—"} icon={I.x} disabled={!canCancel} onClick={() => active && cancel(active)} />
-          <Glyph label="다운로드" counter={active?.status === "completed" && active.resultUrl ? "MP4" : "—"} icon={I.down} disabled={!active || active.status !== "completed" || !active.resultUrl} href={active?.resultUrl ?? undefined} download />
+          <Glyph label="다운로드" counter={active?.video ? "MP4" : "—"} icon={I.down} disabled={!active?.video} href={active?.video?.downloadUrl} download />
           <Glyph label="갤러리" counter={galleryTotal > 0 ? String(galleryTotal) : "—"} icon={I.grid} href="/gallery" />
           <Glyph label="다시" counter={active ? `×${reuseCount}` : "—"} icon={I.redo} disabled={!active} onClick={() => active && reuse(active)} />
         </div>

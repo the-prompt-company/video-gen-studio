@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import type { PublicGeneration } from "@/lib/generations";
+import type { PublicGeneration, PublicVideo } from "@/lib/generations";
 import { findModel } from "@/lib/catalog";
 import { usd, fmtDate, fmtRelative, shortModel } from "@/lib/format";
 import { STATUS_LABEL } from "@/lib/generation-status";
@@ -14,6 +14,11 @@ function expiresIn(d: Date | string | null | undefined): string | null {
   if (ms <= 0) return "만료됨";
   const days = Math.floor(ms / 86400_000);
   return days > 0 ? `${days}일 남음` : `${Math.floor(ms / 3600_000)}시간 남음`;
+}
+
+function retention(v: PublicVideo | null): string | null {
+  if (!v) return null;
+  return v.kind === "stored" ? "영구" : expiresIn(v.expiresAt);
 }
 
 /** "16:9" from params when the model exposes it, otherwise from the loaded video's pixels. */
@@ -56,16 +61,36 @@ function useVideoSize() {
   return { ref, size, read };
 }
 
+/** True once the element has come within rootMargin of the viewport, and stays true. */
+function useNearViewport<T extends Element>(rootMargin: string) {
+  const ref = useRef<T>(null);
+  const [near, setNear] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || near) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) setNear(true);
+      },
+      { rootMargin },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [near, rootMargin]);
+  return { ref, near };
+}
+
 function Tile({ g, onOpen }: { g: PublicGeneration; onOpen: () => void }) {
   const { ref, size, read } = useVideoSize();
+  const { ref: tileRef, near } = useNearViewport<HTMLLIElement>("0px 0px 80px 0px");
   const label = aspectLabel(g, size?.w, size?.h);
-  const exp = expiresIn(g.expiresAt);
+  const keep = retention(g.video);
   return (
-    <li className="group overflow-hidden rounded-xl border border-border bg-surface">
+    <li ref={tileRef} className="group overflow-hidden rounded-xl border border-border bg-surface">
       <button type="button" onClick={onOpen} className="relative block w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent" aria-label={`${g.prompt || "프롬프트 없음"} 자세히 보기`}>
         <video
           ref={ref}
-          src={g.resultUrl ?? undefined}
+          src={near ? g.video?.url : undefined}
           muted
           loop
           playsInline
@@ -90,7 +115,7 @@ function Tile({ g, onOpen }: { g: PublicGeneration; onOpen: () => void }) {
           </span>
           <span className="shrink-0">{g.username ? `${g.username} · ` : ""}{fmtRelative(g.createdAt)}</span>
         </div>
-        {exp && <div className={`text-[11px] ${exp === "만료됨" ? "text-rose-300" : "text-subtle"}`}>보관 {exp}</div>}
+        {keep && <div className={`text-[11px] ${keep === "만료됨" ? "text-rose-300" : "text-subtle"}`}>보관 {keep}</div>}
       </div>
     </li>
   );
@@ -111,7 +136,7 @@ function Detail({ g, onClose }: { g: PublicGeneration; onClose: () => void }) {
         <div className="flex h-[58dvh] min-h-[240px] shrink-0 items-center justify-center overflow-hidden bg-background">
           <video
             ref={ref}
-            src={g.resultUrl ?? undefined}
+            src={g.video?.url}
             controls
             autoPlay
             loop
@@ -177,10 +202,16 @@ function Detail({ g, onClose }: { g: PublicGeneration; onClose: () => void }) {
                   <dd className="tabular-nums text-foreground-2">{fmtDate(g.completedAt)}</dd>
                 </>
               )}
-              {g.expiresAt && (
+              {g.video?.kind === "stored" && (
                 <>
                   <dt className="text-muted">보관</dt>
-                  <dd className="tabular-nums text-foreground-2">{fmtDate(g.expiresAt)}까지 · {expiresIn(g.expiresAt)}</dd>
+                  <dd className="text-foreground-2">영구</dd>
+                </>
+              )}
+              {g.video?.kind === "provider" && g.video.expiresAt && (
+                <>
+                  <dt className="text-muted">보관</dt>
+                  <dd className="tabular-nums text-foreground-2">{fmtDate(g.video.expiresAt)}까지 · {expiresIn(g.video.expiresAt)}</dd>
                 </>
               )}
               {g.username && (
@@ -192,8 +223,8 @@ function Detail({ g, onClose }: { g: PublicGeneration; onClose: () => void }) {
             </dl>
           </div>
           <div className="flex gap-2 md:flex-col">
-            {g.resultUrl && (
-              <a href={g.resultUrl} download target="_blank" rel="noreferrer" className="inline-flex h-10 flex-1 items-center justify-center rounded-full bg-accent px-5 text-sm font-medium text-background transition hover:bg-accent-hover md:flex-none">
+            {g.video && (
+              <a href={g.video.downloadUrl} download target="_blank" rel="noreferrer" className="inline-flex h-10 flex-1 items-center justify-center rounded-full bg-accent px-5 text-sm font-medium text-background transition hover:bg-accent-hover md:flex-none">
                 다운로드
               </a>
             )}
@@ -209,13 +240,16 @@ function Detail({ g, onClose }: { g: PublicGeneration; onClose: () => void }) {
 
 export function Gallery({ items, isAdmin, showAll }: { items: PublicGeneration[]; isAdmin: boolean; showAll: boolean }) {
   const [open, setOpen] = useState<PublicGeneration | null>(null);
+  const expiring = items.some((g) => g.video?.kind === "provider");
 
   return (
     <div>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">갤러리</h1>
-          <p className="mt-1 text-sm text-muted">완료된 영상 {items.length}건. 결과는 Higgsfield에 7일간만 보관되니 필요한 건 다운로드하세요.</p>
+          <p className="mt-1 text-sm text-muted">
+            완료된 영상 {items.length}건.{expiring ? " 영구 보관이 아닌 결과는 Higgsfield에 7일간만 남으니 필요한 건 다운로드하세요." : ""}
+          </p>
         </div>
         {isAdmin && (
           <div className="flex rounded-full border border-border p-0.5 text-sm">
