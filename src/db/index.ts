@@ -2,21 +2,34 @@ import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
 import * as schema from "./schema";
 
+/** Every warm server instance holds up to this many of the pooler's client slots (200 on Supabase Free). */
+function poolMax() {
+  const raw = process.env.DB_POOL_MAX;
+  if (!raw) return 5;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 1) throw new Error(`DB_POOL_MAX must be a positive integer, got "${raw}"`);
+  return n;
+}
+
 function createDb() {
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error("DATABASE_URL is not set");
   // Supabase: use the Transaction pooler URL (port 6543) on Vercel.
   // - prepare: false — pgbouncer transaction mode does not support prepared statements.
+  // - max_pipeline: 0 sends one query per connection at a time. The transaction pooler hands
+  //   the server connection back at the first reply, so a query sent before that reply never
+  //   gets its answer, and the next reply on the socket resolves the wrong query.
+  //   postgres-js 3.4.9 reads max_pipeline but leaves it out of its types, hence `pooled`.
   // - idle_timeout / max_lifetime — drop idle sockets ourselves before the pooler
   //   does; otherwise the next query can hang for a minute on a half-closed socket.
   // - connect_timeout — fail fast instead of blocking a page render.
-  const client = postgres(url, {
-    prepare: false,
-    max: 5,
-    idle_timeout: 20,
-    max_lifetime: 60 * 30,
-    connect_timeout: 10,
-  });
+  const options = { prepare: false, idle_timeout: 20, max_lifetime: 60 * 30, connect_timeout: 10 };
+  const pooled = { ...options, max: poolMax(), max_pipeline: 0 };
+  const client = postgres(url, pooled);
+  // With max_pipeline 0, sql.begin() sends BEGIN but never reserves its connection
+  // (porsager/postgres#1189), so transactions get their own connection with the default.
+  // The pooler keeps the server connection until COMMIT, so pipelining inside one is safe.
+  client.begin = postgres(url, { ...options, max: 1 }).begin;
   return drizzle(client, { schema });
 }
 
