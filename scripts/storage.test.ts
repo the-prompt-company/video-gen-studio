@@ -17,7 +17,7 @@ import type { AddressInfo } from "node:net";
 import { createInterface } from "node:readline";
 import { put } from "@vercel/blob";
 import { configFromEnv, createFakeHiggsfield } from "./fake-higgsfield";
-import { byteLimit, copyVideo, deleteRefs, putVideo, storageEnabled, videoKey, videoUrls } from "../src/lib/storage";
+import { byteLimit, copyVideo, deleteRefs, isRefPathname, putVideo, refPrefix, storageEnabled, videoKey, videoUrls } from "../src/lib/storage";
 
 const MB = 1024 * 1024;
 /** MAX_COPY_BYTES and COPY_TIMEOUT_MS in src/lib/generations.ts. */
@@ -25,6 +25,8 @@ const LIMITS = { maxBytes: 1024 ** 3, timeoutMs: 240_000 };
 const TOKEN = "vercel_blob_rw_fakestore_secret";
 const ID = "1b4e28ba-2fa1-11d2-883f-0016d3cca427";
 const OTHER = "00000000-0000-4000-8000-000000000000";
+const OWNER = 7;
+const MEMBER = 8;
 
 const streamOf = (text: string) => new Blob([text]).stream();
 
@@ -240,7 +242,7 @@ test("deleteRefs deletes reference uploads in this store and never a stored vide
   try {
     const key = videoKey(ID);
     await putVideo(key, streamOf("video bytes"), { contentType: "video/mp4" });
-    const ref = await put("refs/1-clip.mp4", Buffer.from("ref"), { access: "public", addRandomSuffix: true, token: TOKEN });
+    const ref = await put(`refs/${OWNER}/1-clip.mp4`, Buffer.from("ref"), { access: "public", addRandomSuffix: true, token: TOKEN });
     const video = videoUrls(key)?.url ?? "";
     const spellings = [
       video,
@@ -253,17 +255,80 @@ test("deleteRefs deletes reference uploads in this store and never a stored vide
       video.replace("/videos/", "/refs/%252e%252e/videos/"),
       video.replace("/videos/", "/refs%2Fvideos/"),
       video.replace("/videos/", "/refs/%E0%A4%A/"),
+      video.replace("/videos/", `/refs/${OWNER}/%2e%2e/%2e%2e/videos/`),
+      video.replace("/videos/", `/refs/${OWNER}/%252e%252e/%252e%252e/videos/`),
+      video.replace("/videos/", `/refs/${OWNER}/..%5C..%5Cvideos/`),
+      video.replace("/videos/", `/refs/${OWNER}/%E0%A4%A/`),
     ];
     const elsewhere = [`https://fakestore.public.blob.vercel-storage.com/${key}`, "https://cdn.higgsfield.ai/ref.png", "not a url"];
-    const deleted = await deleteRefs([ref.url, ...spellings, ...elsewhere]);
+    const deleted = await deleteRefs([ref.url, ...spellings, ...elsewhere], OWNER);
     assert.deepEqual(deleted, [ref.url]);
     assert.deepEqual((await fake.stats()).deleted, [ref.pathname], "del() was asked for the reference alone");
     assert.equal((await fetch(video)).status, 200);
     assert.equal((await fetch(ref.url)).status, 404);
     delete process.env.BLOB_READ_WRITE_TOKEN;
-    assert.deepEqual(await deleteRefs([ref.url]), [], "with storage off nothing is deleted");
+    assert.deepEqual(await deleteRefs([ref.url], OWNER), [], "with storage off nothing is deleted");
   } finally {
     fake.close();
+  }
+});
+
+test("deleteRefs deletes the row owner's refs/<id>/ upload and never another member's, however its URL is spelled", async () => {
+  const fake = await blobFake();
+  try {
+    const upload = (pathname: string) => put(pathname, Buffer.from(pathname), { access: "public", addRandomSuffix: true, token: TOKEN });
+    const own = await upload(`refs/${OWNER}/1-clip.mp4`);
+    const member = await upload(`refs/${MEMBER}/1-clip.mp4`);
+    const kept = [member, await upload(`refs/${OWNER}${OWNER}/1-clip.mp4`), await upload("refs/1-clip.mp4"), await upload("1-clip.mp4")];
+    const name = member.pathname.slice(`refs/${MEMBER}/`.length);
+    const blob = `${fake.base}/blob`;
+    const tricks = [
+      `${blob}/refs/${OWNER}/../${MEMBER}/${name}`,
+      `${blob}/refs/${OWNER}/%2e%2e/${MEMBER}/${name}`,
+      `${blob}/refs/${OWNER}/%252e%252e/${MEMBER}/${name}`,
+      `${blob}/refs/${OWNER}/..%2F${MEMBER}%2F${name}`,
+      `${blob}/refs/${OWNER}/..%5C${MEMBER}%5C${name}`,
+      `${blob}/refs/${OWNER}%2F..%2F${MEMBER}/${name}`,
+      `${blob}/refs/${OWNER}/x/..%252F..%252F${MEMBER}%252F${name}`,
+    ];
+    const elsewhere = [
+      own.url.replace("127.0.0.1", "localhost"),
+      `https://fakestore.public.blob.vercel-storage.com/${own.pathname}`,
+      `https://cdn.higgsfield.ai/${own.pathname}`,
+    ];
+    const deleted = await deleteRefs([...kept.map((b) => b.url), ...tricks, ...elsewhere, own.url], OWNER);
+    assert.deepEqual(deleted, [own.url]);
+    assert.deepEqual((await fake.stats()).deleted, [own.pathname], "del() was asked for the owner's upload alone");
+    for (const b of kept) assert.equal((await fetch(b.url)).status, 200, `${b.pathname} is still served`);
+    assert.equal((await fetch(own.url)).status, 404);
+  } finally {
+    fake.close();
+  }
+});
+
+test("isRefPathname admits one file name under the uploader's refs/<id>/ and nothing else", () => {
+  assert.equal(refPrefix(OWNER), `refs/${OWNER}/`);
+  for (const p of [`refs/${OWNER}/1793200000000-clip.mp4`, `refs/${OWNER}/레퍼런스 영상.mp4`, `refs/${OWNER}/a..b.png`]) {
+    assert.equal(isRefPathname(p, OWNER), true, p);
+  }
+  for (const p of [
+    "videos/x.mp4",
+    videoKey(ID),
+    `refs/${MEMBER}/x.mp4`,
+    `refs/${OWNER}${OWNER}/x.mp4`,
+    "refs/1793200000000-clip.mp4",
+    `refs/${OWNER}/`,
+    `refs/${OWNER}/.`,
+    `refs/${OWNER}/..`,
+    `refs/${OWNER}/../${MEMBER}/x.mp4`,
+    `refs/${OWNER}/../../videos/x.mp4`,
+    `refs/${OWNER}/a/b.mp4`,
+    `refs/${OWNER}/..\\${MEMBER}\\x.mp4`,
+    `/refs/${OWNER}/x.mp4`,
+    `REFS/${OWNER}/x.mp4`,
+    `x/refs/${OWNER}/x.mp4`,
+  ]) {
+    assert.equal(isRefPathname(p, OWNER), false, p);
   }
 });
 
