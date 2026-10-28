@@ -21,15 +21,20 @@ export default async function playground({ page, ev, env }) {
   // Every GET /api/generations/<id> the page makes, with its response, so pg-poll can judge them.
   const polls = [];
   const lists = [];
+  // One batched GET /api/generations?ids=a,b per tick: each id becomes one poll entry with the batch's start time,
+  // so a batch groups into one tick and an id missing from the returned items still counts as bad.
   page.on("response", async (res) => {
     const req = res.request();
     if (req.method() !== "GET") return;
-    const { pathname } = new URL(res.url());
-    if (pathname === "/api/generations") lists.push(req.timing().startTime);
+    const { pathname, searchParams } = new URL(res.url());
+    const batch = pathname === "/api/generations" ? searchParams.get("ids") : null;
+    if (pathname === "/api/generations" && batch === null) lists.push(req.timing().startTime);
     const m = /^\/api\/generations\/([^/]+)$/.exec(pathname);
-    if (!m) return;
+    if (!m && batch === null) return;
     const body = await res.json().catch(() => null);
-    polls.push({ t: req.timing().startTime, path: pathname, id: m[1], status: res.status(), itemId: body?.item?.id ?? null });
+    if (m) return polls.push({ t: req.timing().startTime, path: pathname, id: m[1], status: res.status(), itemId: body?.item?.id ?? null });
+    const returned = new Set((body?.items ?? []).map((i) => i.id));
+    for (const id of batch.split(",")) polls.push({ t: req.timing().startTime, path: `${pathname}?ids=`, id, status: res.status(), itemId: returned.has(id) ? id : null });
   });
 
   await ev.login("/playground");

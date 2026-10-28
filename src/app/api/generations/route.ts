@@ -1,19 +1,39 @@
-import { and, desc, eq, lt } from "drizzle-orm";
-import { randomUUID } from "node:crypto";
+import { after } from "next/server";
+import { and, desc, eq, inArray, lt } from "drizzle-orm";
 import { getDb, schema } from "@/db";
+import type { User } from "@/db/schema";
 import { requireUser, errorResponse, HttpError } from "@/lib/auth";
-import { findModel, coerceParams, buildArguments } from "@/lib/catalog";
-import * as hf from "@/lib/higgsfield";
-import { apiKeyFor, priceFor, publicGeneration } from "@/lib/generations";
+import { findModel, coerceParams } from "@/lib/catalog";
+import { isGenerationId, priceFor, publicGeneration, settle, submitGeneration } from "@/lib/generations";
 
 const MAX_IMAGES = 6;
 const MAX_VIDEOS = 3;
+const MAX_IDS = 24;
 
-/** GET /api/generations?before=<iso>&limit=24&status=completed — the caller's own rows. */
+/** Settle the listed rows the caller may see. The client poll sends every live id in one request per tick. */
+async function pollRows(user: User, raw: string) {
+  const ids = raw.split(",").filter((s) => s !== "");
+  if (ids.length > MAX_IDS) throw new HttpError(400, `ids는 최대 ${MAX_IDS}개입니다`);
+  const valid = ids.filter(isGenerationId);
+  if (valid.length === 0) return [];
+  const g = schema.generations;
+  const rows = await getDb()
+    .select()
+    .from(g)
+    .where(user.role === "admin" ? inArray(g.id, valid) : and(inArray(g.id, valid), eq(g.userId, user.id)));
+  return Promise.all(rows.map((row) => settle(row, after)));
+}
+
+/**
+ * GET /api/generations?ids=<id>,<id> — settle and return those rows (max 24).
+ * GET /api/generations?before=<iso>&limit=24&status=completed — the caller's own rows.
+ */
 export async function GET(req: Request) {
   try {
     const user = await requireUser();
     const url = new URL(req.url);
+    const ids = url.searchParams.get("ids");
+    if (ids !== null) return Response.json({ items: (await pollRows(user, ids)).map((g) => publicGeneration(g)) });
     const limit = Math.min(60, Math.max(1, Number(url.searchParams.get("limit") ?? 24)));
     const before = url.searchParams.get("before");
     const status = url.searchParams.get("status");
@@ -73,47 +93,15 @@ export async function POST(req: Request) {
     const videoUrls = urlList(body.videoUrls, spec.videos ? Math.min(MAX_VIDEOS, spec.videos.max) : 0, "영상");
 
     let params: Record<string, unknown>;
-    let args: Record<string, unknown>;
     try {
       params = coerceParams(spec, body.params ?? {});
-      args = buildArguments(spec, prompt, params, imageUrls, videoUrls);
     } catch (e) {
       throw new HttpError(400, e instanceof Error ? e.message : String(e));
     }
 
-    const apiKey = apiKeyFor(user);
-    const durationS = Number(params[spec.durationKey] ?? 0);
-    const idem = randomUUID();
-
-    let submitted: hf.HfSubmitResponse;
-    try {
-      submitted = await hf.submit(apiKey, spec.id, args, idem);
-    } catch (e) {
-      if (e instanceof hf.HiggsfieldError) {
-        const hint = e.status === 429 ? ` (큐가 가득 참, ${e.retryAfterS ?? 30}초 후 재시도)` : "";
-        throw new HttpError(502, e.message + hint);
-      }
-      throw e;
-    }
-
-    const [row] = await db
-      .insert(schema.generations)
-      .values({
-        userId: user.id,
-        modelId: spec.id,
-        prompt,
-        params,
-        imageRefs: imageUrls,
-        videoRefs: videoUrls,
-        status: "queued",
-        requestId: submitted.request_id,
-        durationS,
-        costUsd: "0",
-      })
-      .returning();
-
+    const row = await submitGeneration(user, { spec, prompt, params, imageUrls, videoUrls });
     const price = await priceFor(spec.id);
-    return Response.json({ item: publicGeneration(row), estimatedCostUsd: price * durationS }, { status: 201 });
+    return Response.json({ item: publicGeneration(row), estimatedCostUsd: price * row.durationS }, { status: 201 });
   } catch (e) {
     return errorResponse(e);
   }

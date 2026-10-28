@@ -8,6 +8,13 @@
       "when": 1793084240587,
       "tag": "0000_spotty_rictor",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1793157529022,
+      "tag": "0001_next_check_at",
+      "breakpoints": true
     }
   ]
 }

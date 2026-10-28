@@ -5,7 +5,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ModelSpec, ParamSpec } from "@/lib/catalog";
 import { defaultParams } from "@/lib/catalog";
 import type { PublicGeneration } from "@/lib/generations";
-import { usd, STATUS_LABEL, shortModel } from "@/lib/format";
+import { usd, shortModel } from "@/lib/format";
+import { isLive, STATUS_LABEL } from "@/lib/generation-status";
 import { Button, ErrorText, Field, Input, Select, Textarea } from "@/components/ui";
 import { StatusBadge } from "@/components/StatusBadge";
 
@@ -41,8 +42,10 @@ function readImageSize(file: File): Promise<{ w: number; h: number } | null> {
 const SMALL = 4 * 1024 * 1024;
 const MAX_IMAGES = 6;
 const MAX_VIDEOS = 3;
-const LIVE = new Set(["queued", "in_progress"]);
 const FEED_LIMIT = 12;
+const POLL_FIRST_MS = 2000;
+const POLL_MAX_MS = 10000;
+const POLL_JITTER_MS = 400;
 
 async function uploadFile(file: File, largeUploads: boolean): Promise<string> {
   if (file.size <= SMALL) {
@@ -152,10 +155,10 @@ const I = {
 };
 
 function FeedItem({ g, index, total, active, now, modelName }: { g: PublicGeneration; index: number; total: number; active: boolean; now: number; modelName: string }) {
-  const live = LIVE.has(g.status);
+  const live = isLive(g.status);
   const started = new Date(g.createdAt).getTime();
   const took = g.completedAt ? new Date(g.completedAt).getTime() - started : now - started;
-  const label = STATUS_LABEL[g.status] ?? g.status;
+  const label = STATUS_LABEL[g.status];
   return (
     <article data-id={g.id} aria-current={active ? "true" : undefined} aria-label={`${index + 1}번째 결과: ${label}`} className="relative flex h-[calc(100%_-_72px)] w-full flex-col overflow-hidden bg-surface lg:block">
       {/* Peek strip: what shows when this item waits one snap below. */}
@@ -353,6 +356,7 @@ export function Playground({ models, hasApiKey, largeUploads, galleryCount }: { 
   const [activeId, setActiveId] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const feedRef = useRef<HTMLDivElement>(null);
+  const pollDelay = useRef(POLL_FIRST_MS);
 
   const [galleryTotal, setGalleryTotal] = useState(galleryCount);
 
@@ -375,34 +379,32 @@ export function Playground({ models, hasApiKey, largeUploads, galleryCount }: { 
       .finally(() => setLoaded(true));
   }, []);
 
-  const liveIds = useMemo(() => items.filter((i) => LIVE.has(i.status)).map((i) => i.id), [items]);
+  const liveIds = useMemo(() => items.filter((i) => isLive(i.status)).map((i) => i.id), [items]);
   const liveKey = liveIds.join(",");
 
-  // Poll every live item with backoff (2s → ×1.5 → cap 10s), as Higgsfield recommends.
+  // The delay lives in a ref so a change in the live set does not restart the backoff; only this tab's own submit
+  // does. Each wait counts from the request start, and jitter never compounds into the next delay.
   useEffect(() => {
     if (!liveKey) return;
-    const ids = liveKey.split(",");
-    let delay = 2000;
     let stopped = false;
     let t = 0;
-    const tick = async () => {
-      if (stopped) return;
-      await Promise.all(
-        ids.map(async (id) => {
-          try {
-            const res = await fetch(`/api/generations/${id}`, { cache: "no-store" });
-            const body = (await res.json()) as { item?: PublicGeneration };
-            if (body.item) upsert(body.item);
-          } catch {
-            /* retry on next tick */
-          }
-        }),
-      );
-      if (stopped) return;
-      delay = Math.min(10000, delay * 1.5) + Math.random() * 500;
-      t = window.setTimeout(tick, delay);
+    const wait = (ms: number) => {
+      t = window.setTimeout(tick, Math.max(0, ms + (Math.random() - 0.5) * POLL_JITTER_MS));
     };
-    t = window.setTimeout(tick, delay);
+    const tick = async () => {
+      const started = Date.now();
+      try {
+        const res = await fetch(`/api/generations?ids=${liveKey}`, { cache: "no-store" });
+        const body = (await res.json()) as { items?: PublicGeneration[] };
+        body.items?.forEach(upsert);
+      } catch {
+        /* retry on next tick */
+      }
+      if (stopped) return;
+      pollDelay.current = Math.min(POLL_MAX_MS, pollDelay.current * 1.5);
+      wait(pollDelay.current - (Date.now() - started));
+    };
+    wait(pollDelay.current);
     return () => {
       stopped = true;
       window.clearTimeout(t);
@@ -474,6 +476,7 @@ export function Playground({ models, hasApiKey, largeUploads, galleryCount }: { 
       });
       const body = (await res.json().catch(() => ({}))) as { item?: PublicGeneration; error?: string };
       if (!res.ok || !body.item) throw new Error(body.error ?? `제출 실패 (${res.status})`);
+      pollDelay.current = POLL_FIRST_MS;
       upsert(body.item);
       setActiveId(body.item.id);
       feedRef.current?.scrollTo({ top: 0, behavior: prefersReducedMotion() ? "auto" : "smooth" });

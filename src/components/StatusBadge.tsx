@@ -1,12 +1,11 @@
 import { Badge } from "@/components/ui";
-import { STATUS_LABEL, STATUS_TONE } from "@/lib/format";
+import { isLive, STATUS_LABEL, STATUS_TONE, type GenerationStatus } from "@/lib/generation-status";
 
-export function StatusBadge({ status }: { status: string }) {
-  const live = status === "queued" || status === "in_progress";
+export function StatusBadge({ status }: { status: GenerationStatus }) {
   return (
-    <Badge className={STATUS_TONE[status] ?? STATUS_TONE.queued}>
-      {live && <span className="mr-1.5 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-current" />}
-      {STATUS_LABEL[status] ?? status}
+    <Badge className={STATUS_TONE[status]}>
+      {isLive(status) && <span className="mr-1.5 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-current" />}
+      {STATUS_LABEL[status]}
     </Badge>
   );
 }

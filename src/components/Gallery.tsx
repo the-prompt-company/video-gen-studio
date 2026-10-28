@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { PublicGeneration } from "@/lib/generations";
 import { findModel } from "@/lib/catalog";
-import { usd, fmtDate, fmtRelative, shortModel, STATUS_LABEL } from "@/lib/format";
+import { usd, fmtDate, fmtRelative, shortModel } from "@/lib/format";
+import { STATUS_LABEL } from "@/lib/generation-status";
 import { Button, Empty } from "@/components/ui";
 
 function expiresIn(d: Date | string | null | undefined): string | null {
@@ -133,7 +134,7 @@ function Detail({ g, onClose }: { g: PublicGeneration; onClose: () => void }) {
                 )}
                 {size && <span className="tabular-nums">{size.w}×{size.h}</span>}
                 <span className="font-display text-[15px] text-sand">{g.durationS}S · {usd(g.costUsd)}</span>
-                <span>{STATUS_LABEL[g.status] ?? g.status}</span>
+                <span>{STATUS_LABEL[g.status]}</span>
               </div>
               <p className="mt-2 break-words text-sm leading-relaxed text-foreground">{g.prompt || "(프롬프트 없음)"}</p>
             </div>

@@ -19,24 +19,6 @@ export function fmtRelative(d: Date | string | null | undefined): string {
   return `${Math.floor(s / 86400)}일 전`;
 }
 
-export const STATUS_LABEL: Record<string, string> = {
-  queued: "대기",
-  in_progress: "생성 중",
-  completed: "완료",
-  failed: "실패",
-  nsfw: "NSFW 차단",
-  canceled: "취소",
-};
-
-export const STATUS_TONE: Record<string, string> = {
-  queued: "bg-zinc-500/15 text-foreground-2 ring-zinc-500/30",
-  in_progress: "bg-sky-500/15 text-sky-300 ring-sky-500/30",
-  completed: "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30",
-  failed: "bg-rose-500/15 text-rose-300 ring-rose-500/30",
-  nsfw: "bg-amber-500/15 text-amber-300 ring-amber-500/30",
-  canceled: "bg-zinc-500/15 text-muted ring-zinc-500/30",
-};
-
 export function shortModel(id: string): string {
   const parts = id.split("/");
   return parts.length > 2 ? parts.slice(0, 2).join("/") : id;

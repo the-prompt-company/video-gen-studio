@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import type { PublicGeneration } from "@/lib/generations";
 import { CATALOG } from "@/lib/catalog";
-import { usd, fmtDate, shortModel, STATUS_LABEL } from "@/lib/format";
+import { usd, fmtDate, shortModel } from "@/lib/format";
+import { STATUS_LABEL } from "@/lib/generation-status";
 import { Button, Card, Select, Empty } from "@/components/ui";
 import { StatusBadge } from "@/components/StatusBadge";
 import { api } from "./AdminPanels";
