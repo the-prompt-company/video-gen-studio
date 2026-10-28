@@ -88,8 +88,8 @@ export async function submitGeneration(user: User, req: GenerationRequest): Prom
 }
 
 /** Bring the row as far forward as Higgsfield allows right now. Safe under any number of concurrent callers. */
-export function settle(gen: Generation, schedule: Scheduler): Promise<Generation> {
-  return settleAs(gen, "poll", schedule);
+export async function settle(gen: Generation, schedule: Scheduler): Promise<Generation> {
+  return (await settleAs(gen, "poll", schedule)).row;
 }
 
 /** Cancel while queued. Returns the row afterwards: canceled, or wherever Higgsfield says the request went. */
@@ -105,10 +105,8 @@ export async function cancelGeneration(gen: Generation, schedule: Scheduler): Pr
     throw e;
   }
   if (answer === "canceled") return apply(gen, decide(gen, { source: "cancel" }, { now: new Date(), pricePerSecUsd: 0 }), schedule);
-  const looked = await refresh(gen, { ...POLICY.poll, forceCheck: true }, schedule);
-  // refresh returns the row it was given when it could not look (another caller already finished it, no key, or the
-  // provider is down). The caller still needs the row as it stands now.
-  return looked === gen ? current(gen) : looked;
+  const look = await refresh(gen, { forceCheck: true }, schedule);
+  return look.call === "answered" ? look.row : current(gen);
 }
 
 /**
@@ -251,19 +249,26 @@ async function current(gen: Generation): Promise<Generation> {
   return row ?? gen;
 }
 
-function settleAs(gen: Generation, reason: SettleReason, schedule: Scheduler): Promise<Generation> {
+function settleAs(gen: Generation, reason: SettleReason, schedule: Scheduler): Promise<Look> {
   return refresh(gen, POLICY[reason], schedule);
 }
 
+/**
+ * What one refresh did, with the row as this caller now knows it. `answered`: Higgsfield answered this caller.
+ * `unavailable`: this caller asked and got no usable answer. `none`: nothing to ask, no key, or another caller holds
+ * the check, so the row is the one passed in.
+ */
+type Look = { row: Generation; call: "answered" | "unavailable" | "none" };
+
 /** Ask Higgsfield about a live row, but only if this caller wins the row's check claim. */
-async function refresh(gen: Generation, policy: Policy, schedule: Scheduler): Promise<Generation> {
+async function refresh(gen: Generation, policy: Policy, schedule: Scheduler): Promise<Look> {
   const requestId = gen.requestId;
-  if (!isLive(gen.status) || !requestId) return gen;
-  if (!(await claimCheck(gen.id, policy.forceCheck))) return gen;
+  if (!isLive(gen.status) || !requestId) return { row: gen, call: "none" };
+  if (!(await claimCheck(gen.id, policy.forceCheck))) return { row: gen, call: "none" };
   const key = await ownerKey(gen.userId);
   if (!key) {
     console.warn(JSON.stringify({ evt: "status_skipped", id: gen.id, reason: "owner has no api key" }));
-    return gen;
+    return { row: gen, call: "none" };
   }
   let state: hf.ProviderState;
   try {
@@ -271,10 +276,11 @@ async function refresh(gen: Generation, policy: Policy, schedule: Scheduler): Pr
   } catch (e) {
     if (!(e instanceof hf.ProviderUnavailable)) throw e;
     console.warn(JSON.stringify({ evt: "status_unavailable", id: gen.id, error: e.message }));
-    return gen;
+    return { row: gen, call: "unavailable" };
   }
   const pricePerSecUsd = state.kind === "completed" ? await priceFor(gen.modelId) : 0;
-  return apply(gen, decide(gen, { source: "status", state }, { now: new Date(), pricePerSecUsd }), schedule);
+  const row = await apply(gen, decide(gen, { source: "status", state }, { now: new Date(), pricePerSecUsd }), schedule);
+  return { row, call: "answered" };
 }
 
 /**
