@@ -17,7 +17,7 @@ Higgsfield API 위에 올린 팀용 영상 생성 사이트. Next.js 16 (App Rou
 - **API 키**: 사용자가 입력하지 않습니다. 관리자가 어드민에서 사용자별로 할당하고, DB에는 `AUTH_SECRET`로 AES-GCM 암호화돼 저장됩니다. 서버만 복호화해 Higgsfield를 호출합니다.
 - **생성 흐름**: `POST /api/generations` → 행을 먼저 "제출 대기"(`pending`)로 저장 → Higgsfield `POST /{model_id}` (Idempotency-Key는 행 id, `hf_webhook` 포함) → 받으면 "대기"(`queued`)와 `request_id` 저장. 행을 움직이는 코드는 `src/lib/generations.ts` 하나이고, 아래 세 트리거가 모두 그 함수를 부릅니다. 같은 일을 두 번 해도 결과가 같습니다.
   - **브라우저 폴링**: 열린 탭이 live 행을 `GET /api/generations?ids=`로 2s→×1.5→최대 10s 간격으로 폴링하고, 서버가 그때 Higgsfield 상태를 한 번 조회합니다.
-  - **웹훅**: Higgsfield가 끝나면 `POST /api/hooks/higgsfield?g=<생성 id>&t=<토큰>`을 부릅니다. 웹훅은 초인종일 뿐이라 본문은 읽지 않고, `AUTH_SECRET`으로 만든 토큰을 확인한 뒤 사용자 키로 상태를 다시 조회합니다. 행이 종료됐거나 없으면 204(행은 제출 전에 저장되므로 없는 행은 지워진 행), 토큰이 틀리면 401, 조회가 실패했거나 행이 아직 제출 대기면 503이고 Higgsfield는 5xx를 2시간 동안 다시 보냅니다. 제출 대기 행의 웹훅은 받아진 제출의 답을 놓쳤다는 뜻이라, 아무도 제출 중이 아니면 그 자리에서 다시 제출해 원래 `request_id`를 받고 상태를 조회합니다. 탭을 닫아도 완료 직후 비용 기록과 영상 복사가 끝납니다.
+  - **웹훅**: Higgsfield가 끝나면 `POST /api/hooks/higgsfield?g=<생성 id>&t=<토큰>`을 부릅니다. 웹훅은 초인종일 뿐이라 본문은 읽지 않고, `AUTH_SECRET`으로 만든 토큰을 확인한 뒤 사용자 키로 상태를 다시 조회합니다. 행이 종료됐거나 없으면 204(행은 제출 전에 저장되므로 없는 행은 지워진 행), 토큰이 틀리면 401이고, 조회가 실패했거나, 행이 아직 제출 대기거나, 다른 호출자가 1초 안에 같은 행의 강제 조회를 이미 잡았으면(중복·재전송 웹훅은 행당 초당 한 번만 조회) 503이며 Higgsfield는 5xx를 2시간 동안 다시 보냅니다. 제출 대기 행의 웹훅은 받아진 제출의 답을 놓쳤다는 뜻이라, 아무도 제출 중이 아니면 그 자리에서 다시 제출해 원래 `request_id`를 받고 상태를 조회합니다. 탭을 닫아도 완료 직후 비용 기록과 영상 복사가 끝납니다.
   - **크론**: Vercel Cron이 매분 `GET /api/cron/settle`을 부르면 다시 보낼 때가 된 제출 대기 행, 조회 시각이 지난 live 행, 복사가 밀린 완료 행을 오래된 순으로 240초 동안 처리하고 `{"submitted":0,"checked":3,"moved":3,"stored":3,"failures":0,"truncated":false}` 같은 JSON을 돌려줍니다. 놓친 웹훅, 피드에 보이지 않는 오래된 live 행, 탭을 닫은 제출 대기 행, 실패한 복사를 이 크론이 마저 처리합니다.
 - **제출 대기**: Higgsfield가 제출에 429, 5xx로 답하거나 네트워크 오류나 20초 타임아웃이 나면 행은 "제출 대기"로 남고 `POST`는 202와 그 행을 돌려줍니다(받으면 201, 그 밖의 4xx는 실패 행과 502). `Retry-After`(5초에서 300초 사이로 자름) 뒤 다음 폴링, 웹훅, 크론이 같은 Idempotency-Key와 저장된 행에서 다시 만든 같은 본문으로 다시 보냅니다. 앞선 시도가 실제로 받아졌다면 Higgsfield는 원래 `request_id`를 돌려주고 두 번 과금하지 않으며, 본문이 달라지면 422로 실패합니다. 한 행은 30초 제출 lease로 한 호출자만 보내고, lease 동안의 취소는 409 "제출 중"입니다. Higgsfield가 429로만 거절한 대기 행은 바로 취소됩니다. 5xx, 네트워크 오류, 타임아웃으로 답을 잃었거나 제출하던 호출자가 lease 중에 죽은 행은 Higgsfield가 이미 받았을 수 있으므로(뒤에 429를 받아도 그대로), 취소가 같은 키로 한 번 더 보내 원래 `request_id`를 받은 뒤 Higgsfield에서 취소합니다. 이미 시작된 작업이면 409와 함께 그 작업을 끝까지 추적하고, 그 재전송도 답이 없으면 409 "제출 중"입니다. DB 시계로 `created_at`부터 30분 넘게 받아지지 않은 행은 "Higgsfield가 30분 동안 요청을 받지 않았습니다"로 실패합니다. 단, 답을 잃은 적이 있는 행은 실패시키지 않고 계속 다시 보내 Higgsfield가 가진 작업을 찾습니다. 그 작업이 없었다면 30분 뒤에 새로 시작될 수 있고, 대기 중일 때 사용자가 취소할 수 있습니다. 이 30분은 사용자가 더는 기다리지 않는 생성을 늦게 시작해 과금하지 않으려는 제품 결정이고, `src/lib/generations.ts`의 `SUBMIT_DEADLINE_MIN` 한 곳만 바꾸면 됩니다.
 - **비용**: Higgsfield 응답에 비용이 없으므로 `models.price_per_sec_usd × 요청 길이(초)`로 계산합니다. 완료 건만 과금. 어드민 → 모델 탭에서 단가를 넣어야 0이 아닌 값이 나옵니다.
@@ -83,7 +83,7 @@ HIGGSFIELD_BASE_URL=http://localhost:4010 npm run dev  # 또는 .env.local에 �
 
 공개 버킷이라 uuid를 아는 사람은 누구나 볼 수 있습니다(지금 Higgsfield URL과 같은 수준). 사내 영상을 링크로도 공유하면 안 되면 버킷을 Private으로 바꾸고 `src/lib/storage.ts`의 `videoUrls`가 `getPublicUrl` 대신 `createSignedUrl`(예: 1시간)을 쓰도록 고칩니다. 그러면 갤러리를 열 때마다 서명 요청이 한 번 더 가고, 오래 열어 둔 탭의 영상 주소는 만료됩니다.
 
-## Vercel 배포 (Hobby 기준)
+## Vercel 배포 (Pro 기준)
 
 ```bash
 cd web
