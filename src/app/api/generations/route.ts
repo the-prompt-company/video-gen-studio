@@ -1,5 +1,5 @@
 import { after } from "next/server";
-import { and, desc, eq, inArray, lt } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { User } from "@/db/schema";
 import { requireUser, errorResponse, HttpError } from "@/lib/auth";
@@ -13,30 +13,40 @@ const MAX_IMAGES = 6;
 const MAX_VIDEOS = 3;
 const MAX_IDS = 24;
 
+/**
+ * The database's clock in epoch ms. It wrote created_at, so the playground times live rows by it, not by the member's
+ * computer clock.
+ */
+const dbNowMs = sql<number>`extract(epoch from now()) * 1000`.mapWith(Number);
+
 /** Settle the listed rows the caller may see. The client poll sends every live id in one request per tick. */
 async function pollRows(user: User, raw: string) {
   const ids = raw.split(",").filter((s) => s !== "");
   if (ids.length > MAX_IDS) throw new HttpError(400, `ids는 최대 ${MAX_IDS}개입니다`);
   const valid = ids.filter(isGenerationId);
-  if (valid.length === 0) return [];
+  if (valid.length === 0) return { rows: [] };
   const g = schema.generations;
-  const rows = await getDb()
-    .select()
+  const found = await getDb()
+    .select({ row: g, now: dbNowMs })
     .from(g)
     .where(user.role === "admin" ? inArray(g.id, valid) : and(inArray(g.id, valid), eq(g.userId, user.id)));
-  return Promise.all(rows.map((row) => settle(row, after)));
+  return { rows: await Promise.all(found.map(({ row }) => settle(row, after))), now: found[0]?.now };
 }
 
 /**
  * GET /api/generations?ids=<id>,<id> — settle and return those rows (max 24).
  * GET /api/generations?before=<iso>&limit=24&status=completed — the caller's own rows.
+ * Both answer { items, now }: `now` is the database's clock when the rows were read, absent when none matched.
  */
 export async function GET(req: Request) {
   try {
     const user = await requireUser();
     const url = new URL(req.url);
     const ids = url.searchParams.get("ids");
-    if (ids !== null) return Response.json({ items: (await pollRows(user, ids)).map((g) => publicGeneration(g)) });
+    if (ids !== null) {
+      const { rows, now } = await pollRows(user, ids);
+      return Response.json({ items: rows.map((g) => publicGeneration(g)), now });
+    }
     const limit = Math.min(60, Math.max(1, Number(url.searchParams.get("limit") ?? 24)));
     const before = url.searchParams.get("before");
     const status = url.searchParams.get("status");
@@ -47,13 +57,13 @@ export async function GET(req: Request) {
     if (status) where.push(eq(schema.generations.status, status as schema.Generation["status"]));
 
     const rows = await db
-      .select()
+      .select({ row: schema.generations, now: dbNowMs })
       .from(schema.generations)
       .where(and(...where))
       .orderBy(desc(schema.generations.createdAt))
       .limit(limit);
 
-    return Response.json({ items: rows.map((g) => publicGeneration(g)) });
+    return Response.json({ items: rows.map(({ row }) => publicGeneration(row)), now: rows[0]?.now });
   } catch (e) {
     return errorResponse(e);
   }

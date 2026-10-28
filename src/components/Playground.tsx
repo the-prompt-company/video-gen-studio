@@ -14,6 +14,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 
 type ModelWithPrice = ModelSpec & { pricePerSecUsd: number };
 type Ref = { id: string; url: string; name: string; kind: "image" | "video"; local?: string; w?: number; h?: number };
+type FeedAnswer = { items?: PublicGeneration[]; now?: number };
 
 const ASPECT_LABEL: Record<string, string> = {
   "16:9": "가로 16:9",
@@ -362,6 +363,9 @@ export function Playground({ models, hasApiKey, largeUploadPrefix, galleryCount 
   const [loaded, setLoaded] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  // Server clock minus this browser's clock. Rows carry the database's created_at, and a member's computer clock can
+  // be seconds off, so the elapsed times count on the server's clock.
+  const clockOffset = useRef(0);
   const feedRef = useRef<HTMLDivElement>(null);
   const pollDelay = useRef(POLL_FIRST_MS);
 
@@ -375,10 +379,19 @@ export function Playground({ models, hasApiKey, largeUploadPrefix, galleryCount 
     });
   }
 
+  // The answer's `now` is taken as the request's midpoint, so the offset is off by at most half the round trip.
+  function syncClock(sentAt: number, serverNow: number | undefined) {
+    if (serverNow === undefined) return;
+    clockOffset.current = serverNow - (sentAt + Date.now()) / 2;
+    setNow(Date.now() + clockOffset.current);
+  }
+
   useEffect(() => {
+    const sentAt = Date.now();
     fetch(`/api/generations?limit=${FEED_LIMIT}`)
       .then((r) => r.json())
-      .then((b: { items?: PublicGeneration[] }) => {
+      .then((b: FeedAnswer) => {
+        syncClock(sentAt, b.now);
         setItems(b.items ?? []);
         setActiveId(b.items?.[0]?.id ?? null);
       })
@@ -413,10 +426,11 @@ export function Playground({ models, hasApiKey, largeUploadPrefix, galleryCount 
       inflight = request;
       const timeout = window.setTimeout(() => request.abort(), POLL_TIMEOUT_MS);
       const body = await fetch(`/api/generations?ids=${liveKey}`, { cache: "no-store", signal: request.signal })
-        .then((res) => res.json() as Promise<{ items?: PublicGeneration[] }>)
+        .then((res) => res.json() as Promise<FeedAnswer>)
         .catch(() => null);
       window.clearTimeout(timeout);
       if (stopped) return;
+      syncClock(started, body?.now);
       body?.items?.forEach(upsert);
       pollDelay.current = Math.min(POLL_MAX_MS, pollDelay.current * 1.5);
       wait(pollDelay.current - (Date.now() - started));
@@ -432,7 +446,7 @@ export function Playground({ models, hasApiKey, largeUploadPrefix, galleryCount 
   // Elapsed-time clock while anything is live.
   useEffect(() => {
     if (!liveKey) return;
-    const t = window.setInterval(() => setNow(Date.now()), 1000);
+    const t = window.setInterval(() => setNow(Date.now() + clockOffset.current), 1000);
     return () => window.clearInterval(t);
   }, [liveKey]);
 
