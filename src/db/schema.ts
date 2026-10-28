@@ -51,6 +51,12 @@ export const generations = pgTable(
     requestId: text("request_id").$type<RequestId>(),
     /** Earliest time any caller may ask Higgsfield about this row. A conditional UPDATE on it is the per-row check claim. */
     nextCheckAt: timestamp("next_check_at", { withTimezone: true }).notNull().defaultNow(),
+    /**
+     * Higgsfield may hold a job for this pending row although no answer said so: a submit timed out, lost its
+     * connection or got a 5xx, or its submitter died holding the lease. A 429 refuses one attempt, not earlier ones, so
+     * this never goes back to false. Only the same Idempotency-Key sent again can tell, so cancel and the deadline resend.
+     */
+    maybeAccepted: boolean("maybe_accepted").notNull().default(false),
     resultUrl: text("result_url"),
     blobUrl: text("blob_url"),
     /** Object key in the videos bucket, set only after the upload finished. Non-null means playable from storage. */

@@ -33,8 +33,8 @@ export async function GET(_req: Request, { params }: Ctx) {
 }
 
 /**
- * DELETE /api/generations/:id — cancel while pending or queued. 409 while a submit is in flight, and 409 with the
- * current row when Higgsfield already started it.
+ * DELETE /api/generations/:id — cancel while pending or queued. 409 while a submit is in flight or a resend could not
+ * learn whether Higgsfield holds the job, and 409 with the current row when Higgsfield already started it.
  */
 export async function DELETE(_req: Request, { params }: Ctx) {
   try {

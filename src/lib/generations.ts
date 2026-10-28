@@ -100,13 +100,14 @@ export async function settle(gen: Generation, schedule: Scheduler): Promise<Gene
 
 /**
  * Cancel while pending or queued. Returns the row afterwards: canceled, or wherever Higgsfield says the request went.
- * A pending row is canceled here, but never while a submit is in flight, because that submit may still be accepted and
- * start a paid generation nobody tracks. That cancel answers 409 and works a few seconds later.
+ * A pending row Higgsfield only ever refused is canceled here. One that Higgsfield may have accepted is sent again
+ * with the same key first, and the request_id that comes back is canceled at Higgsfield. A cancel that cannot claim the
+ * row (a submit is in flight) or whose resend gets no answer answers 409 and works a few seconds later.
  */
 export async function cancelGeneration(gen: Generation, schedule: Scheduler): Promise<Generation> {
   if (gen.status === "pending") {
-    const stop = decide(gen, { source: "cancel" }, { now: new Date(), pricePerSecUsd: 0 });
-    const row = await apply(gen, stop, schedule, and(eq(schema.generations.status, "pending"), notSubmitting()));
+    const tried = (await resubmit(gen, schedule, "cancel")).row;
+    const row = tried.status === "pending" ? await current(gen) : tried;
     if (row.status === "pending") throw new HttpError(409, SUBMITTING);
     return row.status === "queued" ? cancelGeneration(row, schedule) : row;
   }
@@ -295,18 +296,23 @@ type Observation =
   | { source: "cancel" }
   | { source: "clock" };
 
-/** `wait` keeps a pending row pending, records why, and lets nobody send it again for `afterS`. */
+/**
+ * `wait` keeps a pending row pending, records why, and lets nobody send it again for `afterS`. `maybeAccepted` says the
+ * answer was lost, so Higgsfield may hold a job for the row's key.
+ */
 type Step =
   | { kind: "move"; to: GenerationStatus; patch: LifecyclePatch }
-  | { kind: "wait"; afterS: number; reason: string }
+  | { kind: "wait"; afterS: number; reason: string; maybeAccepted: boolean }
   | { kind: "none" };
 
 /**
  * The whole transition table. Pure.
  *   terminal + anything                → none
  *   pending + submit accepted(id)      → move queued     { requestId, nextCheckAt now() in the database, error null }
- *   pending + submit deferred(s)       → wait clamp(s, 5, 300) with the reason
+ *   pending + submit deferred(s)       → wait clamp(s, 5, 300) with the reason, maybe accepted unless it was a 429
  *   pending + submit rejected(error)   → move failed     { error, completedAt, costUsd 0 }
+ *   pending maybe accepted + cancel    → none, so the caller sends it again and learns whether a job exists
+ *   pending maybe accepted + clock     → none, likewise
  *   pending + clock past the deadline  → move failed     { error "Higgsfield가 30분 동안…", completedAt, costUsd 0 }
  *   live + running(s)                  → move s, only when s ranks above the row
  *   live + completed(url)              → move completed  { resultUrl, expiresAt, completedAt, costUsd = price × durationS }
@@ -321,6 +327,7 @@ function decide(gen: Generation, obs: Observation, ctx: { now: Date; pricePerSec
     to,
     patch: { completedAt: ctx.now, costUsd: "0", ...patch },
   });
+  if ((obs.source === "cancel" || obs.source === "clock") && gen.status === "pending" && gen.maybeAccepted) return { kind: "none" };
   if (obs.source === "cancel") return end("canceled", {});
   if (obs.source === "clock") {
     const late = ctx.now.getTime() - gen.createdAt.getTime() >= SUBMIT_DEADLINE_MIN * 60_000;
@@ -331,7 +338,8 @@ function decide(gen: Generation, obs: Observation, ctx: { now: Date; pricePerSec
     if (gen.status !== "pending") return { kind: "none" };
     if (o.kind === "accepted") return { kind: "move", to: "queued", patch: { requestId: o.requestId, nextCheckAt: sql`now()`, error: null } };
     if (o.kind === "rejected") return end("failed", { error: o.error });
-    return { kind: "wait", afterS: Math.min(RESUBMIT_MAX_S, Math.max(RESUBMIT_MIN_S, o.retryAfterS)), reason: o.detail };
+    const afterS = Math.min(RESUBMIT_MAX_S, Math.max(RESUBMIT_MIN_S, o.retryAfterS));
+    return { kind: "wait", afterS, reason: o.detail, maybeAccepted: o.cause !== "rate_limited" };
   }
   const s = obs.state;
   switch (s.kind) {
@@ -353,17 +361,22 @@ function decide(gen: Generation, obs: Observation, ctx: { now: Date; pricePerSec
 
 /**
  * Writes a step. A move is the only statement that changes generations.status after insert. It matches only while the
- * row still ranks below the target (and `guard`, when given), so a stale or repeated observation updates zero rows.
+ * row still ranks below the target, so a stale or repeated observation updates zero rows.
  * Zero rows means another caller already moved the row at least this far; the row is reread. Only the caller that
- * moved the row schedules the terminal follow-up. A wait touches only a pending row's clock and reason.
+ * moved the row schedules the terminal follow-up. A wait touches only a pending row's clock and reason, and sets
+ * maybe_accepted when the answer was lost.
  */
-async function apply(gen: Generation, step: Step, schedule: Scheduler, guard?: SQL): Promise<Generation> {
+async function apply(gen: Generation, step: Step, schedule: Scheduler): Promise<Generation> {
   if (step.kind === "none") return gen;
   const g = schema.generations;
   if (step.kind === "wait") {
     const [waiting] = await getDb()
       .update(g)
-      .set({ nextCheckAt: sql`now() + make_interval(secs => ${step.afterS})`, error: step.reason })
+      .set({
+        nextCheckAt: sql`now() + make_interval(secs => ${step.afterS})`,
+        error: step.reason,
+        ...(step.maybeAccepted && { maybeAccepted: true }),
+      })
       .where(and(eq(g.id, gen.id), eq(g.status, "pending")))
       .returning();
     return waiting ?? current(gen);
@@ -371,7 +384,7 @@ async function apply(gen: Generation, step: Step, schedule: Scheduler, guard?: S
   const [row] = await getDb()
     .update(g)
     .set({ status: step.to, ...step.patch })
-    .where(and(eq(g.id, gen.id), inArray(g.status, predecessorsOf(step.to)), guard))
+    .where(and(eq(g.id, gen.id), inArray(g.status, predecessorsOf(step.to))))
     .returning();
   if (!row) return current(gen);
   if (!isLive(row.status)) schedule(() => onTerminal(row));
@@ -405,15 +418,17 @@ type Look = { row: Generation; call: Call };
 type Visit = { row: Generation; submit: Call; check: Call };
 
 /**
- * Send a pending row again, but only if this caller wins its submit claim. Past the deadline the claimant fails it
- * instead, which is safe only because the claim proves no other submit of this row is in flight.
+ * Send a pending row again, but only if this caller wins its submit claim. A cancel claims it even while it waits out
+ * a deferral. The claimant stops the row instead (canceled for a cancel, failed past the deadline) only when Higgsfield
+ * cannot hold a job for it, which is safe only because the claim proves no other submit of this row is in flight.
+ * A row Higgsfield may have accepted is sent, because only the answer to the same key tells whether a job exists.
  */
-async function resubmit(gen: Generation, schedule: Scheduler): Promise<Look> {
+async function resubmit(gen: Generation, schedule: Scheduler, intent: "send" | "cancel" = "send"): Promise<Look> {
   if (gen.status !== "pending") return { row: gen, call: "none" };
-  const claimed = await claimSubmit(gen.id);
+  const claimed = await claimSubmit(gen.id, intent === "cancel" ? notSubmitting() : submitDue());
   if (!claimed) return { row: gen, call: "none" };
-  const late = decide(claimed, { source: "clock" }, { now: new Date(), pricePerSecUsd: 0 });
-  if (late.kind !== "none") return { row: await apply(claimed, late, schedule), call: "none" };
+  const stop = decide(claimed, { source: intent === "cancel" ? "cancel" : "clock" }, { now: new Date(), pricePerSecUsd: 0 });
+  if (stop.kind !== "none") return { row: await apply(claimed, stop, schedule), call: "none" };
   return send(claimed, await ownerKey(claimed.userId), schedule);
 }
 
@@ -481,12 +496,13 @@ function submitDue() {
 }
 
 /**
- * Nobody holds the row's submit lease: its clock ran out, or it is waiting out a deferral, which records a reason.
- * A claim clears the reason, so a clock ahead with no reason means a submit is in flight.
+ * A pending row nobody holds the submit lease of: its clock ran out, or it is waiting out a deferral, which records a
+ * reason. A claim clears the reason, so a clock ahead with no reason means a submit is in flight. The cancel claim
+ * reads this rule.
  */
 function notSubmitting() {
   const g = schema.generations;
-  return or(lte(g.nextCheckAt, sql`now()`), isNotNull(g.error));
+  return and(eq(g.status, "pending"), or(lte(g.nextCheckAt, sql`now()`), isNotNull(g.error)));
 }
 
 /** A checkable row nobody claimed a check for within the last FORCED_CHECK_FLOOR_S. */
@@ -561,14 +577,20 @@ async function visit(row: Generation, report: SweepReport): Promise<void> {
 
 /**
  * The submit claim: push next_check_at SUBMIT_LEASE_S ahead and clear the last deferral reason, which marks the row as
- * being submitted. It matches only a row submitDue accepts, so of any number of concurrent callers exactly one gets it.
+ * being submitted. It matches only a row `rule` accepts (submitDue, or notSubmitting for a cancel), so of any number of
+ * concurrent callers exactly one gets it. A row with no reason to clear had a submitter that died holding the lease,
+ * after a send Higgsfield may have accepted, so the claim marks it maybe accepted.
  */
-async function claimSubmit(id: string): Promise<Generation | null> {
+async function claimSubmit(id: string, rule: SQL | undefined): Promise<Generation | null> {
   const g = schema.generations;
   const [row] = await getDb()
     .update(g)
-    .set({ nextCheckAt: sql`now() + make_interval(secs => ${SUBMIT_LEASE_S})`, error: null })
-    .where(and(eq(g.id, id), submitDue()))
+    .set({
+      nextCheckAt: sql`now() + make_interval(secs => ${SUBMIT_LEASE_S})`,
+      error: null,
+      maybeAccepted: sql`${g.maybeAccepted} or ${g.error} is null`,
+    })
+    .where(and(eq(g.id, id), rule))
     .returning();
   return row ?? null;
 }
