@@ -224,14 +224,18 @@ export function publicGeneration(g: Generation, username?: string) {
 
 export type PublicGeneration = ReturnType<typeof publicGeneration>;
 
-/** Stored once the copy landed and storage is still configured. Provider until then, or for good when storage is off. */
+/**
+ * Stored once the copy landed and storage is still configured. Provider until then, or for good when storage is off
+ * or the row has no request id (a mock row, which is never copied).
+ */
 function publicVideo(g: Generation): PublicVideo | null {
   if (g.status !== "completed") return null;
   const stored = g.storagePath && storage.videoUrls(g.storagePath, `${g.id}.mp4`);
   if (stored) return { kind: "stored", ...stored };
   if (!g.resultUrl) return null;
   const unexpired = g.expiresAt === null || g.expiresAt.getTime() > Date.now();
-  return { kind: "provider", url: g.resultUrl, downloadUrl: g.resultUrl, expiresAt: g.expiresAt, storing: storage.storageEnabled() && unexpired };
+  const storing = storage.storageEnabled() && unexpired && g.requestId !== null;
+  return { kind: "provider", url: g.resultUrl, downloadUrl: g.resultUrl, expiresAt: g.expiresAt, storing };
 }
 
 /**
