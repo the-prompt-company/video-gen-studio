@@ -48,6 +48,9 @@ const FEED_LIMIT = 12;
 const POLL_FIRST_MS = 2000;
 const POLL_MAX_MS = 10000;
 const POLL_JITTER_MS = 400;
+// One poll may wait out Higgsfield's 8 s status timeout. A request still unanswered after this is aborted, because one
+// that never answers would otherwise stop polling until a reload.
+const POLL_TIMEOUT_MS = 10_000;
 const STORE_WAIT_MS = 120_000;
 
 async function uploadFile(file: File, largeUploadPrefix: string | null): Promise<string> {
@@ -400,19 +403,21 @@ export function Playground({ models, hasApiKey, largeUploadPrefix, galleryCount 
     if (!liveKey) return;
     let stopped = false;
     let t = 0;
+    let inflight: AbortController | null = null;
     const wait = (ms: number) => {
       t = window.setTimeout(tick, Math.max(0, ms + (Math.random() - 0.5) * POLL_JITTER_MS));
     };
     const tick = async () => {
       const started = Date.now();
-      try {
-        const res = await fetch(`/api/generations?ids=${liveKey}`, { cache: "no-store" });
-        const body = (await res.json()) as { items?: PublicGeneration[] };
-        body.items?.forEach(upsert);
-      } catch {
-        /* retry on next tick */
-      }
+      const request = new AbortController();
+      inflight = request;
+      const timeout = window.setTimeout(() => request.abort(), POLL_TIMEOUT_MS);
+      const body = await fetch(`/api/generations?ids=${liveKey}`, { cache: "no-store", signal: request.signal })
+        .then((res) => res.json() as Promise<{ items?: PublicGeneration[] }>)
+        .catch(() => null);
+      window.clearTimeout(timeout);
       if (stopped) return;
+      body?.items?.forEach(upsert);
       pollDelay.current = Math.min(POLL_MAX_MS, pollDelay.current * 1.5);
       wait(pollDelay.current - (Date.now() - started));
     };
@@ -420,6 +425,7 @@ export function Playground({ models, hasApiKey, largeUploadPrefix, galleryCount 
     return () => {
       stopped = true;
       window.clearTimeout(t);
+      inflight?.abort();
     };
   }, [liveKey]);
 
