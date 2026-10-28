@@ -640,6 +640,28 @@ async function duplicateWebhooks(owner: Owner, admin: User, upstream: string, ho
   });
 }
 
+/**
+ * Another caller completes the row after the webhook read it and before the webhook's forced claim: a row lock holds
+ * the claim while the row moves, as when a duplicate delivery loses the race. The webhook must judge the row as it
+ * stands, not as it read it.
+ */
+async function hookAfterAnotherCallerFinished(owner: Owner, admin: User, upstream: string) {
+  await withKnobs(upstream, { dropWebhooks: 1 }, { dropWebhooks: 0 }, async () => {
+    const row = await submit(owner, admin, "읽은 뒤 다른 호출자가 끝낸 행의 훅");
+    const callsBefore = statusCalls(await stats(upstream), row.requestId);
+    const pending: Promise<string>[] = [];
+    await getDb().transaction(async (tx) => {
+      await tx.execute(sql`select id from generations where id = ${row.id} for update`);
+      pending.push(owner.onProviderHook(hookUrlFor(row.id), recorder().schedule));
+      await sleep(1000);
+      await tx.execute(sql`update generations set status = 'completed', completed_at = now() where id = ${row.id}`);
+    });
+    const outcome = await pending[0];
+    check(outcome === "done", "a webhook whose row another caller completed between its read and its claim answers done, not 503", outcome);
+    check(statusCalls(await stats(upstream), row.requestId) === callsBefore, "and asks Higgsfield nothing");
+  });
+}
+
 async function redeliveryAfter503(owner: Owner, admin: User, upstream: string, hooks: Hooks) {
   await withKnobs(upstream, { statusFailN: 1 }, { statusFailN: 0 }, async () => {
     const row = await submit(owner, admin, "503 뒤 재전송");
@@ -810,6 +832,7 @@ async function triggerChecks(owner: Owner, admin: User, upstream: string, proxy:
   await hookRefusals(owner, admin, proxy);
   await withKnownPrice(MODEL, () => oneWebhookNoPoll(owner, admin, upstream, hooks));
   await duplicateWebhooks(owner, admin, upstream, hooks);
+  await hookAfterAnotherCallerFinished(owner, admin, upstream);
   await redeliveryAfter503(owner, admin, upstream, hooks);
   await pollAnsweredAfterHook(owner, admin, upstream, proxy);
   console.log(`removed ${await removeCreated()} ${TAG.trim()} rows before the sweep checks, so every due row is this run's`);

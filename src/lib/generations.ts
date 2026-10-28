@@ -128,8 +128,9 @@ export async function onProviderHook(url: URL, schedule: Scheduler): Promise<Hoo
   const g = schema.generations;
   const [row] = await getDb().select().from(g).where(eq(g.id, id)).limit(1);
   const look = row ? await settleAs(row, "hook", schedule) : null;
-  if (look && !isLive(look.row.status)) return "done";
-  console.warn(JSON.stringify({ evt: "hook_retry", id, status: look?.row.status ?? "missing", call: look?.call ?? "none" }));
+  const now = look && (look.call === "answered" ? look.row : await current(look.row));
+  if (now && !isLive(now.status)) return "done";
+  console.warn(JSON.stringify({ evt: "hook_retry", id, status: now?.status ?? "missing", call: look?.call ?? "none" }));
   return "retry";
 }
 
