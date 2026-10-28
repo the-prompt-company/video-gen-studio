@@ -133,7 +133,8 @@ export type HookOutcome = "done" | "unauthorized" | "retry";
  * submit we never recorded, so the hook sends it again first and gets the original request id back. Done means the
  * row is terminal, or gone: the row is inserted before its id reaches Higgsfield, so a missing row was deleted and no
  * redelivery can help. Anything else asks Higgsfield to deliver again: another caller holds the submit, the resend
- * was deferred, the row has no request id, or Higgsfield gave no usable answer.
+ * was deferred, another caller claimed a status check within the last second, the row has no request id, or
+ * Higgsfield gave no usable answer.
  */
 export async function onProviderHook(url: URL, schedule: Scheduler): Promise<HookOutcome> {
   const id = url.searchParams.get("g") ?? "";
