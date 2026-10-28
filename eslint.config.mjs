@@ -33,6 +33,8 @@ const eslintConfig = defineConfig([
     // Verification harness output (verify-video-gen-studio skill): its own distDir and run evidence.
     ".next-verify/**",
     ".verify/**",
+    // Local agent worktrees are full copies of the repo on other branches.
+    ".claude/worktrees/**",
   ]),
 ]);
 
