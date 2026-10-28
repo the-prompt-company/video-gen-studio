@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Verification harness output (verify-video-gen-studio skill): its own distDir and run evidence.
+    ".next-verify/**",
+    ".verify/**",
   ]),
 ]);
 
