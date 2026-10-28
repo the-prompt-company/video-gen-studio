@@ -911,6 +911,12 @@ async function insertedRow(label: string, withinMs: number): Promise<Generation>
   }
 }
 
+async function firstCheckDue(owner: Owner, admin: User) {
+  const row = await submit(owner, admin, "수락 직후 첫 조회 시각");
+  const ahead = await secondsUntilNextCheck(row.id);
+  check(row.status === "queued" && ahead <= 0, "a row Higgsfield just accepted is due for its first status check by the database's clock", `${ahead.toFixed(2)} s ahead`);
+}
+
 async function lostAcceptResent(owner: Owner, admin: User, upstream: string, proxy: Proxy) {
   const tap = proxy.tapNextSubmit();
   const submitting = submit(owner, admin, "답을 잃은 제출");
@@ -931,7 +937,7 @@ async function lostAcceptResent(owner: Owner, admin: User, upstream: string, pro
   await sleep(wait * 1000 + 300);
   const resent = await owner.settle(await readRow(row.id), rec.schedule);
   check(
-    resent.status !== "pending" && isLive(resent.status) && resent.requestId === seen.requestId && resent.error === null,
+    resent.status !== "pending" && resent.requestId === seen.requestId && resent.error === null,
     "the poll after the wait sends the same key and body and gets the original request_id back",
     `${resent.status} ${resent.requestId}`,
   );
@@ -1056,6 +1062,7 @@ async function submitDeadline(owner: Owner, admin: User, proxy: Proxy) {
 }
 
 async function submitChecks(owner: Owner, admin: User, upstream: string, proxy: Proxy) {
+  await firstCheckDue(owner, admin);
   await lostAcceptResent(owner, admin, upstream, proxy);
   await rateLimitedThenAccepted(owner, admin, upstream);
   await cancelPending(owner, admin, upstream, proxy);

@@ -280,12 +280,10 @@ const POLICY = {
   sweep: { forceCheck: false },
 } as const satisfies Record<SettleReason, Policy>;
 
+/** next_check_at is a claim clock, compared with the database's now(), so it is only ever written as SQL. */
 type LifecyclePatch = Partial<
-  Pick<
-    typeof schema.generations.$inferInsert,
-    "requestId" | "nextCheckAt" | "resultUrl" | "expiresAt" | "completedAt" | "costUsd" | "error"
-  >
->;
+  Pick<typeof schema.generations.$inferInsert, "requestId" | "resultUrl" | "expiresAt" | "completedAt" | "costUsd" | "error">
+> & { nextCheckAt?: SQL };
 
 /** What a caller learned: a submit answer, a status answer, a user's cancel, or the clock (the submit deadline). */
 type Observation =
@@ -303,7 +301,7 @@ type Step =
 /**
  * The whole transition table. Pure.
  *   terminal + anything                → none
- *   pending + submit accepted(id)      → move queued     { requestId, nextCheckAt now, error null }
+ *   pending + submit accepted(id)      → move queued     { requestId, nextCheckAt now() in the database, error null }
  *   pending + submit deferred(s)       → wait clamp(s, 5, 300) with the reason
  *   pending + submit rejected(error)   → move failed     { error, completedAt, costUsd 0 }
  *   pending + clock past the deadline  → move failed     { error "Higgsfield가 30분 동안…", completedAt, costUsd 0 }
@@ -328,7 +326,7 @@ function decide(gen: Generation, obs: Observation, ctx: { now: Date; pricePerSec
   if (obs.source === "submit") {
     const o = obs.outcome;
     if (gen.status !== "pending") return { kind: "none" };
-    if (o.kind === "accepted") return { kind: "move", to: "queued", patch: { requestId: o.requestId, nextCheckAt: ctx.now, error: null } };
+    if (o.kind === "accepted") return { kind: "move", to: "queued", patch: { requestId: o.requestId, nextCheckAt: sql`now()`, error: null } };
     if (o.kind === "rejected") return end("failed", { error: o.error });
     return { kind: "wait", afterS: Math.min(RESUBMIT_MAX_S, Math.max(RESUBMIT_MIN_S, o.retryAfterS)), reason: o.detail };
   }
