@@ -29,6 +29,12 @@
  * --measure <base> inserts 15 live rows, keeps /playground of the app at <base> open for 60 s in a headless browser
  * (Playwright from the verify-video-gen-studio skill), and prints the app requests and the fake's status calls.
  * The app at <base> must use the same HIGGSFIELD_BASE_URL, and the fake's FAKE_HF_DURATION_MS must outlast the window.
+ *
+ * --copy-peak copies one completed result into storage while sampling this process's memory every 5 ms, prints the
+ * peak arrayBuffers and rss over the baseline, and checks the stored object's size and sha256 against the source. The
+ * fake runs in its own process, so its copies of the bytes stay out of the sample:
+ *   FAKE_HF_VIDEO_BYTES=314572800 npm run fake:hf
+ *   HIGGSFIELD_BASE_URL=http://localhost:4010 npx dotenv -e .env.local -- tsx --expose-gc scripts/lifecycle-check.ts --copy-peak
  */
 import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
@@ -1473,6 +1479,54 @@ async function measure(owner: Owner, admin: User, upstream: string, base: string
   if (report.feed === 0) throw new Error("FAIL the playground never loaded its feed, so the window measured nothing");
 }
 
+/** sha256 and size of a URL's body, hashed as it streams so the check itself buffers nothing. */
+async function streamedDigest(url: string): Promise<{ sha256: string; size: number }> {
+  const res = await fetch(url);
+  if (!res.ok || !res.body) throw new Error(`FAIL ${url} answered ${res.status}`);
+  const hash = createHash("sha256");
+  const reader = res.body.getReader();
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) return { sha256: hash.digest("hex"), size };
+    hash.update(value);
+    size += value.byteLength;
+  }
+}
+
+async function copyPeak(owner: Owner, admin: User, upstream: string) {
+  const row = await submit(owner, admin, "큰 결과 복사의 메모리 정점");
+  await providerReaches(upstream, row.requestId ?? "", "completed", 30_000);
+  const completed = await owner.settle(await readRow(row.id), () => {});
+  if (completed.status !== "completed" || !completed.resultUrl) throw new Error(`FAIL setup: the row is ${completed.status}`);
+  const gc = (globalThis as { gc?: () => void }).gc;
+  gc?.();
+  const base = process.memoryUsage();
+  const peak = { arrayBuffers: base.arrayBuffers, rss: base.rss };
+  const sample = () => {
+    const m = process.memoryUsage();
+    peak.arrayBuffers = Math.max(peak.arrayBuffers, m.arrayBuffers);
+    peak.rss = Math.max(peak.rss, m.rss);
+  };
+  const timer = setInterval(sample, 5);
+  const t0 = Date.now();
+  const stored = await owner.storeVideo(completed);
+  sample();
+  clearInterval(timer);
+  const ms = Date.now() - t0;
+  const source = await streamedDigest(completed.resultUrl);
+  const object = (await stats(upstream)).storage.byKey[objectName(row.id)];
+  const mb = (n: number) => Math.round(n / 2 ** 20);
+  console.log(
+    `COPY_PEAK ${JSON.stringify({ bytes: source.size, ms, gcBaseline: gc !== undefined, arrayBuffersPeakMb: mb(peak.arrayBuffers - base.arrayBuffers), rssPeakMb: mb(peak.rss - base.rss), sizeMb: mb(source.size) })}`,
+  );
+  check(
+    stored.storagePath !== null && stored.sizeBytes === source.size && object?.size === source.size && object.sha256 === source.sha256,
+    "the stored copy has the source's size and sha256, and size_bytes records it",
+    `${stored.sizeBytes} bytes, sha256 ${object?.sha256.slice(0, 12)}`,
+  );
+}
+
 /** Child mode for crashAfterAccept: submit one row through the proxy in HIGGSFIELD_BASE_URL and wait to be killed. */
 async function submitOnce(label: string) {
   const owner: Owner = await import("../src/lib/generations");
@@ -1513,6 +1567,9 @@ async function main() {
   try {
     if (!proxy) {
       await measure(owner, admin, upstream, base ?? "");
+    } else if (process.argv.includes("--copy-peak")) {
+      if (ownFake) throw new Error("FAIL --copy-peak needs the fake in its own process: start it with FAKE_HF_VIDEO_BYTES and set HIGGSFIELD_BASE_URL");
+      await copyPeak(owner, admin, upstream);
     } else {
       const onlyAt = process.argv.indexOf("--only");
       const only = onlyAt >= 0 ? (process.argv[onlyAt + 1] ?? "").split(",").filter(Boolean) : null;
