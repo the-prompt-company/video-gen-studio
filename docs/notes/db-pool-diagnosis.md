@@ -147,7 +147,7 @@ Take the worst case: one instance takes the whole peak at this PC's round trip. 
 ## Not covered here
 
 - The end-to-end burst (`burst429-prod`) was not rerun on this branch, because it writes rows and this diagnosis was read-only. Rerun it before launch. On master, its webhook proxy log (`hookproxy-prod.log`) shows p95 11.3 s and 114 of 1,744 deliveries over 10 s.
-- The client connects without TLS. `DATABASE_URL` has no `sslmode`, and postgres-js defaults to `ssl: false`. Adding `?sslmode=require` to the URL turns TLS on without a code change. That was not tested here.
+- Both clients in `src/db/index.ts` require TLS (`ssl: "require"`), so the link to the pooler is encrypted. postgres-js sets `rejectUnauthorized: false` for `"require"`, so the server certificate is not verified. Verifying it needs Supabase's CA certificate passed as `ssl: { ca }`. That was not tested here.
 - A suspended Fluid instance may keep its client connections open until it resumes, because `idle_timeout` runs only while the instance runs. The 50% headroom above covers this. It was not measured.
 - Switching to `pg` with `drizzle-orm/node-postgres` would remove the transaction workaround and halve the round trips for parameterized queries (459 ms against 744 ms above). It changes `package.json` and the shape that `db.execute()` returns, so it is a separate change.
 - When porsager/postgres#1189 is fixed upstream, the second client for `begin` can go.

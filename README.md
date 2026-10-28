@@ -28,6 +28,7 @@ Higgsfield API 위에 올린 팀용 영상 생성 사이트. Next.js 16 (App Rou
 
 - [supabase.com](https://supabase.com)에서 프로젝트를 만들고 **Connect → Transaction pooler** URI(포트 6543)를 `DATABASE_URL`에 넣습니다. Vercel 서버리스에서는 이 주소를 써야 연결 수가 폭주하지 않습니다.
 - 드라이버는 `postgres`(postgres-js)이고 pooler 호환을 위해 `prepare: false`로 둡니다. 마이그레이션(`npm run db:migrate`)도 같은 URI로 동작합니다.
+- `DB_POOL_MAX`(선택, 양의 정수, 기본 5)는 서버 인스턴스 하나가 pooler에 여는 연결 수 상한입니다. Supabase Free의 transaction pooler는 클라이언트를 200개까지 받으므로 인스턴스 수 × `DB_POOL_MAX` ≤ 100으로 둡니다. 계산과 근거는 `docs/notes/db-pool-diagnosis.md`에 있습니다.
 - Neon 전용 코드는 없으므로 일반 Postgres(로컬 Docker 포함)에도 그대로 붙습니다.
 
 ## 로컬 실행
