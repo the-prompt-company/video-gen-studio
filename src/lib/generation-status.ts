@@ -1,15 +1,16 @@
-export const GENERATION_STATUSES = ["queued", "in_progress", "completed", "failed", "nsfw", "canceled"] as const;
+export const GENERATION_STATUSES = ["pending", "queued", "in_progress", "completed", "failed", "nsfw", "canceled"] as const;
 export type GenerationStatus = (typeof GENERATION_STATUSES)[number];
 
 /** Lifecycle order. A row only ever moves to a strictly higher rank, which is what makes racing writers converge. */
 export const RANK = {
+  pending: 0,
   queued: 1,
   in_progress: 2,
   completed: 3,
   failed: 3,
   nsfw: 3,
   canceled: 3,
-} as const satisfies Record<GenerationStatus, 1 | 2 | 3>;
+} as const satisfies Record<GenerationStatus, 0 | 1 | 2 | 3>;
 
 export type LiveStatus = { [S in GenerationStatus]: (typeof RANK)[S] extends 3 ? never : S }[GenerationStatus];
 
@@ -25,6 +26,7 @@ export function predecessorsOf(to: GenerationStatus): GenerationStatus[] {
 }
 
 export const STATUS_LABEL: Record<GenerationStatus, string> = {
+  pending: "제출 대기",
   queued: "대기",
   in_progress: "생성 중",
   completed: "완료",
@@ -34,6 +36,7 @@ export const STATUS_LABEL: Record<GenerationStatus, string> = {
 };
 
 export const STATUS_TONE: Record<GenerationStatus, string> = {
+  pending: "bg-zinc-500/15 text-foreground-2 ring-zinc-500/30",
   queued: "bg-zinc-500/15 text-foreground-2 ring-zinc-500/30",
   in_progress: "bg-sky-500/15 text-sky-300 ring-sky-500/30",
   completed: "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30",

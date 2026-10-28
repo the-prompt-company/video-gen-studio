@@ -3,15 +3,20 @@
  *
  *   npx dotenv -e .env.local -- tsx scripts/lifecycle-check.ts
  *   npx dotenv -e .env.local -- tsx scripts/lifecycle-check.ts --triggers
+ *   npx dotenv -e .env.local -- tsx scripts/lifecycle-check.ts --submits
  *   HIGGSFIELD_BASE_URL=http://localhost:4010 SUPABASE_URL=http://localhost:4010 SUPABASE_SERVICE_ROLE_KEY=fake npx dotenv -e .env.local -- tsx scripts/lifecycle-check.ts
  *   HIGGSFIELD_BASE_URL=http://localhost:4010 npx dotenv -e .env.local -- tsx scripts/lifecycle-check.ts --measure http://localhost:3100
  *
  * Without HIGGSFIELD_BASE_URL it starts its own fake (scripts/fake-higgsfield.ts). The copy checks upload to the same
  * fake's Supabase Storage subset: SUPABASE_URL is set to the fake when unset and refused when it points anywhere else.
  * The rows it creates belong to ADMIN_USERNAME, whose Higgsfield key must be set (the fake accepts any key), carry
- * prompts starting with "GP-5 ", and are deleted before it exits. It exits non-zero at the first failed check.
+ * prompts starting with "GP-6 ", and are deleted before it exits. It exits non-zero at the first failed check.
  * The stalled-copy check waits out the 240 s fetch timeout, so a full run takes about seven minutes.
  * If the test model's price is 0 it sets 0.0123 USD/s for the cost check and restores the stored price afterwards.
+ *
+ * The submit checks (--submits runs only those) drive pending rows: a lost accept, 429s, the deadline, cancel during
+ * and after a submit, a 422 body mismatch, and a submitter killed after the fake accepted (a child process of this
+ * script, started with --submit-once, killed by the proxy's tap).
  *
  * The webhook and sweep checks (--triggers runs only those) point PUBLIC_BASE_URL at a receiver inside this process
  * that answers like src/app/api/hooks/higgsfield/route.ts, so the fake's webhooks reach the owner without a server.
@@ -23,12 +28,14 @@
  * (Playwright from the verify-video-gen-studio skill), and prints the app requests and the fake's status calls.
  * The app at <base> must use the same HIGGSFIELD_BASE_URL, and the fake's FAKE_HF_DURATION_MS must outlast the window.
  */
+import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
+import { once } from "node:events";
 import { createServer, type IncomingHttpHeaders, type IncomingMessage, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
-import { and, eq, gt, inArray, isNotNull, isNull, notInArray, or, sql } from "drizzle-orm";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { and, desc, eq, gt, inArray, isNotNull, isNull, notInArray, or, sql, type SQL } from "drizzle-orm";
 import { getDb, schema } from "../src/db";
 import type { Generation, User } from "../src/db/schema";
 import { coerceParams, findModel } from "../src/lib/catalog";
@@ -40,12 +47,29 @@ type Owner = typeof import("../src/lib/generations");
 type Proxy = ReturnType<typeof startProxy>;
 type Hooks = ReturnType<typeof startHookReceiver>;
 type Stats = {
+  accepted: { byIdempotencyKey: Record<string, number> };
+  rejected: { 429: number; 422: number; 503: number };
   statusPolls: { byRequest: Record<string, { total: number; perSecondMax: number }>; byApiKey: Record<string, number> };
   webhooks: { sent: number; dropped: number; failed: number; retried: number; byRequest: Record<string, number[]> };
   media: { downloads: number };
   storage: { byKey: Record<string, { writes: number; size: number; sha256: string }> };
 };
-type Knobs = Partial<Pick<Config, "mediaDelayMs" | "storageFailN" | "statusFailN" | "dropWebhooks" | "dupWebhooks">>;
+type Knobs = Partial<
+  Pick<
+    Config,
+    | "mediaDelayMs"
+    | "storageFailN"
+    | "statusFailN"
+    | "dropWebhooks"
+    | "dupWebhooks"
+    | "firstN429"
+    | "retryAfterS"
+    | "submitFailN"
+    | "submitDelayMs"
+  >
+>;
+type SubmitSeen = { key: string; status: number; requestId: string };
+type TapReply = { status: number; retryAfterS: number } | "hang-up";
 type Schedule = (task: () => Promise<void>) => void;
 type BrowserResponse = { url(): string; status(): number; request(): { method(): string } };
 type BrowserPage = {
@@ -63,12 +87,14 @@ type Chromium = {
   }>;
 };
 
-const TAG = "GP-5 ";
+const TAG = "GP-6 ";
 const SWEEP_BUDGET_MS = 240_000;
 const HOOK_HTTP = { done: 204, unauthorized: 401, retry: 503 } as const;
 const MODEL = "minimax/hailuo-2.3/standard/image-to-video";
 const CHECK_GAP_MS = 15_000;
 const MIRROR_LEASE_S = 360;
+const SUBMIT_LEASE_S = 30;
+const DEADLINE_ERROR = "Higgsfield가 30분 동안 요청을 받지 않았습니다";
 const COPY_TIMEOUT_MS = 240_000;
 const STORAGE_ENV = ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"] as const;
 const TEST_PRICE = "0.0123";
@@ -104,16 +130,32 @@ function forwardable(h: IncomingHttpHeaders): Record<string, string> {
 /**
  * Sits between the owner and the fake. It counts every request and can hold one status answer: the answer is fetched
  * from the fake when the request arrives and delivered only on release, which is how a slow, stale observation looks.
+ * It can also tap the next submit: the fake gets it and answers, the test sees that answer, and the owner gets the
+ * reply the test picks instead, or a hung-up connection. That is how a lost accept and a crashed submitter look.
  */
 function startProxy(target: string) {
   let requests = 0;
   const holds = new Map<string, { arrived: () => void; released: Promise<void> }>();
+  let tap: { seen: (s: SubmitSeen) => void; reply: Promise<TapReply> } | null = null;
   const server = createServer(async (req, res) => {
     requests++;
     const url = new URL(req.url ?? "/", target);
     const body = await readAll(req);
     const upstream = await fetch(url, { method: req.method, headers: forwardable(req.headers), body: body.length ? new Uint8Array(body) : undefined });
     const bytes = Buffer.from(await upstream.arrayBuffer());
+    const key = req.headers["idempotency-key"];
+    if (req.method === "POST" && typeof key === "string" && tap) {
+      const t = tap;
+      tap = null;
+      const requestId = String((JSON.parse(bytes.toString("utf8") || "{}") as { request_id?: unknown }).request_id ?? "");
+      t.seen({ key, status: upstream.status, requestId });
+      const reply = await t.reply;
+      if (reply === "hang-up") return void res.destroy();
+      res
+        .writeHead(reply.status, { "content-type": "application/json", "retry-after": String(reply.retryAfterS) })
+        .end(JSON.stringify({ detail: "lifecycle-check replaced this answer" }));
+      return;
+    }
     const requestId = /^\/requests\/([^/]+)\/status$/.exec(url.pathname)?.[1];
     const hold = requestId ? holds.get(requestId) : undefined;
     if (requestId && hold) {
@@ -136,6 +178,13 @@ function startProxy(target: string) {
       const released = new Promise<void>((r) => (release = r));
       holds.set(requestId, { arrived, released });
       return { arrival, release };
+    },
+    tapNextSubmit() {
+      let seen!: (s: SubmitSeen) => void;
+      let reply!: (r: TapReply) => void;
+      const answered = new Promise<SubmitSeen>((r) => (seen = r));
+      tap = { seen, reply: new Promise<TapReply>((r) => (reply = r)) };
+      return { answered, reply };
     },
   };
 }
@@ -202,6 +251,17 @@ async function secondsUntilLeaseEnds(id: string): Promise<number> {
   return Number(row.s);
 }
 
+async function secondsUntilNextCheck(id: string): Promise<number> {
+  const [row] = await getDb().execute<{ s: string }>(
+    sql`select extract(epoch from next_check_at - now()) as s from generations where id = ${id}`,
+  );
+  return Number(row.s);
+}
+
+async function acceptedFor(upstream: string, key: string): Promise<number> {
+  return (await stats(upstream)).accepted.byIdempotencyKey[key] ?? 0;
+}
+
 async function readRow(id: string): Promise<Generation> {
   const [row] = await getDb().select().from(schema.generations).where(eq(schema.generations.id, id)).limit(1);
   if (!row) throw new Error(`FAIL row ${id} disappeared`);
@@ -225,7 +285,7 @@ async function submit(owner: Owner, admin: User, label: string): Promise<Generat
     params: coerceParams(spec, {}),
     imageUrls: ["https://example.com/gp3-ref.jpg"],
     videoUrls: [],
-  });
+  }, (task) => void task());
   created.push(row.id);
   return row;
 }
@@ -553,7 +613,8 @@ async function removeCreated(): Promise<number> {
 
 /**
  * sweep settles every due row of every user, and a row the fake does not know turns failed. Refuse to sweep while a
- * row this run did not create is live with a request id, or is an unstored, unexpired result, whatever its clocks say.
+ * row this run did not create is pending, is live with a request id, or is an unstored, unexpired result, whatever its
+ * clocks say.
  */
 async function assertSweepScope(): Promise<void> {
   const g = schema.generations;
@@ -562,10 +623,15 @@ async function assertSweepScope(): Promise<void> {
     .from(g)
     .where(
       and(
-        isNotNull(g.requestId),
         or(
-          inArray(g.status, LIVE_STATUSES),
-          and(eq(g.status, "completed"), isNull(g.storagePath), isNotNull(g.resultUrl), or(isNull(g.expiresAt), gt(g.expiresAt, sql`now()`))),
+          eq(g.status, "pending"),
+          and(
+            isNotNull(g.requestId),
+            or(
+              inArray(g.status, LIVE_STATUSES),
+              and(eq(g.status, "completed"), isNull(g.storagePath), isNotNull(g.resultUrl), or(isNull(g.expiresAt), gt(g.expiresAt, sql`now()`))),
+            ),
+          ),
         ),
         created.length > 0 ? notInArray(g.id, created) : undefined,
       ),
@@ -595,8 +661,8 @@ async function hookRefusals(owner: Owner, admin: User, proxy: Proxy) {
   check(refused.every((c) => c === 401), "a webhook with a tampered token, or with another row's token, gets 401", refused.join(","));
   const noRequestId = await post(hookUrlFor(bare.id));
   check(noRequestId === 503, "a webhook for a live row without request_id gets 503, so Higgsfield delivers it again");
-  const notInserted = await owner.onProviderHook(hookUrlFor(randomUUID()), recorder().schedule);
-  check(notInserted === "retry", "a webhook for a row that is not inserted yet asks for redelivery", notInserted);
+  const missing = await owner.onProviderHook(hookUrlFor(randomUUID()), recorder().schedule);
+  check(missing === "done", "a webhook for a row that does not exist answers done (204), since rows are inserted before Higgsfield sees their id", missing);
   const after = await readRow(row.id);
   check(
     proxy.requests() === before && after.status === row.status && after.nextCheckAt.getTime() === row.nextCheckAt.getTime(),
@@ -628,10 +694,19 @@ async function duplicateWebhooks(owner: Owner, admin: User, upstream: string, ho
   await withKnobs(upstream, { dupWebhooks: true }, { dupWebhooks: false }, async () => {
     const before = hooks.rec.tasks.length;
     const row = await submit(owner, admin, "중복 웹훅");
-    const codes = await deliveries(upstream, row.requestId ?? "", 2, 20_000);
+    const until = Date.now() + 30_000;
+    let codes = await deliveries(upstream, row.requestId ?? "", 2, 20_000);
+    while (codes.filter((c) => c === 204).length < 2 && Date.now() < until) {
+      await sleep(250);
+      codes = (await stats(upstream)).webhooks.byRequest[row.requestId ?? ""] ?? [];
+    }
     await Promise.all(hooks.rec.tasks);
     const final = await readRow(row.id);
-    check(codes.join() === "204,204", "both deliveries of a duplicated webhook get 204", codes.join(","));
+    check(
+      codes.filter((c) => c === 204).length === 2 && statusCalls(await stats(upstream), row.requestId) === 1,
+      "both deliveries of a duplicated webhook end in 204 and share one status call (a loser of the 1 s floor gets 503 and comes again)",
+      codes.join(","),
+    );
     check(
       hooks.rec.tasks.length - before === 1 && final.mirrorAttempts === 1 && (await writesOf(upstream, row.id)) === 1,
       "the two webhooks made one transition: one follow-up, one copy claim, one upload",
@@ -723,6 +798,7 @@ async function pollAnsweredAfterHook(owner: Owner, admin: User, upstream: string
     const held = proxy.hold(requestId);
     const late = owner.settle(row, rec.schedule);
     await held.arrival;
+    await sleep(1100);
     const hook = await owner.onProviderHook(hookUrlFor(row.id), rec.schedule);
     held.release();
     const polled = await late;
@@ -755,8 +831,8 @@ async function hookPollSweepRace(owner: Owner, admin: User, upstream: string) {
     const final = await readRow(row.id);
     const stamps = new Set([polled, final].filter((g) => g.status === "completed").map((g) => g.completedAt?.toISOString()));
     check(
-      hook === "done" && final.status === "completed" && stamps.size === 1,
-      "a webhook, a poll and a sweep on the same finished row end completed with one completed_at",
+      final.status === "completed" && stamps.size === 1 && (hook === "done" || statusCalls(await stats(upstream), row.requestId) >= 1),
+      "a webhook, a poll and a sweep on the same finished row end completed with one completed_at (a hook that lost the check to them asks for redelivery)",
       `hook ${hook}, poll returned ${polled.status}, sweep moved ${report.moved}`,
     );
     check(
@@ -828,13 +904,308 @@ async function sweepPastDeadline(owner: Owner, admin: User, upstream: string) {
   });
 }
 
+/** Wait for the row a submit in flight has inserted, found by its unique prompt. */
+async function insertedRow(label: string, withinMs: number): Promise<Generation> {
+  const g = schema.generations;
+  const until = Date.now() + withinMs;
+  for (;;) {
+    const [row] = await getDb()
+      .select()
+      .from(g)
+      .where(and(eq(g.prompt, `${TAG}${label}`), eq(g.status, "pending")))
+      .orderBy(desc(g.createdAt))
+      .limit(1);
+    if (row) return row;
+    if (Date.now() > until) throw new Error(`FAIL no row "${TAG}${label}" within ${withinMs} ms`);
+    await sleep(100);
+  }
+}
+
+async function firstCheckDue(owner: Owner, admin: User) {
+  const row = await submit(owner, admin, "수락 직후 첫 조회 시각");
+  const ahead = await secondsUntilNextCheck(row.id);
+  check(row.status === "queued" && ahead <= 0, "a row Higgsfield just accepted is due for its first status check by the database's clock", `${ahead.toFixed(2)} s ahead`);
+}
+
+async function lostAcceptResent(owner: Owner, admin: User, upstream: string, proxy: Proxy) {
+  const tap = proxy.tapNextSubmit();
+  const submitting = submit(owner, admin, "답을 잃은 제출");
+  const seen = await tap.answered;
+  tap.reply({ status: 503, retryAfterS: 6 });
+  const row = await submitting;
+  check(
+    seen.status === 200 && seen.requestId !== "" && row.status === "pending" && row.requestId === null && /503/.test(row.error ?? ""),
+    "a submit the fake accepted but whose answer was lost (503) leaves the row pending, with no request_id and the reason recorded",
+    row.error ?? "",
+  );
+  const wait = await secondsUntilNextCheck(row.id);
+  check(wait > 4 && wait <= 6, "the row waits out Retry-After 6 s before anyone sends it again", `${wait.toFixed(1)} s`);
+  const rec = recorder();
+  const before = proxy.requests();
+  const early = await owner.settle(row, rec.schedule);
+  check(proxy.requests() === before && early.status === "pending", "a poll during the wait sends nothing");
+  await sleep(wait * 1000 + 300);
+  const resent = await owner.settle(await readRow(row.id), rec.schedule);
+  check(
+    resent.status !== "pending" && resent.requestId === seen.requestId && resent.error === null,
+    "the poll after the wait sends the same key and body and gets the original request_id back",
+    `${resent.status} ${resent.requestId}`,
+  );
+  check((await acceptedFor(upstream, row.id)) === 1, "the fake accepted that Idempotency-Key once");
+  const final = await settleUntilDone(owner, row.id, rec.schedule, 30_000);
+  await Promise.all(rec.tasks);
+  check(final.status === "completed" && final.requestId === seen.requestId, "and the row completes under that request_id");
+}
+
+async function rateLimitedThenAccepted(owner: Owner, admin: User, upstream: string) {
+  await withKnobs(upstream, { firstN429: 2, retryAfterS: 5 }, { firstN429: 0, retryAfterS: 5 }, async () => {
+    const before = (await stats(upstream)).rejected[429];
+    const row = await submit(owner, admin, "429 두 번 뒤 수락");
+    check(row.status === "pending" && /429/.test(row.error ?? ""), "a 429 on submit leaves the row pending with the reason, not an error to the user", row.error ?? "");
+    const rec = recorder();
+    const seen = new Set<string>([row.status]);
+    const until = Date.now() + 60_000;
+    let now = row;
+    while (isLive(now.status)) {
+      if (Date.now() > until) throw new Error(`FAIL row ${row.id} still ${now.status} after 60 s`);
+      await sleep(1000);
+      now = await owner.settle(await readRow(row.id), rec.schedule);
+      seen.add(now.status);
+    }
+    await Promise.all(rec.tasks);
+    const s = await stats(upstream);
+    check(
+      now.status === "completed" && s.rejected[429] - before === 2 && s.accepted.byIdempotencyKey[row.id] === 1,
+      "polls resend it after each Retry-After until the fake accepts it once, and it completes",
+      `statuses ${[...seen].join(" -> ")}, 429s ${s.rejected[429] - before}`,
+    );
+  });
+}
+
+async function cancelPending(owner: Owner, admin: User, upstream: string, proxy: Proxy) {
+  const rec = recorder();
+  const label = "제출 중 취소";
+  const inflight = await withKnobs(upstream, { submitDelayMs: 4000 }, { submitDelayMs: 0 }, async () => {
+    const submitting = submit(owner, admin, label);
+    const row = await insertedRow(label, 3000);
+    const refused = await owner.cancelGeneration(row, rec.schedule).then(
+      () => null,
+      (e: unknown) => e as { status?: number; message?: string },
+    );
+    check(refused?.status === 409 && /제출 중/.test(refused.message ?? ""), "a cancel while the submit is in flight answers 409 제출 중", refused?.message);
+    return submitting;
+  });
+  check(inflight.status === "queued" && inflight.requestId !== null, "and the submit it refused to race lands as queued");
+
+  const waiting = await withKnobs(upstream, { firstN429: 1, retryAfterS: 30 }, { firstN429: 0, retryAfterS: 5 }, () =>
+    submit(owner, admin, "429 대기 중 취소"),
+  );
+  check(waiting.status === "pending" && (await secondsUntilNextCheck(waiting.id)) > 20, "a 429 leaves the row pending for Retry-After 30 s");
+  const before = proxy.requests();
+  const canceled = await owner.cancelGeneration(waiting, rec.schedule);
+  await getDb().execute(sql`update generations set next_check_at = now() where id = ${waiting.id}`);
+  const later = await owner.settle(await readRow(waiting.id), rec.schedule);
+  await Promise.all(rec.tasks);
+  check(
+    canceled.status === "canceled" && later.status === "canceled" && proxy.requests() === before && (await acceptedFor(upstream, waiting.id)) === 0,
+    "a pending row waiting out a deferral cancels at once, is never sent afterwards, and the fake never accepted it",
+  );
+}
+
+async function bodyMismatch(owner: Owner, admin: User, upstream: string) {
+  const row = await withKnobs(upstream, { firstN429: 1, retryAfterS: 5 }, { firstN429: 0, retryAfterS: 5 }, () =>
+    submit(owner, admin, "본문이 다른 재제출"),
+  );
+  if (row.status !== "pending") throw new Error(`FAIL setup: the first submit ended ${row.status}`);
+  const other = await fetch(`${upstream}/${MODEL}`, {
+    method: "POST",
+    headers: { Authorization: "Key gp6-probe", "Content-Type": "application/json", "Idempotency-Key": row.id },
+    body: JSON.stringify({ prompt: "다른 본문" }),
+  });
+  if (!other.ok) throw new Error(`FAIL setup: the probe submit got ${other.status}`);
+  const before = (await stats(upstream)).rejected[422];
+  await sleep((await secondsUntilNextCheck(row.id)) * 1000 + 300);
+  const rec = recorder();
+  const failed = await owner.settle(await readRow(row.id), rec.schedule);
+  await Promise.all(rec.tasks);
+  check(
+    failed.status === "failed" && /422/.test(failed.error ?? "") && Number(failed.costUsd) === 0 && (await stats(upstream)).rejected[422] === before + 1,
+    "a resend whose body differs from the one Higgsfield holds for the key gets 422, and the row fails with that reason at no cost",
+    failed.error ?? "",
+  );
+  check(rec.tasks.length === 1, "the failed row's follow-up was scheduled once");
+}
+
+async function submitDeadline(owner: Owner, admin: User, proxy: Proxy) {
+  const insert = async (label: string, extra: { status: Generation["status"]; nextCheckAt?: SQL; error?: string }) => {
+    const [row] = await getDb()
+      .insert(schema.generations)
+      .values({ userId: admin.id, modelId: MODEL, prompt: `${TAG}${label}`, durationS: 6, costUsd: "0", createdAt: sql`now() - interval '31 minutes'`, ...extra })
+      .returning();
+    created.push(row.id);
+    return row;
+  };
+  const due = await insert("31분 된 제출 대기", { status: "pending", nextCheckAt: sql`now()` });
+  const leased = await insert("31분 된 제출 대기, lease 중", { status: "pending", nextCheckAt: sql`now() + make_interval(secs => ${SUBMIT_LEASE_S})` });
+  const swept = await insert("31분 된 제출 대기, sweep이 처리", { status: "pending", nextCheckAt: sql`now()`, error: "Higgsfield 429: Too many requests" });
+  const mock = await insert("31분 된 목업 모양 생성 중 행", { status: "in_progress" });
+  const before = proxy.requests();
+  const rec = recorder();
+  const failed = await owner.settle(due, rec.schedule);
+  check(
+    failed.status === "failed" && failed.error === DEADLINE_ERROR && failed.completedAt !== null && Number(failed.costUsd) === 0,
+    "a pending row past 30 minutes fails with the reason instead of being sent",
+    failed.error ?? "",
+  );
+  const held = await owner.settle(leased, rec.schedule);
+  check(held.status === "pending", "one whose submit lease is held is not failed under its submitter");
+  await assertSweepScope();
+  const report = await owner.sweep(sweepDeadline());
+  const [s, m] = await Promise.all([readRow(swept.id), readRow(mock.id)]);
+  check(s.status === "failed" && s.error === DEADLINE_ERROR && report.moved >= 1, "the sweep fails a past-deadline pending row too", JSON.stringify(report));
+  check(m.status === "in_progress" && m.nextCheckAt.getTime() === mock.nextCheckAt.getTime(), "and leaves the mock-shaped row (no request_id, not pending) untouched");
+  await getDb().execute(sql`update generations set next_check_at = now() where id = ${leased.id}`);
+  const expired = await owner.settle(await readRow(leased.id), rec.schedule);
+  check(expired.status === "failed" && expired.error === DEADLINE_ERROR, "once the lease runs out, that row fails too");
+  await Promise.all(rec.tasks);
+  check(proxy.requests() === before, "none of them made a Higgsfield call", `${proxy.requests() - before} requests`);
+}
+
+async function submitChecks(owner: Owner, admin: User, upstream: string, proxy: Proxy) {
+  await firstCheckDue(owner, admin);
+  await lostAcceptResent(owner, admin, upstream, proxy);
+  await rateLimitedThenAccepted(owner, admin, upstream);
+  await cancelPending(owner, admin, upstream, proxy);
+  await bodyMismatch(owner, admin, upstream);
+  console.log(`removed ${await removeCreated()} ${TAG.trim()} rows before the deadline sweep, so every due row is this run's`);
+  await submitDeadline(owner, admin, proxy);
+}
+
+/**
+ * A submitter dies after Higgsfield accepted and before its UPDATE: a child process of this script submits, and the
+ * proxy kills it the moment the fake has answered. The row stays pending under the dead submitter's lease. The fake's
+ * webhook gets 503 until the lease runs out, then a redelivery sends the row again with the same key and body, gets
+ * the original request_id, and completes it.
+ */
+async function crashAfterAccept(owner: Owner, admin: User, upstream: string, proxy: Proxy, hooks: Hooks) {
+  const label = "수락 뒤 죽은 제출자";
+  const tap = proxy.tapNextSubmit();
+  const child = spawn(process.execPath, ["--import", "tsx", fileURLToPath(import.meta.url), "--submit-once", label], {
+    env: process.env,
+    stdio: ["ignore", "inherit", "inherit"],
+  });
+  const seen = await tap.answered;
+  const exited = once(child, "exit");
+  child.kill("SIGKILL");
+  await exited;
+  tap.reply("hang-up");
+  created.push(seen.key);
+  const row = await readRow(seen.key);
+  check(
+    seen.status === 200 && row.status === "pending" && row.requestId === null && (await acceptedFor(upstream, row.id)) === 1,
+    "a submitter killed after the fake accepted leaves the row pending without request_id",
+  );
+  const before = proxy.requests();
+  await owner.settle(row, recorder().schedule);
+  check(proxy.requests() === before, "while the dead submitter's 30 s lease runs, a poll sends nothing");
+  const until = Date.now() + 120_000;
+  let codes: number[] = [];
+  while (!codes.includes(204)) {
+    if (Date.now() > until) throw new Error(`FAIL no 204 webhook for ${seen.requestId} within 120 s (${codes.join(",")})`);
+    await sleep(500);
+    codes = (await stats(upstream)).webhooks.byRequest[seen.requestId] ?? [];
+  }
+  await Promise.all(hooks.rec.tasks);
+  const final = await readRow(row.id);
+  check(
+    codes[0] === 503 && codes.at(-1) === 204,
+    "its webhook got 503 while the lease held, and a redelivery after it answered 204",
+    codes.join(","),
+  );
+  check(
+    final.status === "completed" && final.requestId === seen.requestId && (await acceptedFor(upstream, row.id)) === 1 && final.storagePath === `${row.id}.mp4`,
+    "that redelivery sent the row again, got the original request_id, completed and stored it: one accepted submit for the key",
+  );
+}
+
+/**
+ * The cron route, called the way Vercel Cron calls it. This process talks to a fake, so the route must refuse to sweep
+ * the shared database and ask Higgsfield nothing, until SWEEP_ALLOW_NONPROD=1 opens it.
+ */
+async function cronRouteGuard(owner: Owner, admin: User, proxy: Proxy) {
+  const route = await import("../src/app/api/cron/settle/route");
+  const saved = { secret: process.env.CRON_SECRET, allow: process.env.SWEEP_ALLOW_NONPROD };
+  process.env.CRON_SECRET = "lifecycle-check";
+  delete process.env.SWEEP_ALLOW_NONPROD;
+  try {
+    const call = () => route.GET(new Request("http://local/api/cron/settle", { headers: { authorization: "Bearer lifecycle-check" } }));
+    await submitWithoutHook(owner, admin, "fake 기준 크론");
+    const before = proxy.requests();
+    const refused = await call();
+    const body = (await refused.json()) as { error?: string };
+    check(
+      refused.status === 409 && /SWEEP_ALLOW_NONPROD/.test(body.error ?? "") && proxy.requests() === before,
+      "the cron route answers 409 and sweeps nothing while HIGGSFIELD_BASE_URL is not the real Higgsfield",
+      body.error,
+    );
+    process.env.SWEEP_ALLOW_NONPROD = "1";
+    await assertSweepScope();
+    const allowed = await call();
+    const report = (await allowed.json()) as { checked?: number };
+    check(allowed.status === 200 && (report.checked ?? 0) >= 1, "with SWEEP_ALLOW_NONPROD=1 the same call sweeps", JSON.stringify(report));
+  } finally {
+    if (saved.secret === undefined) delete process.env.CRON_SECRET;
+    else process.env.CRON_SECRET = saved.secret;
+    if (saved.allow === undefined) delete process.env.SWEEP_ALLOW_NONPROD;
+    else process.env.SWEEP_ALLOW_NONPROD = saved.allow;
+  }
+}
+
+/**
+ * Replays of one valid hook URL while the row is live: 40 at once, then one every 100 ms. The forced claim's floor lets
+ * at most one status call through per second, and the row still makes one transition and one upload.
+ */
+async function replayedHooks(owner: Owner, admin: User, upstream: string) {
+  await withKnobs(upstream, { dropWebhooks: 1 }, { dropWebhooks: 0 }, async () => {
+    const row = await submit(owner, admin, "같은 웹훅 URL 재생");
+    const requestId = row.requestId ?? "";
+    await providerReaches(upstream, requestId, "in_progress", 10_000);
+    const rec = recorder();
+    const url = hookUrlFor(row.id);
+    const before = statusCalls(await stats(upstream), requestId);
+    const t0 = Date.now();
+    const answers = await Promise.all(Array.from({ length: 40 }, () => owner.onProviderHook(url, rec.schedule)));
+    while (Date.now() - t0 < 2000 && (await readRow(row.id)).status !== "completed") answers.push(await owner.onProviderHook(url, rec.schedule));
+    const windowS = (Date.now() - t0) / 1000;
+    const calls = statusCalls(await stats(upstream), requestId) - before;
+    check(
+      calls >= 1 && calls <= Math.ceil(windowS),
+      `${answers.length} replays of one hook URL over ${windowS.toFixed(1)} s made at most one status call per second`,
+      `${calls} calls`,
+    );
+    await providerReaches(upstream, requestId, "completed", 12_000);
+    await sleep(1100);
+    const last = await Promise.all(Array.from({ length: 10 }, () => owner.onProviderHook(url, rec.schedule)));
+    await Promise.all(rec.tasks);
+    const again = await owner.onProviderHook(url, rec.schedule);
+    const final = await readRow(row.id);
+    check(
+      last.includes("done") && again === "done" && final.status === "completed" && rec.tasks.length === 1 && (await writesOf(upstream, row.id)) === 1,
+      "after completion one of 10 parallel replays completes the row, the others ask for redelivery until it lands, a later replay answers done, and there is one transition and one upload",
+      `${last.filter((a) => a === "done").length} done, ${last.filter((a) => a === "retry").length} retry`,
+    );
+  });
+}
+
 async function triggerChecks(owner: Owner, admin: User, upstream: string, proxy: Proxy, hooks: Hooks) {
   await hookRefusals(owner, admin, proxy);
+  await replayedHooks(owner, admin, upstream);
   await withKnownPrice(MODEL, () => oneWebhookNoPoll(owner, admin, upstream, hooks));
   await duplicateWebhooks(owner, admin, upstream, hooks);
   await hookAfterAnotherCallerFinished(owner, admin, upstream);
   await redeliveryAfter503(owner, admin, upstream, hooks);
   await pollAnsweredAfterHook(owner, admin, upstream, proxy);
+  await cronRouteGuard(owner, admin, proxy);
   console.log(`removed ${await removeCreated()} ${TAG.trim()} rows before the sweep checks, so every due row is this run's`);
   await sweepTicks(owner, admin, upstream);
   await hookPollSweepRace(owner, admin, upstream);
@@ -897,7 +1268,15 @@ async function measure(owner: Owner, admin: User, upstream: string, base: string
   if (report.feed === 0) throw new Error("FAIL the playground never loaded its feed, so the window measured nothing");
 }
 
+/** Child mode for crashAfterAccept: submit one row through the proxy in HIGGSFIELD_BASE_URL and wait to be killed. */
+async function submitOnce(label: string) {
+  const owner: Owner = await import("../src/lib/generations");
+  await submit(owner, await adminUser(), label);
+}
+
 async function main() {
+  const onceAt = process.argv.indexOf("--submit-once");
+  if (onceAt >= 0) return submitOnce(process.argv[onceAt + 1]);
   const measureAt = process.argv.indexOf("--measure");
   const base = measureAt >= 0 ? process.argv[measureAt + 1] : null;
   if (measureAt >= 0 && (!base || !process.env.HIGGSFIELD_BASE_URL)) {
@@ -930,7 +1309,9 @@ async function main() {
     if (!proxy) {
       await measure(owner, admin, upstream, base ?? "");
     } else {
-      if (!process.argv.includes("--triggers")) {
+      const triggers = process.argv.includes("--triggers");
+      const submits = process.argv.includes("--submits");
+      if (!triggers && !submits) {
         await withKnownPrice(MODEL, () => fiftyCallers(owner, admin, upstream));
         await reversedObservations(owner, admin, upstream, proxy);
         await cancelRaces(owner, admin, upstream);
@@ -941,10 +1322,12 @@ async function main() {
         await storageOff(owner, admin, upstream);
         await stalledCopy(owner, admin, upstream);
       }
+      if (!triggers) await submitChecks(owner, admin, upstream, proxy);
       hooks = startHookReceiver(owner);
       process.env.PUBLIC_BASE_URL = await listen(hooks.server);
       console.log(`webhooks go to the receiver at ${process.env.PUBLIC_BASE_URL}`);
-      await triggerChecks(owner, admin, upstream, proxy, hooks);
+      if (!submits) await triggerChecks(owner, admin, upstream, proxy, hooks);
+      if (!triggers) await crashAfterAccept(owner, admin, upstream, proxy, hooks);
       console.log(`all checks passed (${proxy.requests()} Higgsfield requests went through the counter)`);
     }
   } finally {

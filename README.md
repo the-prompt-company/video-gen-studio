@@ -15,10 +15,11 @@ Higgsfield API 위에 올린 팀용 영상 생성 사이트. Next.js 16 (App Rou
 
 - **인증**: 서버가 scrypt 해시로 비밀번호를 검증하고 7일짜리 HttpOnly JWT 쿠키를 발급합니다. 10회 실패 시 15분 잠금. `proxy.ts`가 보호 경로를 막습니다.
 - **API 키**: 사용자가 입력하지 않습니다. 관리자가 어드민에서 사용자별로 할당하고, DB에는 `AUTH_SECRET`로 AES-GCM 암호화돼 저장됩니다. 서버만 복호화해 Higgsfield를 호출합니다.
-- **생성 흐름**: `POST /api/generations` → Higgsfield `POST /{model_id}` (Idempotency-Key, `hf_webhook` 포함) → `request_id` 저장. 행을 움직이는 코드는 `src/lib/generations.ts` 하나이고, 아래 세 트리거가 모두 그 함수를 부릅니다. 같은 일을 두 번 해도 결과가 같습니다.
+- **생성 흐름**: `POST /api/generations` → 행을 먼저 "제출 대기"(`pending`)로 저장 → Higgsfield `POST /{model_id}` (Idempotency-Key는 행 id, `hf_webhook` 포함) → 받으면 "대기"(`queued`)와 `request_id` 저장. 행을 움직이는 코드는 `src/lib/generations.ts` 하나이고, 아래 세 트리거가 모두 그 함수를 부릅니다. 같은 일을 두 번 해도 결과가 같습니다.
   - **브라우저 폴링**: 열린 탭이 live 행을 `GET /api/generations?ids=`로 2s→×1.5→최대 10s 간격으로 폴링하고, 서버가 그때 Higgsfield 상태를 한 번 조회합니다.
-  - **웹훅**: Higgsfield가 끝나면 `POST /api/hooks/higgsfield?g=<생성 id>&t=<토큰>`을 부릅니다. 웹훅은 초인종일 뿐이라 본문은 읽지 않고, `AUTH_SECRET`으로 만든 토큰을 확인한 뒤 사용자 키로 상태를 다시 조회합니다. 행이 종료되면 204, 토큰이 틀리면 401, 행이 아직 없거나 조회가 실패하면 503이고 Higgsfield는 5xx를 2시간 동안 다시 보냅니다. 탭을 닫아도 완료 직후 비용 기록과 영상 복사가 끝납니다.
-  - **크론**: Vercel Cron이 매분 `GET /api/cron/settle`을 부르면 조회 시각이 지난 live 행과 복사가 밀린 완료 행을 오래된 순으로 240초 동안 처리하고 `{"checked":3,"moved":3,"stored":3,"failures":0,"truncated":false}` 같은 JSON을 돌려줍니다. 놓친 웹훅, 피드에 보이지 않는 오래된 live 행, 실패한 복사를 이 크론이 마저 처리합니다.
+  - **웹훅**: Higgsfield가 끝나면 `POST /api/hooks/higgsfield?g=<생성 id>&t=<토큰>`을 부릅니다. 웹훅은 초인종일 뿐이라 본문은 읽지 않고, `AUTH_SECRET`으로 만든 토큰을 확인한 뒤 사용자 키로 상태를 다시 조회합니다. 행이 종료됐거나 없으면 204(행은 제출 전에 저장되므로 없는 행은 지워진 행), 토큰이 틀리면 401, 조회가 실패했거나 행이 아직 제출 대기면 503이고 Higgsfield는 5xx를 2시간 동안 다시 보냅니다. 제출 대기 행의 웹훅은 받아진 제출의 답을 놓쳤다는 뜻이라, 아무도 제출 중이 아니면 그 자리에서 다시 제출해 원래 `request_id`를 받고 상태를 조회합니다. 탭을 닫아도 완료 직후 비용 기록과 영상 복사가 끝납니다.
+  - **크론**: Vercel Cron이 매분 `GET /api/cron/settle`을 부르면 다시 보낼 때가 된 제출 대기 행, 조회 시각이 지난 live 행, 복사가 밀린 완료 행을 오래된 순으로 240초 동안 처리하고 `{"submitted":0,"checked":3,"moved":3,"stored":3,"failures":0,"truncated":false}` 같은 JSON을 돌려줍니다. 놓친 웹훅, 피드에 보이지 않는 오래된 live 행, 탭을 닫은 제출 대기 행, 실패한 복사를 이 크론이 마저 처리합니다.
+- **제출 대기**: Higgsfield가 제출에 429, 5xx로 답하거나 네트워크 오류나 20초 타임아웃이 나면 행은 "제출 대기"로 남고 `POST`는 202와 그 행을 돌려줍니다(받으면 201, 그 밖의 4xx는 실패 행과 502). `Retry-After`(5초에서 300초 사이로 자름) 뒤 다음 폴링, 웹훅, 크론이 같은 Idempotency-Key와 저장된 행에서 다시 만든 같은 본문으로 다시 보냅니다. 앞선 시도가 실제로 받아졌다면 Higgsfield는 원래 `request_id`를 돌려주고 두 번 과금하지 않으며, 본문이 달라지면 422로 실패합니다. 한 행은 30초 제출 lease로 한 호출자만 보내고, lease 동안의 취소는 409 "제출 중"입니다. 대기 중(lease 밖)인 행은 바로 취소됩니다. 30분 넘게 받아지지 않은 행은 "Higgsfield가 30분 동안 요청을 받지 않았습니다"로 실패합니다. 이 30분은 사용자가 더는 기다리지 않는 생성을 늦게 시작해 과금하지 않으려는 제품 결정이고, `src/lib/generations.ts`의 `SUBMIT_DEADLINE_MIN` 한 곳만 바꾸면 됩니다.
 - **비용**: Higgsfield 응답에 비용이 없으므로 `models.price_per_sec_usd × 요청 길이(초)`로 계산합니다. 완료 건만 과금. 어드민 → 모델 탭에서 단가를 넣어야 0이 아닌 값이 나옵니다.
 - **레퍼런스 업로드**: 4 MB 이하 파일은 서버를 거쳐 Higgsfield 업로드 스토리지로 바로 갑니다(Blob 사용 안 함). 그보다 큰 mp4는 `BLOB_READ_WRITE_TOKEN`이 있을 때만 브라우저 → Vercel Blob 직접 업로드로 받고, 생성이 끝나면 삭제합니다.
 - **결과 보관**: Higgsfield는 결과를 7일 뒤 지웁니다. `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`가 있으면 완료 전이를 일으킨 요청이 응답 뒤(`after`)에 결과를 받아 Supabase Storage 공개 버킷에 `<생성 id>.mp4`로 복사하고, 갤러리와 피드는 그 복사본을 재생합니다(보관 "영구"). `SUPABASE_URL`이나 `SUPABASE_SERVICE_ROLE_KEY`가 비어 있으면 복사하지 않고 Higgsfield URL로 재생하며 갤러리에 남은 일수를 표시합니다(아래 완료 영상 보관).
@@ -55,7 +56,10 @@ HIGGSFIELD_BASE_URL=http://localhost:4010 npm run dev  # 또는 .env.local에 �
 |---|---|---|
 | `FAKE_HF_PORT` | `4010` | 포트 |
 | `FAKE_HF_DURATION_MS` | `3000-8000` | 제출부터 완료까지 걸리는 시간(범위 또는 고정값) |
-| `FAKE_HF_429_FIRST_N` | `0` | API 키별 처음 N건 제출에 429와 `Retry-After: 5` |
+| `FAKE_HF_429_FIRST_N` | `0` | API 키별 처음 N건 제출에 429와 `Retry-After` |
+| `FAKE_HF_RETRY_AFTER_S` | `5` | 429와 제출 5xx에 붙이는 `Retry-After` 초 |
+| `FAKE_HF_SUBMIT_FAIL_N` | `0` | 제출 처음 N건에 503(키와 상관없이) |
+| `FAKE_HF_SUBMIT_DELAY_MS` | `0` | 제출 응답 지연. 제출 lease 중 취소를 재현할 때 씀 |
 | `FAKE_HF_DROP_WEBHOOKS` | `0` | `?hf_webhook=` 웹훅을 이 비율만큼 보내지 않음 |
 | `FAKE_HF_DUP_WEBHOOKS` | 없음 | `1`이면 완료 웹훅을 두 번 보냄 |
 | `FAKE_HF_VIDEO_BYTES` | `2097152` | `/media/` 응답 크기 |
@@ -65,7 +69,9 @@ HIGGSFIELD_BASE_URL=http://localhost:4010 npm run dev  # 또는 .env.local에 �
 | `FAKE_HF_STATUS_FAIL_N` | `0` | 상태 조회 처음 N건에 503 |
 | `FAKE_HF_WEBHOOK_RETRY_MS` | `2000` | 웹훅이 5xx나 연결 오류를 받으면 이 간격부터 두 배씩 늘려 2시간 동안 다시 보냄. 4xx는 다시 보내지 않음(Higgsfield와 같음) |
 
-가짜 서버는 Supabase Storage의 부분집합(`POST|PUT /storage/v1/object/{bucket}/{key}`, `GET /storage/v1/object/public/{bucket}/{key}`)도 받으므로 `SUPABASE_URL=http://localhost:4010 SUPABASE_SERVICE_ROLE_KEY=fake`로 복사 흐름까지 로컬에서 돌릴 수 있습니다. `GET /_stats`는 Idempotency-Key별 수락 수, 요청별·키별 상태 조회 수(초당 최대 포함), 웹훅 전송·재전송 수와 요청별 응답 코드 목록, 미디어 다운로드 수, 스토리지 키별 쓰기 횟수·크기·sha256을 돌려주고 `POST /_reset`은 모두 비웁니다. `POST /_config`에 `{"mediaDelayMs": 250000}`, `{"storageFailN": 3}`(다음 3건 실패), `{"statusFailN": 1}`, `{"dropWebhooks": 1}`, `{"dupWebhooks": true}`를 보내면 서버를 다시 띄우지 않고 그 값을 바꿉니다. 단위 테스트는 `node --test --import tsx scripts/fake-higgsfield.test.ts`, 생명주기와 복사 단정은 `HIGGSFIELD_BASE_URL=http://localhost:4010 SUPABASE_URL=http://localhost:4010 SUPABASE_SERVICE_ROLE_KEY=fake npx dotenv -e .env.local -- tsx scripts/lifecycle-check.ts`입니다.
+가짜 서버는 Supabase Storage의 부분집합(`POST|PUT /storage/v1/object/{bucket}/{key}`, `GET /storage/v1/object/public/{bucket}/{key}`)도 받으므로 `SUPABASE_URL=http://localhost:4010 SUPABASE_SERVICE_ROLE_KEY=fake`로 복사 흐름까지 로컬에서 돌릴 수 있습니다. `GET /_stats`는 Idempotency-Key별 수락 수, 요청별·키별 상태 조회 수(초당 최대 포함), 웹훅 전송·재전송 수와 요청별 응답 코드 목록, 미디어 다운로드 수, 스토리지 키별 쓰기 횟수·크기·sha256을 돌려주고 `POST /_reset`은 모두 비웁니다. `POST /_config`에 `{"mediaDelayMs": 250000}`, `{"storageFailN": 3}`(다음 3건 실패), `{"statusFailN": 1}`, `{"dropWebhooks": 1}`, `{"dupWebhooks": true}`, `{"firstN429": 1}`(키별 횟수를 처음부터 다시 셈), `{"retryAfterS": 60}`, `{"submitFailN": 3}`, `{"submitDelayMs": 10000}`을 보내면 서버를 다시 띄우지 않고 그 값을 바꾸고, 응답으로 현재 값 전부를 돌려줍니다. 단위 테스트는 `node --test --import tsx scripts/fake-higgsfield.test.ts`, 생명주기와 복사 단정은 `HIGGSFIELD_BASE_URL=http://localhost:4010 SUPABASE_URL=http://localhost:4010 SUPABASE_SERVICE_ROLE_KEY=fake npx dotenv -e .env.local -- tsx scripts/lifecycle-check.ts`입니다(`--submits`는 제출 대기 단정만, `--triggers`는 웹훅과 크론 단정만).
+
+출시 burst는 `scripts/burst.ts`로 재현합니다. 가짜 서버를 `FAKE_HF_429_FIRST_N=5 FAKE_HF_DROP_WEBHOOKS=0.1 FAKE_HF_DUP_WEBHOOKS=1 npm run fake:hf`로, 앱을 `HIGGSFIELD_BASE_URL`과 `SUPABASE_URL`을 가짜로, `PUBLIC_BASE_URL`을 앱 자신으로, 크론까지 보려면 `SWEEP_ALLOW_NONPROD=1`도 넣어 띄운 뒤 `HIGGSFIELD_BASE_URL=http://localhost:4010 BURST_BASE=http://localhost:3000 CRON_SECRET=<앱과 같은 값> npx dotenv -e .env.local -- tsx scripts/burst.ts`를 실행합니다. `gp6-burst-01`부터 20명을 DB에 직접 만들어 실제 로그인과 생성 라우트로 15건씩 제출하고, 모든 행 종료, 완료 행 저장, 키별 수락 1회, 502 0건을 단정한 뒤 클릭부터 완료까지 p50·p95를 찍습니다. 끝나면 그 사용자와 행을 지우고 남은 것이 0인지 확인합니다. 공용 DB의 행을 건드리지 않도록 다른 사용자의 due 행이 있으면 크론을 부르지 않습니다.
 
 ## 완료 영상 보관 (Supabase Storage)
 
@@ -97,8 +103,9 @@ vercel --prod
 
 - `vercel.json`은 함수를 Supabase DB와 같은 서울(`icn1`)에 두고 `/api/cron/settle`을 매분 부릅니다. 크론 라우트는 `CRON_SECRET`이 없으면 항상 401입니다.
 - **Hobby**는 매분 크론이 든 `vercel.json`을 배포 단계에서 거부합니다. Hobby에 배포하려면 `schedule`을 `0 18 * * *`(KST 03시, 하루 1회)로 바꿉니다. 그러면 탭을 닫았고 웹훅까지 놓친 행은 다음 방문이나 다음 날 크론에 정리됩니다. 웹훅과 `after` 복사는 플랜과 상관없이 같습니다.
-- 웹훅 주소는 `PUBLIC_BASE_URL`, 없으면 `https://$VERCEL_PROJECT_PRODUCTION_URL`입니다. 프리뷰 배포는 배포 보호 뒤에 있어 웹훅을 받을 수 없으므로 프리뷰에서 제출한 생성도 프로덕션 주소로 등록됩니다. 프리뷰와 프로덕션이 같은 DB를 쓰므로 프로덕션이 그 행을 처리합니다. 프리뷰에 별도 DB를 붙이면 프로덕션은 그 행을 찾지 못해 503을 주고, 그 프리뷰의 행은 폴링과 크론으로만 움직입니다.
+- 웹훅 주소는 `PUBLIC_BASE_URL`, 없으면 `https://$VERCEL_PROJECT_PRODUCTION_URL`입니다. 프리뷰 배포는 배포 보호 뒤에 있어 웹훅을 받을 수 없으므로 프리뷰에서 제출한 생성도 프로덕션 주소로 등록됩니다. 프리뷰와 프로덕션이 같은 DB를 쓰므로 프로덕션이 그 행을 처리합니다. 프리뷰에 별도 DB를 붙이면 프로덕션은 그 행을 찾지 못해 204로 끝내고, 그 프리뷰의 행은 폴링과 크론으로만 움직입니다.
 - 로컬에서는 `PUBLIC_BASE_URL`을 비워 둡니다. 웹훅 없이 브라우저 폴링으로 동작하고, 크론은 `curl -H "Authorization: Bearer $CRON_SECRET" localhost:3000/api/cron/settle`로 직접 부릅니다. 가짜 Higgsfield의 웹훅까지 보려면 `PUBLIC_BASE_URL=http://localhost:3000`을 넣습니다.
+- **주의: 로컬 크론도 공용 DB 전체를 처리합니다.** `.env.local`의 DB는 프로덕션과 같은 하나뿐이고 sweep은 모든 사용자의 due 행을 처리합니다. 가짜 Higgsfield로 sweep하면 실제 live 행이 `request not found`로 실패하고, 실제 완료 행에 가짜에만 있는 복사본 경로가 기록됩니다. 그래서 `HIGGSFIELD_BASE_URL`이 실제 API가 아닌 서버의 크론 라우트는 sweep하지 않고 409를 돌려줍니다. DB의 due 행이 모두 이 실행의 것일 때만 `SWEEP_ALLOW_NONPROD=1`로 띄워 엽니다(`scripts/burst.ts`는 다른 사용자의 due 행이 있으면 크론을 부르지 않습니다).
 
 ## Free(Hobby) 티어 검토
 

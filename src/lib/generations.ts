@@ -1,10 +1,9 @@
-import { randomUUID } from "node:crypto";
-import { and, eq, gt, inArray, isNotNull, isNull, lte, notInArray, or, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, isNotNull, isNull, lte, notInArray, or, sql, type SQL } from "drizzle-orm";
 import { del } from "@vercel/blob";
 import { getDb, schema } from "@/db";
 import type { Generation, User } from "@/db/schema";
 import { HttpError } from "@/lib/auth";
-import { buildArguments, type ModelSpec } from "@/lib/catalog";
+import { buildArguments, findModel, type ModelSpec } from "@/lib/catalog";
 import { decrypt, signToken, verifyToken } from "@/lib/crypto";
 import { isLive, LIVE_STATUSES, predecessorsOf, RANK, type GenerationStatus } from "@/lib/generation-status";
 import * as hf from "@/lib/higgsfield";
@@ -28,6 +27,16 @@ export type PublicVideo =
 
 /** A live row is asked about at most once per CHECK_GAP_S, whoever asks. */
 const CHECK_GAP_S = 15;
+/** A forced check (a webhook, a refused cancel) skips the gap but not this floor, so replayed hooks share one call. */
+const FORCED_CHECK_FLOOR_S = 1;
+/** A submit claim holds this long, longer than the 20 s submit timeout, so an expired lease means the submitter died. */
+const SUBMIT_LEASE_S = 30;
+/** Higgsfield's Retry-After, clamped, is how long a deferred submit waits before anyone sends it again. */
+const RESUBMIT_MIN_S = 5;
+const RESUBMIT_MAX_S = 300;
+/** The operator's call: a pending row older than this fails instead of starting a paid generation nobody expects now. */
+const SUBMIT_DEADLINE_MIN = 30;
+const SUBMIT_DEADLINE_ERROR = `Higgsfield가 ${SUBMIT_DEADLINE_MIN}분 동안 요청을 받지 않았습니다`;
 /** A copy claim holds at least this long, longer than the 300 s maxDuration of every route that copies. */
 const MIRROR_LEASE_S = 360;
 const MIRROR_BACKOFF_CAP_S = 6 * 3600;
@@ -35,6 +44,7 @@ const COPY_TIMEOUT_MS = 240_000;
 const MAX_COPY_BYTES = 1024 ** 3;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const NO_KEY = "API 키가 아직 할당되지 않았습니다. 관리자에게 문의하세요";
+const SUBMITTING = "제출 중입니다. 몇 초 뒤 다시 취소하세요";
 
 export function isGenerationId(s: string): boolean {
   return UUID.test(s);
@@ -52,41 +62,35 @@ export async function priceFor(modelId: string): Promise<number> {
   return m ? Number(m.pricePerSecUsd) : 0;
 }
 
-/** Submit with Idempotency-Key = the new row's id, then insert the row as queued. */
-export async function submitGeneration(user: User, req: GenerationRequest): Promise<Generation> {
+/**
+ * Insert the row as pending, holding its submit lease, then submit once. Returns it queued (accepted), failed
+ * (rejected), or still pending (deferred by a 429, 5xx, network error or timeout). A pending row is sent again by the
+ * next poll, webhook or sweep, with the same Idempotency-Key and the same body.
+ */
+export async function submitGeneration(user: User, req: GenerationRequest, schedule: Scheduler): Promise<Generation> {
   const { spec, prompt, params, imageUrls, videoUrls } = req;
-  let args: Record<string, unknown>;
+  const key = apiKeyFor(user);
   try {
-    args = buildArguments(spec, prompt, params, imageUrls, videoUrls);
+    buildArguments(spec, prompt, params, imageUrls, videoUrls);
   } catch (e) {
     throw new HttpError(400, e instanceof Error ? e.message : String(e));
   }
-  const id = randomUUID();
-  const webhookUrl = hookUrl(id);
-  const outcome = await hf.submit(apiKeyFor(user), spec.id, args, { idempotencyKey: id, webhookUrl });
-  if (outcome.kind === "deferred") {
-    const hint = outcome.cause === "rate_limited" ? ` (큐가 가득 참, ${outcome.retryAfterS}초 후 재시도)` : "";
-    throw new HttpError(502, outcome.detail + hint);
-  }
-  if (outcome.kind === "rejected") throw new HttpError(502, outcome.error);
   const [row] = await getDb()
     .insert(schema.generations)
     .values({
-      id,
       userId: user.id,
       modelId: spec.id,
       prompt,
       params,
       imageRefs: imageUrls,
       videoRefs: videoUrls,
-      status: "queued",
-      requestId: outcome.requestId,
+      status: "pending",
+      nextCheckAt: sql`now() + make_interval(secs => ${SUBMIT_LEASE_S})`,
       durationS: Number(params[spec.durationKey] ?? 0),
       costUsd: "0",
     })
     .returning();
-  console.info(JSON.stringify({ evt: "generation_submitted", id, hookHost: webhookUrl && new URL(webhookUrl).host }));
-  return row;
+  return (await send(row, key, schedule)).row;
 }
 
 /** Bring the row as far forward as Higgsfield allows right now. Safe under any number of concurrent callers. */
@@ -94,8 +98,18 @@ export async function settle(gen: Generation, schedule: Scheduler): Promise<Gene
   return (await settleAs(gen, "poll", schedule)).row;
 }
 
-/** Cancel while queued. Returns the row afterwards: canceled, or wherever Higgsfield says the request went. */
+/**
+ * Cancel while pending or queued. Returns the row afterwards: canceled, or wherever Higgsfield says the request went.
+ * A pending row is canceled here, but never while a submit is in flight, because that submit may still be accepted and
+ * start a paid generation nobody tracks. That cancel answers 409 and works a few seconds later.
+ */
 export async function cancelGeneration(gen: Generation, schedule: Scheduler): Promise<Generation> {
+  if (gen.status === "pending") {
+    const stop = decide(gen, { source: "cancel" }, { now: new Date(), pricePerSecUsd: 0 });
+    const row = await apply(gen, stop, schedule, and(eq(schema.generations.status, "pending"), notSubmitting()));
+    if (row.status === "pending") throw new HttpError(409, SUBMITTING);
+    return row.status === "queued" ? cancelGeneration(row, schedule) : row;
+  }
   if (gen.status !== "queued" || !gen.requestId) throw new HttpError(409, "대기 중인 건만 취소할 수 있습니다");
   const key = await ownerKey(gen.userId);
   if (!key) throw new HttpError(403, NO_KEY);
@@ -115,9 +129,12 @@ export type HookOutcome = "done" | "unauthorized" | "retry";
 
 /**
  * Higgsfield's webhook is a doorbell and its body is never read. The token in the URL proves we issued the URL for
- * this row, and a forced status check with the owner's key decides what happened. Done means the row is terminal.
- * Anything else asks Higgsfield to deliver again: the row is not inserted yet (submit inserts after Higgsfield
- * accepts), it has no request id, or Higgsfield gave no usable answer.
+ * this row, and a forced status check with the owner's key decides what happened. A pending row is one whose accepted
+ * submit we never recorded, so the hook sends it again first and gets the original request id back. Done means the
+ * row is terminal, or gone: the row is inserted before its id reaches Higgsfield, so a missing row was deleted and no
+ * redelivery can help. Anything else asks Higgsfield to deliver again: another caller holds the submit, the resend
+ * was deferred, another caller claimed a status check within the last second, the row has no request id, or
+ * Higgsfield gave no usable answer.
  */
 export async function onProviderHook(url: URL, schedule: Scheduler): Promise<HookOutcome> {
   const id = url.searchParams.get("g") ?? "";
@@ -127,31 +144,44 @@ export async function onProviderHook(url: URL, schedule: Scheduler): Promise<Hoo
   }
   const g = schema.generations;
   const [row] = await getDb().select().from(g).where(eq(g.id, id)).limit(1);
-  const look = row ? await settleAs(row, "hook", schedule) : null;
-  const now = look && (look.call === "answered" ? look.row : await current(look.row));
-  if (now && !isLive(now.status)) return "done";
-  console.warn(JSON.stringify({ evt: "hook_retry", id, status: now?.status ?? "missing", call: look?.call ?? "none" }));
+  if (!row) {
+    console.warn(JSON.stringify({ evt: "hook_missing", id }));
+    return "done";
+  }
+  const seen = await settleAs(row, "hook", schedule);
+  const now = seen.check === "answered" ? seen.row : await current(seen.row);
+  if (!isLive(now.status)) return "done";
+  console.warn(JSON.stringify({ evt: "hook_retry", id, status: now.status, submit: seen.submit, call: seen.check }));
   return "retry";
 }
 
 /**
- * checked: status calls Higgsfield answered. moved: rows whose status changed during the visit. stored: rows that
- * gained a stored copy during the visit. failures: status calls with no usable answer, copies that failed, and visits
- * that threw. truncated: the deadline stopped the sweep before every due row was visited.
+ * submitted: submits Higgsfield accepted or refused. checked: status calls Higgsfield answered. moved: rows whose status
+ * changed during the visit. stored: rows that gained a stored copy during the visit. failures: submits and status calls
+ * with no usable answer, copies that failed, and visits that threw. truncated: the deadline stopped the sweep before
+ * every due row was visited.
  */
-export type SweepReport = { checked: number; moved: number; stored: number; failures: number; truncated: boolean };
+export type SweepReport = {
+  submitted: number;
+  checked: number;
+  moved: number;
+  stored: number;
+  failures: number;
+  truncated: boolean;
+};
 
 /** Rows per due query. The sweep reads pages until none is left, so this bounds a query, not the work. */
 const SWEEP_PAGE = 100;
 
 /**
  * Visit every due row once, oldest first and one at a time, until none is left or `deadline` passes. A row is due
- * when it is live and its check clock ran out, or when it is a completed result whose copy lease ran out. Copies run
- * inline. Sweeps that overlap each other, a hook, or a poll converge, because every step goes through the same claims.
+ * when it is pending and nobody is submitting it or waiting out a deferral, when it is live and its check clock ran
+ * out, or when it is a completed result whose copy lease ran out. Copies run inline. Sweeps that overlap each other, a
+ * hook, or a poll converge, because every step goes through the same claims.
  */
 export async function sweep({ deadline }: { deadline: number }): Promise<SweepReport> {
   const started = Date.now();
-  const report: SweepReport = { checked: 0, moved: 0, stored: 0, failures: 0, truncated: false };
+  const report: SweepReport = { submitted: 0, checked: 0, moved: 0, stored: 0, failures: 0, truncated: false };
   const visited: string[] = [];
   while (!report.truncated) {
     const due = await dueRows(visited);
@@ -253,22 +283,36 @@ const POLICY = {
   sweep: { forceCheck: false },
 } as const satisfies Record<SettleReason, Policy>;
 
+/** next_check_at is a claim clock, compared with the database's now(), so it is only ever written as SQL. */
 type LifecyclePatch = Partial<
-  Pick<typeof schema.generations.$inferInsert, "resultUrl" | "expiresAt" | "completedAt" | "costUsd" | "error">
->;
+  Pick<typeof schema.generations.$inferInsert, "requestId" | "resultUrl" | "expiresAt" | "completedAt" | "costUsd" | "error">
+> & { nextCheckAt?: SQL };
 
-type Observation = { source: "status"; state: hf.ProviderState } | { source: "cancel" };
+/** What a caller learned: a submit answer, a status answer, a user's cancel, or the clock (the submit deadline). */
+type Observation =
+  | { source: "submit"; outcome: hf.SubmitOutcome }
+  | { source: "status"; state: hf.ProviderState }
+  | { source: "cancel" }
+  | { source: "clock" };
 
-type Step = { kind: "move"; to: GenerationStatus; patch: LifecyclePatch } | { kind: "none" };
+/** `wait` keeps a pending row pending, records why, and lets nobody send it again for `afterS`. */
+type Step =
+  | { kind: "move"; to: GenerationStatus; patch: LifecyclePatch }
+  | { kind: "wait"; afterS: number; reason: string }
+  | { kind: "none" };
 
 /**
  * The whole transition table. Pure.
- *   terminal + anything      → none
- *   live + running(s)        → move s, only when s ranks above the row
- *   live + completed(url)    → move completed  { resultUrl, expiresAt, completedAt, costUsd = price × durationS }
- *   live + ended(s, error)   → move s          { error, expiresAt, completedAt, costUsd 0 }
- *   live + missing           → move failed     { error "request not found", completedAt, costUsd 0 }
- *   live + cancel            → move canceled   { completedAt, costUsd 0 }
+ *   terminal + anything                → none
+ *   pending + submit accepted(id)      → move queued     { requestId, nextCheckAt now() in the database, error null }
+ *   pending + submit deferred(s)       → wait clamp(s, 5, 300) with the reason
+ *   pending + submit rejected(error)   → move failed     { error, completedAt, costUsd 0 }
+ *   pending + clock past the deadline  → move failed     { error "Higgsfield가 30분 동안…", completedAt, costUsd 0 }
+ *   live + running(s)                  → move s, only when s ranks above the row
+ *   live + completed(url)              → move completed  { resultUrl, expiresAt, completedAt, costUsd = price × durationS }
+ *   live + ended(s, error)             → move s          { error, expiresAt, completedAt, costUsd 0 }
+ *   live + missing                     → move failed     { error "request not found", completedAt, costUsd 0 }
+ *   live + cancel                      → move canceled   { completedAt, costUsd 0 }
  */
 function decide(gen: Generation, obs: Observation, ctx: { now: Date; pricePerSecUsd: number }): Step {
   if (!isLive(gen.status)) return { kind: "none" };
@@ -278,6 +322,17 @@ function decide(gen: Generation, obs: Observation, ctx: { now: Date; pricePerSec
     patch: { completedAt: ctx.now, costUsd: "0", ...patch },
   });
   if (obs.source === "cancel") return end("canceled", {});
+  if (obs.source === "clock") {
+    const late = ctx.now.getTime() - gen.createdAt.getTime() >= SUBMIT_DEADLINE_MIN * 60_000;
+    return gen.status === "pending" && late ? end("failed", { error: SUBMIT_DEADLINE_ERROR }) : { kind: "none" };
+  }
+  if (obs.source === "submit") {
+    const o = obs.outcome;
+    if (gen.status !== "pending") return { kind: "none" };
+    if (o.kind === "accepted") return { kind: "move", to: "queued", patch: { requestId: o.requestId, nextCheckAt: sql`now()`, error: null } };
+    if (o.kind === "rejected") return end("failed", { error: o.error });
+    return { kind: "wait", afterS: Math.min(RESUBMIT_MAX_S, Math.max(RESUBMIT_MIN_S, o.retryAfterS)), reason: o.detail };
+  }
   const s = obs.state;
   switch (s.kind) {
     case "running":
@@ -297,17 +352,26 @@ function decide(gen: Generation, obs: Observation, ctx: { now: Date; pricePerSec
 }
 
 /**
- * The only statement that changes generations.status after insert. It matches only while the row still ranks below
- * the target, so a stale or repeated observation updates zero rows. Zero rows means another caller already moved the
- * row at least this far; the row is reread. Only the caller that moved the row schedules the terminal follow-up.
+ * Writes a step. A move is the only statement that changes generations.status after insert. It matches only while the
+ * row still ranks below the target (and `guard`, when given), so a stale or repeated observation updates zero rows.
+ * Zero rows means another caller already moved the row at least this far; the row is reread. Only the caller that
+ * moved the row schedules the terminal follow-up. A wait touches only a pending row's clock and reason.
  */
-async function apply(gen: Generation, step: Step, schedule: Scheduler): Promise<Generation> {
+async function apply(gen: Generation, step: Step, schedule: Scheduler, guard?: SQL): Promise<Generation> {
   if (step.kind === "none") return gen;
   const g = schema.generations;
+  if (step.kind === "wait") {
+    const [waiting] = await getDb()
+      .update(g)
+      .set({ nextCheckAt: sql`now() + make_interval(secs => ${step.afterS})`, error: step.reason })
+      .where(and(eq(g.id, gen.id), eq(g.status, "pending")))
+      .returning();
+    return waiting ?? current(gen);
+  }
   const [row] = await getDb()
     .update(g)
     .set({ status: step.to, ...step.patch })
-    .where(and(eq(g.id, gen.id), inArray(g.status, predecessorsOf(step.to))))
+    .where(and(eq(g.id, gen.id), inArray(g.status, predecessorsOf(step.to)), guard))
     .returning();
   if (!row) return current(gen);
   if (!isLive(row.status)) schedule(() => onTerminal(row));
@@ -320,18 +384,68 @@ async function current(gen: Generation): Promise<Generation> {
   return row ?? gen;
 }
 
-function settleAs(gen: Generation, reason: SettleReason, schedule: Scheduler): Promise<Look> {
-  return refresh(gen, POLICY[reason], schedule);
+/** A visit does every step the row allows now: send a due pending row, then check a live one. */
+async function settleAs(gen: Generation, reason: SettleReason, schedule: Scheduler): Promise<Visit> {
+  const submitted = await resubmit(gen, schedule);
+  const checked = await refresh(submitted.row, POLICY[reason], schedule);
+  return { row: checked.row, submit: submitted.call, check: checked.call };
 }
 
 /**
- * What one refresh did, with the row as this caller now knows it. `answered`: Higgsfield answered this caller.
- * `unavailable`: this caller asked and got no usable answer. `none`: nothing to ask, no key, or another caller holds
- * the check, so the row is the one passed in.
+ * One call to Higgsfield, from this caller's side. `answered`: Higgsfield answered (a submit accepted or refused, or a
+ * status). `unavailable`: this caller asked and got no usable answer (a deferred submit, a failed status call).
+ * `none`: nothing to ask, no key, the deadline passed, or another caller holds the claim.
  */
-type Look = { row: Generation; call: "answered" | "unavailable" | "none" };
+type Call = "answered" | "unavailable" | "none";
 
-/** Ask Higgsfield about a live row, but only if this caller wins the row's check claim. */
+/** What one submit or one refresh did, with the row as this caller now knows it. */
+type Look = { row: Generation; call: Call };
+
+/** What one visit did: the submit of a pending row, then the status check. */
+type Visit = { row: Generation; submit: Call; check: Call };
+
+/**
+ * Send a pending row again, but only if this caller wins its submit claim. Past the deadline the claimant fails it
+ * instead, which is safe only because the claim proves no other submit of this row is in flight.
+ */
+async function resubmit(gen: Generation, schedule: Scheduler): Promise<Look> {
+  if (gen.status !== "pending") return { row: gen, call: "none" };
+  const claimed = await claimSubmit(gen.id);
+  if (!claimed) return { row: gen, call: "none" };
+  const late = decide(claimed, { source: "clock" }, { now: new Date(), pricePerSecUsd: 0 });
+  if (late.kind !== "none") return { row: await apply(claimed, late, schedule), call: "none" };
+  return send(claimed, await ownerKey(claimed.userId), schedule);
+}
+
+/**
+ * One submit attempt for a row whose submit lease this caller holds. Idempotency-Key is the row id and the body is
+ * rebuilt from the stored row, so every attempt is the same request and Higgsfield returns the original request id
+ * for one it already accepted. A changed body gets 422, which fails the row.
+ */
+async function send(gen: Generation, key: hf.ApiKey | null, schedule: Scheduler): Promise<Look> {
+  const outcome: hf.SubmitOutcome = key ? await submitRow(gen, key) : { kind: "rejected", error: NO_KEY };
+  const detail = outcome.kind === "deferred" ? outcome.detail : outcome.kind === "rejected" ? outcome.error : undefined;
+  console.info(JSON.stringify({ evt: "generation_submit", id: gen.id, outcome: outcome.kind, detail }));
+  const row = await apply(gen, decide(gen, { source: "submit", outcome }, { now: new Date(), pricePerSecUsd: 0 }), schedule);
+  if (outcome.kind === "accepted" && row.requestId !== outcome.requestId) {
+    console.warn(JSON.stringify({ evt: "submit_unrecorded", id: gen.id, requestId: outcome.requestId, status: row.status }));
+  }
+  return { row, call: outcome.kind === "deferred" ? "unavailable" : "answered" };
+}
+
+async function submitRow(gen: Generation, key: hf.ApiKey): Promise<hf.SubmitOutcome> {
+  const spec = findModel(gen.modelId);
+  if (!spec) return { kind: "rejected", error: `카탈로그에 없는 모델입니다: ${gen.modelId}` };
+  let args: Record<string, unknown>;
+  try {
+    args = buildArguments(spec, gen.prompt, gen.params, gen.imageRefs, gen.videoRefs);
+  } catch (e) {
+    return { kind: "rejected", error: e instanceof Error ? e.message : String(e) };
+  }
+  return hf.submit(key, spec.id, args, { idempotencyKey: gen.id, webhookUrl: hookUrl(gen.id) });
+}
+
+/** Ask Higgsfield about a live row, but only if this caller wins the row's check claim. Pending rows have nothing to ask. */
 async function refresh(gen: Generation, policy: Policy, schedule: Scheduler): Promise<Look> {
   const requestId = gen.requestId;
   if (!isLive(gen.status) || !requestId) return { row: gen, call: "none" };
@@ -358,6 +472,27 @@ async function refresh(gen: Generation, policy: Policy, schedule: Scheduler): Pr
 function checkable() {
   const g = schema.generations;
   return and(inArray(g.status, LIVE_STATUSES), isNotNull(g.requestId));
+}
+
+/** A pending row nobody is submitting and whose deferral has run out. The submit claim and the sweep read this rule. */
+function submitDue() {
+  const g = schema.generations;
+  return and(eq(g.status, "pending"), lte(g.nextCheckAt, sql`now()`));
+}
+
+/**
+ * Nobody holds the row's submit lease: its clock ran out, or it is waiting out a deferral, which records a reason.
+ * A claim clears the reason, so a clock ahead with no reason means a submit is in flight.
+ */
+function notSubmitting() {
+  const g = schema.generations;
+  return or(lte(g.nextCheckAt, sql`now()`), isNotNull(g.error));
+}
+
+/** A checkable row nobody claimed a check for within the last FORCED_CHECK_FLOOR_S. */
+function forcedCheckDue() {
+  const floor = sql`now() + make_interval(secs => ${CHECK_GAP_S - FORCED_CHECK_FLOOR_S})`;
+  return and(checkable(), lte(schema.generations.nextCheckAt, floor));
 }
 
 /** A checkable row whose check clock has run out. The unforced check claim and the sweep read the same rule. */
@@ -389,7 +524,7 @@ async function dueRows(visited: string[]): Promise<Generation[]> {
     .from(g)
     .where(
       and(
-        or(checkDue(), storage.storageEnabled() ? copyDue() : undefined),
+        or(submitDue(), checkDue(), storage.storageEnabled() ? copyDue() : undefined),
         visited.length > 0 ? notInArray(g.id, visited) : undefined,
       ),
     )
@@ -397,18 +532,22 @@ async function dueRows(visited: string[]): Promise<Generation[]> {
     .limit(SWEEP_PAGE);
 }
 
-/** One sweep step: check a live row and await its copy, or copy a completed one. Counts into `report`, never throws. */
+/**
+ * One sweep step: send a pending row, check a live row and await its copy, or copy a completed one. Counts into
+ * `report`, never throws.
+ */
 async function visit(row: Generation, report: SweepReport): Promise<void> {
   try {
     let settled: Generation;
     if (isLive(row.status)) {
       const tasks: Promise<void>[] = [];
-      const look = await settleAs(row, "sweep", (task) => void tasks.push(task()));
-      if (look.call === "answered") report.checked++;
-      if (look.call === "unavailable") report.failures++;
-      if (look.row.status !== row.status) report.moved++;
+      const seen = await settleAs(row, "sweep", (task) => void tasks.push(task()));
+      if (seen.submit === "answered") report.submitted++;
+      if (seen.check === "answered") report.checked++;
+      report.failures += [seen.submit, seen.check].filter((c) => c === "unavailable").length;
+      if (seen.row.status !== row.status) report.moved++;
       await Promise.all(tasks);
-      settled = tasks.length > 0 ? await current(look.row) : look.row;
+      settled = tasks.length > 0 ? await current(seen.row) : seen.row;
     } else {
       settled = await storeVideo(row);
     }
@@ -421,15 +560,31 @@ async function visit(row: Generation, report: SweepReport): Promise<void> {
 }
 
 /**
+ * The submit claim: push next_check_at SUBMIT_LEASE_S ahead and clear the last deferral reason, which marks the row as
+ * being submitted. It matches only a row submitDue accepts, so of any number of concurrent callers exactly one gets it.
+ */
+async function claimSubmit(id: string): Promise<Generation | null> {
+  const g = schema.generations;
+  const [row] = await getDb()
+    .update(g)
+    .set({ nextCheckAt: sql`now() + make_interval(secs => ${SUBMIT_LEASE_S})`, error: null })
+    .where(and(eq(g.id, id), submitDue()))
+    .returning();
+  return row ?? null;
+}
+
+/**
  * Push next_check_at CHECK_GAP_S ahead. Unforced, it matches only when the row is due, so of any number of concurrent
- * callers exactly one wins per gap. Forced (the hook, or a cancel Higgsfield refused) it always wins and resets the gap.
+ * callers exactly one wins per gap. Forced (the hook, or a cancel Higgsfield refused) it skips the gap but not the
+ * floor: next_check_at more than CHECK_GAP_S - FORCED_CHECK_FLOOR_S ahead means a check was claimed within the last
+ * FORCED_CHECK_FLOOR_S, so duplicated or replayed webhooks for a live row make at most one status call per second.
  */
 async function claimCheck(id: string, force: boolean): Promise<boolean> {
   const g = schema.generations;
   const claimed = await getDb()
     .update(g)
     .set({ nextCheckAt: sql`now() + make_interval(secs => ${CHECK_GAP_S})` })
-    .where(and(eq(g.id, id), force ? checkable() : checkDue()))
+    .where(and(eq(g.id, id), force ? forcedCheckDue() : checkDue()))
     .returning({ id: g.id });
   return claimed.length > 0;
 }
