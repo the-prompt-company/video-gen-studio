@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, gt, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, isNotNull, isNull, lte, notInArray, or, sql } from "drizzle-orm";
 import { del } from "@vercel/blob";
 import { getDb, schema } from "@/db";
 import type { Generation, User } from "@/db/schema";
 import { HttpError } from "@/lib/auth";
 import { buildArguments, type ModelSpec } from "@/lib/catalog";
-import { decrypt } from "@/lib/crypto";
+import { decrypt, signToken, verifyToken } from "@/lib/crypto";
 import { isLive, LIVE_STATUSES, predecessorsOf, RANK, type GenerationStatus } from "@/lib/generation-status";
 import * as hf from "@/lib/higgsfield";
 import * as storage from "@/lib/storage";
@@ -62,7 +62,8 @@ export async function submitGeneration(user: User, req: GenerationRequest): Prom
     throw new HttpError(400, e instanceof Error ? e.message : String(e));
   }
   const id = randomUUID();
-  const outcome = await hf.submit(apiKeyFor(user), spec.id, args, { idempotencyKey: id, webhookUrl: null });
+  const webhookUrl = hookUrl(id);
+  const outcome = await hf.submit(apiKeyFor(user), spec.id, args, { idempotencyKey: id, webhookUrl });
   if (outcome.kind === "deferred") {
     const hint = outcome.cause === "rate_limited" ? ` (큐가 가득 참, ${outcome.retryAfterS}초 후 재시도)` : "";
     throw new HttpError(502, outcome.detail + hint);
@@ -84,12 +85,13 @@ export async function submitGeneration(user: User, req: GenerationRequest): Prom
       costUsd: "0",
     })
     .returning();
+  console.info(JSON.stringify({ evt: "generation_submitted", id, hookHost: webhookUrl && new URL(webhookUrl).host }));
   return row;
 }
 
 /** Bring the row as far forward as Higgsfield allows right now. Safe under any number of concurrent callers. */
-export function settle(gen: Generation, schedule: Scheduler): Promise<Generation> {
-  return settleAs(gen, "poll", schedule);
+export async function settle(gen: Generation, schedule: Scheduler): Promise<Generation> {
+  return (await settleAs(gen, "poll", schedule)).row;
 }
 
 /** Cancel while queued. Returns the row afterwards: canceled, or wherever Higgsfield says the request went. */
@@ -105,10 +107,66 @@ export async function cancelGeneration(gen: Generation, schedule: Scheduler): Pr
     throw e;
   }
   if (answer === "canceled") return apply(gen, decide(gen, { source: "cancel" }, { now: new Date(), pricePerSecUsd: 0 }), schedule);
-  const looked = await refresh(gen, { ...POLICY.poll, forceCheck: true }, schedule);
-  // refresh returns the row it was given when it could not look (another caller already finished it, no key, or the
-  // provider is down). The caller still needs the row as it stands now.
-  return looked === gen ? current(gen) : looked;
+  const look = await refresh(gen, { forceCheck: true }, schedule);
+  return look.call === "answered" ? look.row : current(gen);
+}
+
+export type HookOutcome = "done" | "unauthorized" | "retry";
+
+/**
+ * Higgsfield's webhook is a doorbell and its body is never read. The token in the URL proves we issued the URL for
+ * this row, and a forced status check with the owner's key decides what happened. Done means the row is terminal.
+ * Anything else asks Higgsfield to deliver again: the row is not inserted yet (submit inserts after Higgsfield
+ * accepts), it has no request id, or Higgsfield gave no usable answer.
+ */
+export async function onProviderHook(url: URL, schedule: Scheduler): Promise<HookOutcome> {
+  const id = url.searchParams.get("g") ?? "";
+  if (!verifyToken("hf-hook", id, url.searchParams.get("t") ?? "")) {
+    console.warn(JSON.stringify({ evt: "hook_unauthorized", id: id.slice(0, 36) }));
+    return "unauthorized";
+  }
+  const g = schema.generations;
+  const [row] = await getDb().select().from(g).where(eq(g.id, id)).limit(1);
+  const look = row ? await settleAs(row, "hook", schedule) : null;
+  const now = look && (look.call === "answered" ? look.row : await current(look.row));
+  if (now && !isLive(now.status)) return "done";
+  console.warn(JSON.stringify({ evt: "hook_retry", id, status: now?.status ?? "missing", call: look?.call ?? "none" }));
+  return "retry";
+}
+
+/**
+ * checked: status calls Higgsfield answered. moved: rows whose status changed during the visit. stored: rows that
+ * gained a stored copy during the visit. failures: status calls with no usable answer, copies that failed, and visits
+ * that threw. truncated: the deadline stopped the sweep before every due row was visited.
+ */
+export type SweepReport = { checked: number; moved: number; stored: number; failures: number; truncated: boolean };
+
+/** Rows per due query. The sweep reads pages until none is left, so this bounds a query, not the work. */
+const SWEEP_PAGE = 100;
+
+/**
+ * Visit every due row once, oldest first and one at a time, until none is left or `deadline` passes. A row is due
+ * when it is live and its check clock ran out, or when it is a completed result whose copy lease ran out. Copies run
+ * inline. Sweeps that overlap each other, a hook, or a poll converge, because every step goes through the same claims.
+ */
+export async function sweep({ deadline }: { deadline: number }): Promise<SweepReport> {
+  const started = Date.now();
+  const report: SweepReport = { checked: 0, moved: 0, stored: 0, failures: 0, truncated: false };
+  const visited: string[] = [];
+  while (!report.truncated) {
+    const due = await dueRows(visited);
+    if (due.length === 0) break;
+    for (const row of due) {
+      if (Date.now() >= deadline) {
+        report.truncated = true;
+        break;
+      }
+      visited.push(row.id);
+      await visit(row, report);
+    }
+  }
+  console.info(JSON.stringify({ evt: "sweep", ...report, ms: Date.now() - started }));
+  return report;
 }
 
 /**
@@ -167,21 +225,32 @@ export function publicGeneration(g: Generation, username?: string) {
 
 export type PublicGeneration = ReturnType<typeof publicGeneration>;
 
-/** Stored once the copy landed and storage is still configured. Provider until then, or for good when storage is off. */
+/**
+ * Stored once the copy landed and storage is still configured. Provider until then, or for good when storage is off
+ * or the row has no request id (a mock row, which is never copied).
+ */
 function publicVideo(g: Generation): PublicVideo | null {
   if (g.status !== "completed") return null;
   const stored = g.storagePath && storage.videoUrls(g.storagePath, `${g.id}.mp4`);
   if (stored) return { kind: "stored", ...stored };
   if (!g.resultUrl) return null;
   const unexpired = g.expiresAt === null || g.expiresAt.getTime() > Date.now();
-  return { kind: "provider", url: g.resultUrl, downloadUrl: g.resultUrl, expiresAt: g.expiresAt, storing: storage.storageEnabled() && unexpired };
+  const storing = storage.storageEnabled() && unexpired && g.requestId !== null;
+  return { kind: "provider", url: g.resultUrl, downloadUrl: g.resultUrl, expiresAt: g.expiresAt, storing };
 }
 
-type SettleReason = "poll";
+/**
+ * Who asks a row to move: an open tab, Higgsfield's webhook, or the cron sweep. Only the webhook forces a check,
+ * because it rings once Higgsfield has an answer. Where the copy runs is the caller's Scheduler: `after` in a route,
+ * inline in the sweep.
+ */
+type SettleReason = "poll" | "hook" | "sweep";
 type Policy = { forceCheck: boolean };
 
 const POLICY = {
   poll: { forceCheck: false },
+  hook: { forceCheck: true },
+  sweep: { forceCheck: false },
 } as const satisfies Record<SettleReason, Policy>;
 
 type LifecyclePatch = Partial<
@@ -251,19 +320,26 @@ async function current(gen: Generation): Promise<Generation> {
   return row ?? gen;
 }
 
-function settleAs(gen: Generation, reason: SettleReason, schedule: Scheduler): Promise<Generation> {
+function settleAs(gen: Generation, reason: SettleReason, schedule: Scheduler): Promise<Look> {
   return refresh(gen, POLICY[reason], schedule);
 }
 
+/**
+ * What one refresh did, with the row as this caller now knows it. `answered`: Higgsfield answered this caller.
+ * `unavailable`: this caller asked and got no usable answer. `none`: nothing to ask, no key, or another caller holds
+ * the check, so the row is the one passed in.
+ */
+type Look = { row: Generation; call: "answered" | "unavailable" | "none" };
+
 /** Ask Higgsfield about a live row, but only if this caller wins the row's check claim. */
-async function refresh(gen: Generation, policy: Policy, schedule: Scheduler): Promise<Generation> {
+async function refresh(gen: Generation, policy: Policy, schedule: Scheduler): Promise<Look> {
   const requestId = gen.requestId;
-  if (!isLive(gen.status) || !requestId) return gen;
-  if (!(await claimCheck(gen.id, policy.forceCheck))) return gen;
+  if (!isLive(gen.status) || !requestId) return { row: gen, call: "none" };
+  if (!(await claimCheck(gen.id, policy.forceCheck))) return { row: gen, call: "none" };
   const key = await ownerKey(gen.userId);
   if (!key) {
     console.warn(JSON.stringify({ evt: "status_skipped", id: gen.id, reason: "owner has no api key" }));
-    return gen;
+    return { row: gen, call: "none" };
   }
   let state: hf.ProviderState;
   try {
@@ -271,37 +347,97 @@ async function refresh(gen: Generation, policy: Policy, schedule: Scheduler): Pr
   } catch (e) {
     if (!(e instanceof hf.ProviderUnavailable)) throw e;
     console.warn(JSON.stringify({ evt: "status_unavailable", id: gen.id, error: e.message }));
-    return gen;
+    return { row: gen, call: "unavailable" };
   }
   const pricePerSecUsd = state.kind === "completed" ? await priceFor(gen.modelId) : 0;
-  return apply(gen, decide(gen, { source: "status", state }, { now: new Date(), pricePerSecUsd }), schedule);
+  const row = await apply(gen, decide(gen, { source: "status", state }, { now: new Date(), pricePerSecUsd }), schedule);
+  return { row, call: "answered" };
+}
+
+/** A live row Higgsfield can be asked about. Mock rows carry no request id and are never asked. */
+function checkable() {
+  const g = schema.generations;
+  return and(inArray(g.status, LIVE_STATUSES), isNotNull(g.requestId));
+}
+
+/** A checkable row whose check clock has run out. The unforced check claim and the sweep read the same rule. */
+function checkDue() {
+  return and(checkable(), lte(schema.generations.nextCheckAt, sql`now()`));
+}
+
+/**
+ * A completed Higgsfield result that is unstored, unexpired, and whose copy lease has run out. The copy claim and the
+ * sweep read the same rule. Mock rows carry no request id and are never copied.
+ */
+function copyDue() {
+  const g = schema.generations;
+  return and(
+    eq(g.status, "completed"),
+    isNotNull(g.requestId),
+    isNotNull(g.resultUrl),
+    isNull(g.storagePath),
+    or(isNull(g.mirrorNextAt), lte(g.mirrorNextAt, sql`now()`)),
+    or(isNull(g.expiresAt), gt(g.expiresAt, sql`now()`)),
+  );
+}
+
+/** Due rows this sweep has not visited, oldest first. Copies are due only while storage is configured. */
+async function dueRows(visited: string[]): Promise<Generation[]> {
+  const g = schema.generations;
+  return getDb()
+    .select()
+    .from(g)
+    .where(
+      and(
+        or(checkDue(), storage.storageEnabled() ? copyDue() : undefined),
+        visited.length > 0 ? notInArray(g.id, visited) : undefined,
+      ),
+    )
+    .orderBy(g.createdAt)
+    .limit(SWEEP_PAGE);
+}
+
+/** One sweep step: check a live row and await its copy, or copy a completed one. Counts into `report`, never throws. */
+async function visit(row: Generation, report: SweepReport): Promise<void> {
+  try {
+    let settled: Generation;
+    if (isLive(row.status)) {
+      const tasks: Promise<void>[] = [];
+      const look = await settleAs(row, "sweep", (task) => void tasks.push(task()));
+      if (look.call === "answered") report.checked++;
+      if (look.call === "unavailable") report.failures++;
+      if (look.row.status !== row.status) report.moved++;
+      await Promise.all(tasks);
+      settled = tasks.length > 0 ? await current(look.row) : look.row;
+    } else {
+      settled = await storeVideo(row);
+    }
+    if (settled.storagePath && !row.storagePath) report.stored++;
+    else if (settled.mirrorError && settled.mirrorAttempts > row.mirrorAttempts) report.failures++;
+  } catch (e) {
+    report.failures++;
+    console.warn(JSON.stringify({ evt: "sweep_failed", id: row.id, error: e instanceof Error ? e.message : String(e) }));
+  }
 }
 
 /**
  * Push next_check_at CHECK_GAP_S ahead. Unforced, it matches only when the row is due, so of any number of concurrent
- * callers exactly one wins per gap. Forced (a cancel Higgsfield refused) it always wins and resets the gap.
+ * callers exactly one wins per gap. Forced (the hook, or a cancel Higgsfield refused) it always wins and resets the gap.
  */
 async function claimCheck(id: string, force: boolean): Promise<boolean> {
   const g = schema.generations;
   const claimed = await getDb()
     .update(g)
     .set({ nextCheckAt: sql`now() + make_interval(secs => ${CHECK_GAP_S})` })
-    .where(
-      and(
-        eq(g.id, id),
-        inArray(g.status, LIVE_STATUSES),
-        isNotNull(g.requestId),
-        force ? undefined : lte(g.nextCheckAt, sql`now()`),
-      ),
-    )
+    .where(and(eq(g.id, id), force ? checkable() : checkDue()))
     .returning({ id: g.id });
   return claimed.length > 0;
 }
 
 /**
- * The copy claim. It matches only a completed, unstored, unexpired row whose lease has run out, counts the attempt,
- * and pushes the lease max(MIRROR_LEASE_S, 60·2^attempts, capped at 6 h) ahead. Of any number of concurrent callers
- * exactly one gets the row back.
+ * The copy claim. It matches only a row that copyDue accepts, counts the attempt, and pushes the lease
+ * max(MIRROR_LEASE_S, 60·2^attempts, capped at 6 h) ahead. Of any number of concurrent callers exactly one gets the
+ * row back.
  */
 async function claimCopy(id: string): Promise<Generation | null> {
   const g = schema.generations;
@@ -309,16 +445,7 @@ async function claimCopy(id: string): Promise<Generation | null> {
   const [row] = await getDb()
     .update(g)
     .set({ mirrorAttempts: sql`${g.mirrorAttempts} + 1`, mirrorNextAt: sql`now() + make_interval(secs => ${backoff})` })
-    .where(
-      and(
-        eq(g.id, id),
-        eq(g.status, "completed"),
-        isNotNull(g.resultUrl),
-        isNull(g.storagePath),
-        or(isNull(g.mirrorNextAt), lte(g.mirrorNextAt, sql`now()`)),
-        or(isNull(g.expiresAt), gt(g.expiresAt, sql`now()`)),
-      ),
-    )
+    .where(and(eq(g.id, id), copyDue()))
     .returning();
   return row ?? null;
 }
@@ -365,6 +492,20 @@ async function cleanupRefs(gen: Generation) {
   } catch (e) {
     console.warn("blob cleanup failed", e);
   }
+}
+
+/**
+ * Where Higgsfield rings for this row. Always the production host, because preview deployments sit behind Vercel's
+ * deployment protection and cannot receive it. Null in local dev, where Higgsfield cannot reach this machine.
+ */
+function hookUrl(id: string): string | null {
+  const host = process.env.VERCEL_PROJECT_PRODUCTION_URL;
+  const base = process.env.PUBLIC_BASE_URL || (host && `https://${host}`);
+  if (!base) return null;
+  const url = new URL("/api/hooks/higgsfield", base);
+  url.searchParams.set("g", id);
+  url.searchParams.set("t", signToken("hf-hook", id));
+  return url.href;
 }
 
 async function ownerKey(userId: number): Promise<hf.ApiKey | null> {

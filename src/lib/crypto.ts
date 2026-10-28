@@ -5,6 +5,7 @@ import {
   createCipheriv,
   createDecipheriv,
   createHash,
+  createHmac,
 } from "node:crypto";
 
 /** scrypt password hash: "scrypt$<salt hex>$<hash hex>" */
@@ -22,10 +23,31 @@ export function verifyPassword(password: string, stored: string): boolean {
   return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
-function secretKey(): Buffer {
+function authSecret(): string {
   const secret = process.env.AUTH_SECRET;
   if (!secret || secret.length < 16) throw new Error("AUTH_SECRET must be set (16+ chars)");
-  return createHash("sha256").update(secret).digest();
+  return secret;
+}
+
+function secretKey(): Buffer {
+  return createHash("sha256").update(authSecret()).digest();
+}
+
+/** What a token authorizes. Each purpose has its own key, so a token for one never verifies for another. */
+export type TokenPurpose = "hf-hook";
+
+const TOKEN_CHARS = 32;
+
+/** base64url HMAC-SHA256 of `value` under a key derived from AUTH_SECRET and `purpose`, cut to 32 chars (192 bits). */
+export function signToken(purpose: TokenPurpose, value: string): string {
+  const key = createHmac("sha256", authSecret()).update(`token:${purpose}`).digest();
+  return createHmac("sha256", key).update(value).digest("base64url").slice(0, TOKEN_CHARS);
+}
+
+export function verifyToken(purpose: TokenPurpose, value: string, token: string): boolean {
+  const expected = Buffer.from(signToken(purpose, value));
+  const actual = Buffer.from(token);
+  return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
 /** AES-256-GCM, packed as "v1.<iv>.<tag>.<cipher>" (base64). */

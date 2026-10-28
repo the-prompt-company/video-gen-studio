@@ -15,7 +15,10 @@ Higgsfield API 위에 올린 팀용 영상 생성 사이트. Next.js 16 (App Rou
 
 - **인증**: 서버가 scrypt 해시로 비밀번호를 검증하고 7일짜리 HttpOnly JWT 쿠키를 발급합니다. 10회 실패 시 15분 잠금. `proxy.ts`가 보호 경로를 막습니다.
 - **API 키**: 사용자가 입력하지 않습니다. 관리자가 어드민에서 사용자별로 할당하고, DB에는 `AUTH_SECRET`로 AES-GCM 암호화돼 저장됩니다. 서버만 복호화해 Higgsfield를 호출합니다.
-- **생성 흐름**: `POST /api/generations` → Higgsfield `POST /{model_id}` (Idempotency-Key 포함) → `request_id` 저장. 브라우저가 `GET /api/generations/:id`를 2s→×1.5→최대 10s 간격으로 폴링하고, 서버가 그때 Higgsfield 상태를 한 번 조회해 DB를 갱신합니다. Hobby 플랜의 cron 제약(하루 1회) 때문에 서버 측 폴링은 두지 않았습니다.
+- **생성 흐름**: `POST /api/generations` → Higgsfield `POST /{model_id}` (Idempotency-Key, `hf_webhook` 포함) → `request_id` 저장. 행을 움직이는 코드는 `src/lib/generations.ts` 하나이고, 아래 세 트리거가 모두 그 함수를 부릅니다. 같은 일을 두 번 해도 결과가 같습니다.
+  - **브라우저 폴링**: 열린 탭이 live 행을 `GET /api/generations?ids=`로 2s→×1.5→최대 10s 간격으로 폴링하고, 서버가 그때 Higgsfield 상태를 한 번 조회합니다.
+  - **웹훅**: Higgsfield가 끝나면 `POST /api/hooks/higgsfield?g=<생성 id>&t=<토큰>`을 부릅니다. 웹훅은 초인종일 뿐이라 본문은 읽지 않고, `AUTH_SECRET`으로 만든 토큰을 확인한 뒤 사용자 키로 상태를 다시 조회합니다. 행이 종료되면 204, 토큰이 틀리면 401, 행이 아직 없거나 조회가 실패하면 503이고 Higgsfield는 5xx를 2시간 동안 다시 보냅니다. 탭을 닫아도 완료 직후 비용 기록과 영상 복사가 끝납니다.
+  - **크론**: Vercel Cron이 매분 `GET /api/cron/settle`을 부르면 조회 시각이 지난 live 행과 복사가 밀린 완료 행을 오래된 순으로 240초 동안 처리하고 `{"checked":3,"moved":3,"stored":3,"failures":0,"truncated":false}` 같은 JSON을 돌려줍니다. 놓친 웹훅, 피드에 보이지 않는 오래된 live 행, 실패한 복사를 이 크론이 마저 처리합니다.
 - **비용**: Higgsfield 응답에 비용이 없으므로 `models.price_per_sec_usd × 요청 길이(초)`로 계산합니다. 완료 건만 과금. 어드민 → 모델 탭에서 단가를 넣어야 0이 아닌 값이 나옵니다.
 - **레퍼런스 업로드**: 4 MB 이하 파일은 서버를 거쳐 Higgsfield 업로드 스토리지로 바로 갑니다(Blob 사용 안 함). 그보다 큰 mp4는 `BLOB_READ_WRITE_TOKEN`이 있을 때만 브라우저 → Vercel Blob 직접 업로드로 받고, 생성이 끝나면 삭제합니다.
 - **결과 보관**: Higgsfield는 결과를 7일 뒤 지웁니다. `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`가 있으면 완료 전이를 일으킨 요청이 응답 뒤(`after`)에 결과를 받아 Supabase Storage 공개 버킷에 `<생성 id>.mp4`로 복사하고, 갤러리와 피드는 그 복사본을 재생합니다(보관 "영구"). `SUPABASE_URL`이나 `SUPABASE_SERVICE_ROLE_KEY`가 비어 있으면 복사하지 않고 Higgsfield URL로 재생하며 갤러리에 남은 일수를 표시합니다(아래 완료 영상 보관).
@@ -59,16 +62,18 @@ HIGGSFIELD_BASE_URL=http://localhost:4010 npm run dev  # 또는 .env.local에 �
 | `FAKE_HF_VIDEO_FILE` | 없음 | `/media/` 응답으로 보낼 실제 영상 파일. 브라우저에서 재생까지 보려면 `public/mock/result-landscape.webm` 같은 파일을 주고, 주면 `FAKE_HF_VIDEO_BYTES`는 무시 |
 | `FAKE_HF_MEDIA_DELAY_MS` | `0` | `/media/` 응답 지연 |
 | `FAKE_HF_STORAGE_FAIL_N` | `0` | 스토리지 쓰기 처음 N건에 500 |
+| `FAKE_HF_STATUS_FAIL_N` | `0` | 상태 조회 처음 N건에 503 |
+| `FAKE_HF_WEBHOOK_RETRY_MS` | `2000` | 웹훅이 5xx나 연결 오류를 받으면 이 간격부터 두 배씩 늘려 2시간 동안 다시 보냄. 4xx는 다시 보내지 않음(Higgsfield와 같음) |
 
-가짜 서버는 Supabase Storage의 부분집합(`POST|PUT /storage/v1/object/{bucket}/{key}`, `GET /storage/v1/object/public/{bucket}/{key}`)도 받으므로 `SUPABASE_URL=http://localhost:4010 SUPABASE_SERVICE_ROLE_KEY=fake`로 복사 흐름까지 로컬에서 돌릴 수 있습니다. `GET /_stats`는 Idempotency-Key별 수락 수, 요청별·키별 상태 조회 수(초당 최대 포함), 웹훅 전송 수, 미디어 다운로드 수, 스토리지 키별 쓰기 횟수·크기·sha256을 돌려주고 `POST /_reset`은 모두 비웁니다. `POST /_config`에 `{"mediaDelayMs": 250000}`이나 `{"storageFailN": 3}`(다음 3건 실패)을 보내면 서버를 다시 띄우지 않고 그 값을 바꿉니다. 단위 테스트는 `node --test --import tsx scripts/fake-higgsfield.test.ts`, 생명주기와 복사 단정은 `HIGGSFIELD_BASE_URL=http://localhost:4010 SUPABASE_URL=http://localhost:4010 SUPABASE_SERVICE_ROLE_KEY=fake npx dotenv -e .env.local -- tsx scripts/lifecycle-check.ts`입니다.
+가짜 서버는 Supabase Storage의 부분집합(`POST|PUT /storage/v1/object/{bucket}/{key}`, `GET /storage/v1/object/public/{bucket}/{key}`)도 받으므로 `SUPABASE_URL=http://localhost:4010 SUPABASE_SERVICE_ROLE_KEY=fake`로 복사 흐름까지 로컬에서 돌릴 수 있습니다. `GET /_stats`는 Idempotency-Key별 수락 수, 요청별·키별 상태 조회 수(초당 최대 포함), 웹훅 전송·재전송 수와 요청별 응답 코드 목록, 미디어 다운로드 수, 스토리지 키별 쓰기 횟수·크기·sha256을 돌려주고 `POST /_reset`은 모두 비웁니다. `POST /_config`에 `{"mediaDelayMs": 250000}`, `{"storageFailN": 3}`(다음 3건 실패), `{"statusFailN": 1}`, `{"dropWebhooks": 1}`, `{"dupWebhooks": true}`를 보내면 서버를 다시 띄우지 않고 그 값을 바꿉니다. 단위 테스트는 `node --test --import tsx scripts/fake-higgsfield.test.ts`, 생명주기와 복사 단정은 `HIGGSFIELD_BASE_URL=http://localhost:4010 SUPABASE_URL=http://localhost:4010 SUPABASE_SERVICE_ROLE_KEY=fake npx dotenv -e .env.local -- tsx scripts/lifecycle-check.ts`입니다.
 
 ## 완료 영상 보관 (Supabase Storage)
 
 1. Supabase 대시보드 → Storage → New bucket. 이름 `videos`, **Public bucket** 켬. Storage Settings의 Global file size limit을 1 GB 이상으로 올립니다(복사는 1 GB 넘는 결과를 거부합니다). Free는 50 MB를 넘길 수 없고 Pro는 500 GB까지 올릴 수 있습니다.
 2. Project Settings → API에서 `SUPABASE_URL`(Project URL)과 `SUPABASE_SERVICE_ROLE_KEY`(service_role)를 `.env.local`과 Vercel 환경 변수에 넣습니다. 버킷 이름을 바꿨으면 `SUPABASE_VIDEO_BUCKET`도 넣습니다.
-3. 생성이 완료되면 몇 초 뒤 서버 로그에 `{"evt":"video_stored","id":...,"bytes":...,"fetchMs":...,"uploadMs":...,"attempt":1}` 한 줄이 찍히고, 갤러리 상세의 보관 행이 "영구"로 바뀝니다. 실패하면 `generations.mirror_error`에 이유가 남고 `mirror_next_at`(최소 6분, 시도마다 2배, 최대 6시간)이 지나야 다시 복사할 수 있습니다. 아직 자동 재시도는 없으므로 그 행은 만료 전까지 Higgsfield URL로 재생됩니다.
+3. 생성이 완료되면 몇 초 뒤 서버 로그에 `{"evt":"video_stored","id":...,"bytes":...,"fetchMs":...,"uploadMs":...,"attempt":1}` 한 줄이 찍히고, 갤러리 상세의 보관 행이 "영구"로 바뀝니다. 실패하면 `generations.mirror_error`에 이유가 남고 `mirror_next_at`(최소 6분, 시도마다 2배, 최대 6시간)이 지난 뒤 크론이 다시 복사합니다. 그동안 그 행은 Higgsfield URL로 재생됩니다.
 
-복사는 완료 전이를 일으킨 요청 하나가 응답 뒤에 합니다(`maxDuration = 300`). 결과 전체를 메모리에 올리므로 1 GB를 넘는 결과는 거부합니다. 행은 URL이 아니라 객체 키(`<id>.mp4`)만 저장하므로 버킷이나 벤더를 옮길 때는 객체를 복사하고 env만 바꾸면 됩니다.
+복사는 완료 전이를 일으킨 요청 하나(브라우저 폴링이나 웹훅)가 응답 뒤에 하고(`maxDuration = 300`), 크론은 sweep 안에서 복사가 끝나기를 기다립니다. 결과 전체를 메모리에 올리므로 1 GB를 넘는 결과는 거부합니다. 행은 URL이 아니라 객체 키(`<id>.mp4`)만 저장하므로 버킷이나 벤더를 옮길 때는 객체를 복사하고 env만 바꾸면 됩니다.
 
 공개 버킷이라 uuid를 아는 사람은 누구나 볼 수 있습니다(지금 Higgsfield URL과 같은 수준). 사내 영상을 링크로도 공유하면 안 되면 버킷을 Private으로 바꾸고 `src/lib/storage.ts`의 `videoUrls`가 `getPublicUrl` 대신 `createSignedUrl`(예: 1시간)을 쓰도록 고칩니다. 그러면 갤러리를 열 때마다 서명 요청이 한 번 더 가고, 오래 열어 둔 탭의 영상 주소는 만료됩니다.
 
@@ -80,12 +85,20 @@ vercel link --yes --project video-gen-studio     # 프로젝트 만들기/연결
 vercel env add DATABASE_URL production           # Supabase 대시보드 → Connect → Transaction pooler URI (6543)
 vercel blob create-store video-gen-refs          # 선택: 4 MB 초과 업로드용 → BLOB_READ_WRITE_TOKEN
 vercel env add AUTH_SECRET production            # node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+vercel env add CRON_SECRET production            # 같은 방법으로 만든 임의 문자열. Vercel Cron이 Bearer로 보냄
 vercel env pull .env.local --yes
 npm run db:migrate && npm run db:seed            # 로컬에서 운영 DB에 적용 (ADMIN_* 은 .env.local에)
 vercel --prod
 ```
 
-`AUTH_SECRET`을 바꾸면 저장된 API 키를 복호화할 수 없게 되니 바꾸지 마세요.
+`AUTH_SECRET`을 바꾸면 저장된 API 키를 복호화할 수 없게 되니 바꾸지 마세요. 진행 중인 생성의 웹훅 URL도 401이 되고(Higgsfield는 4xx를 다시 보내지 않음), 그 행은 크론과 폴링이 마무리합니다.
+
+### 서버 쪽 트리거와 플랜
+
+- `vercel.json`은 함수를 Supabase DB와 같은 서울(`icn1`)에 두고 `/api/cron/settle`을 매분 부릅니다. 크론 라우트는 `CRON_SECRET`이 없으면 항상 401입니다.
+- **Hobby**는 매분 크론이 든 `vercel.json`을 배포 단계에서 거부합니다. Hobby에 배포하려면 `schedule`을 `0 18 * * *`(KST 03시, 하루 1회)로 바꿉니다. 그러면 탭을 닫았고 웹훅까지 놓친 행은 다음 방문이나 다음 날 크론에 정리됩니다. 웹훅과 `after` 복사는 플랜과 상관없이 같습니다.
+- 웹훅 주소는 `PUBLIC_BASE_URL`, 없으면 `https://$VERCEL_PROJECT_PRODUCTION_URL`입니다. 프리뷰 배포는 배포 보호 뒤에 있어 웹훅을 받을 수 없으므로 프리뷰에서 제출한 생성도 프로덕션 주소로 등록됩니다. 프리뷰와 프로덕션이 같은 DB를 쓰므로 프로덕션이 그 행을 처리합니다. 프리뷰에 별도 DB를 붙이면 프로덕션은 그 행을 찾지 못해 503을 주고, 그 프리뷰의 행은 폴링과 크론으로만 움직입니다.
+- 로컬에서는 `PUBLIC_BASE_URL`을 비워 둡니다. 웹훅 없이 브라우저 폴링으로 동작하고, 크론은 `curl -H "Authorization: Bearer $CRON_SECRET" localhost:3000/api/cron/settle`로 직접 부릅니다. 가짜 Higgsfield의 웹훅까지 보려면 `PUBLIC_BASE_URL=http://localhost:3000`을 넣습니다.
 
 ## Free(Hobby) 티어 검토
 
@@ -94,9 +107,9 @@ Vercel 공식 문서 기준(2026-10):
 | 항목 | Hobby | 이 앱에서 |
 |---|---|---|
 | 상업적 사용 | **비상업·개인 용도만** (fair use) | 회사 팀이 쓰는 도구라면 약관상 Pro 대상. 가장 큰 리스크 |
-| 함수 최대 실행 | 300초 | 모든 요청이 수 초 안에 끝남. 생성 대기는 클라이언트 폴링 |
+| 함수 최대 실행 | 300초 | 모든 요청이 수 초 안에 끝남. 생성 대기는 웹훅, 크론, 클라이언트 폴링이 나눠 맡고 크론 sweep은 240초에서 멈춤 |
 | 요청/응답 본문 | 4.5 MB | 큰 영상은 Blob 직접 업로드로 우회. 결과 영상은 Higgsfield URL을 그대로 재생 |
-| Cron | 하루 1회 | 안 씀 (폴링으로 대체) |
+| Cron | 하루 1회 | `vercel.json`을 `0 18 * * *`로 바꿔야 배포됨. 탭을 닫고 웹훅을 놓친 행은 다음 방문이나 다음 날 정리 |
 | Blob | 1 GB 저장, 10 GB 전송/월, 초과 시 차단 | 입력 파일은 생성 후 삭제. 결과 미러링은 끔 |
 | 함수 호출 | 월 100만 | 폴링 한 건당 수십 회. 월 수천 건 생성도 여유 |
 | Active CPU / 메모리 | 4 CPU-hr / 360 GB-hr | 업로드 프록시(≤4 MB)가 가장 무거움. 수천 건 수준이면 충분 |

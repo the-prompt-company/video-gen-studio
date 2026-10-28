@@ -6,7 +6,11 @@
  *   GET  /media/{id}.mp4             deterministic bytes once completed
  *   POST /files/generate-upload-url  then PUT the bytes to upload_url, GET public_url
  *   GET  /_stats, POST /_reset       test hooks, not part of the real API
- *   POST /_config                    test hook: {"mediaDelayMs"?, "storageFailN"?} changes those knobs while running
+ *   POST /_config                    test hook: {"mediaDelayMs"?, "storageFailN"?, "statusFailN"?, "dropWebhooks"?,
+ *                                    "dupWebhooks"?} changes those knobs while running
+ *
+ * Webhooks go to ?hf_webhook=<url> when a request completes. Like Higgsfield, a 5xx or network error is redelivered
+ * (here after FAKE_HF_WEBHOOK_RETRY_MS, doubling, for up to 2 hours) and a 4xx is not.
  *
  * Plus the subset of Supabase Storage that src/lib/storage.ts uses, so SUPABASE_URL can point here too:
  *   POST|PUT /storage/v1/object/{bucket}/{key}   x-upsert honored, sha256 and size kept, writes counted per key
@@ -29,6 +33,8 @@ export type Config = {
   videoFile: string | null;
   mediaDelayMs: number;
   storageFailN: number;
+  statusFailN: number;
+  webhookRetryMs: number;
 };
 
 export function configFromEnv(env: Record<string, string | undefined>): Config {
@@ -43,6 +49,8 @@ export function configFromEnv(env: Record<string, string | undefined>): Config {
     videoFile: env.FAKE_HF_VIDEO_FILE || null,
     mediaDelayMs: Number(env.FAKE_HF_MEDIA_DELAY_MS ?? 0),
     storageFailN: Number(env.FAKE_HF_STORAGE_FAIL_N ?? 0),
+    statusFailN: Number(env.FAKE_HF_STATUS_FAIL_N ?? 0),
+    webhookRetryMs: Number(env.FAKE_HF_WEBHOOK_RETRY_MS ?? 2000),
   };
 }
 
@@ -71,6 +79,9 @@ type Job = {
 };
 
 const EXPIRES_AFTER_S = 7 * 24 * 3600;
+const WEBHOOK_TIMEOUT_MS = 10_000;
+const WEBHOOK_RETRY_WINDOW_MS = 2 * 3600_000;
+const WEBHOOK_RETRY_CAP_MS = 5 * 60_000;
 
 function statusOf(job: Job, now: number): Status {
   if (job.canceledAt !== null) return "canceled";
@@ -97,10 +108,12 @@ function newStats() {
     accepted: { total: 0, byIdempotencyKey: {} as Record<string, number> },
     rejected: { 429: 0, 422: 0 },
     statusPolls: {
+      failed: 0,
       byRequest: {} as Record<string, { total: number; perSecondMax: number }>,
       byApiKey: {} as Record<string, number>,
     },
-    webhooks: { sent: 0, dropped: 0, failed: 0 },
+    /** byRequest lists the HTTP status of every delivery in order, 0 for a network error or timeout. */
+    webhooks: { sent: 0, dropped: 0, failed: 0, retried: 0, byRequest: {} as Record<string, number[]> },
     media: { downloads: 0 },
     storage: {
       failed: 0,
@@ -118,8 +131,10 @@ export function createFakeHiggsfield(config: Config): Server {
   const objects = new Map<string, { contentType: string; bytes: Buffer }>();
   const video = config.videoFile ? readFileSync(config.videoFile) : deterministicBytes(config.videoBytes);
   const videoType = config.videoFile?.endsWith(".webm") ? "video/webm" : "video/mp4";
+  const redeliveries = new Set<NodeJS.Timeout>();
   let stats = newStats();
   let storageWrites = 0;
+  let statusFails = config.statusFailN;
   const server = createHttpServer((req, res) => {
     const started = Date.now();
     res.on("finish", () => console.log(`${req.method} ${req.url} -> ${res.statusCode} ${Date.now() - started}ms`));
@@ -133,6 +148,8 @@ export function createFakeHiggsfield(config: Config): Server {
 
   function reset() {
     for (const job of jobs.values()) if (job.webhookTimer) clearTimeout(job.webhookTimer);
+    for (const t of redeliveries) clearTimeout(t);
+    redeliveries.clear();
     jobs.clear();
     byIdempotencyKey.clear();
     submitsByApiKey.clear();
@@ -141,6 +158,7 @@ export function createFakeHiggsfield(config: Config): Server {
     objects.clear();
     stats = newStats();
     storageWrites = 0;
+    statusFails = config.statusFailN;
   }
 
   function json(res: ServerResponse, status: number, body: unknown, headers: Record<string, string> = {}) {
@@ -176,7 +194,7 @@ export function createFakeHiggsfield(config: Config): Server {
     return body;
   }
 
-  async function fireWebhook(job: Job) {
+  function fireWebhook(job: Job) {
     job.webhookTimer = null;
     if (!job.webhookUrl) return;
     if (Math.random() < config.dropWebhooks) {
@@ -184,22 +202,39 @@ export function createFakeHiggsfield(config: Config): Server {
       return;
     }
     const { status, video: videoUrl, expires_at } = statusBody(job, Date.now());
-    const payload = { request_id: job.id, status, error: null, payload: { video: videoUrl }, expires_at };
-    for (let i = 0; i < (config.dupWebhooks ? 2 : 1); i++) {
-      try {
-        const r = await fetch(job.webhookUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        if (r.ok) stats.webhooks.sent++;
-        else stats.webhooks.failed++;
-        console.log(`webhook ${job.id} -> ${job.webhookUrl} ${r.status}`);
-      } catch (e) {
-        stats.webhooks.failed++;
-        console.log(`webhook ${job.id} -> ${job.webhookUrl} failed: ${e instanceof Error ? e.message : e}`);
-      }
+    const payload = JSON.stringify({ request_id: job.id, status, error: null, payload: { video: videoUrl }, expires_at });
+    for (let i = 0; i < (config.dupWebhooks ? 2 : 1); i++) void deliver(job.id, job.webhookUrl, payload, Date.now(), 1);
+  }
+
+  async function deliver(requestId: string, url: string, payload: string, firstAt: number, attempt: number) {
+    let status = 0;
+    try {
+      const r = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: payload,
+        signal: AbortSignal.timeout(WEBHOOK_TIMEOUT_MS),
+      });
+      status = r.status;
+      console.log(`webhook ${requestId} -> ${url} ${status}`);
+    } catch (e) {
+      console.log(`webhook ${requestId} -> ${url} failed: ${e instanceof Error ? e.message : e}`);
     }
+    (stats.webhooks.byRequest[requestId] ??= []).push(status);
+    if (status >= 200 && status < 300) {
+      stats.webhooks.sent++;
+      return;
+    }
+    stats.webhooks.failed++;
+    const delay = Math.min(config.webhookRetryMs * 2 ** (attempt - 1), WEBHOOK_RETRY_CAP_MS);
+    if ((status !== 0 && status < 500) || Date.now() + delay - firstAt > WEBHOOK_RETRY_WINDOW_MS) return;
+    stats.webhooks.retried++;
+    const timer = setTimeout(() => {
+      redeliveries.delete(timer);
+      void deliver(requestId, url, payload, firstAt, attempt + 1);
+    }, delay);
+    timer.unref();
+    redeliveries.add(timer);
   }
 
   function readBody(req: IncomingMessage): Promise<string> {
@@ -291,13 +326,19 @@ export function createFakeHiggsfield(config: Config): Server {
       return json(res, 200, { ok: true });
     }
     if (method === "POST" && path === "/_config") {
-      const patch = JSON.parse((await readBody(req)) || "{}") as Partial<Pick<Config, "mediaDelayMs" | "storageFailN">>;
+      const patch = JSON.parse((await readBody(req)) || "{}") as Partial<
+        Pick<Config, "mediaDelayMs" | "storageFailN" | "statusFailN" | "dropWebhooks" | "dupWebhooks">
+      >;
       if (typeof patch.mediaDelayMs === "number") config.mediaDelayMs = patch.mediaDelayMs;
       if (typeof patch.storageFailN === "number") {
         config.storageFailN = patch.storageFailN;
         storageWrites = 0;
       }
-      return json(res, 200, { mediaDelayMs: config.mediaDelayMs, storageFailN: config.storageFailN });
+      if (typeof patch.statusFailN === "number") statusFails = config.statusFailN = patch.statusFailN;
+      if (typeof patch.dropWebhooks === "number") config.dropWebhooks = patch.dropWebhooks;
+      if (typeof patch.dupWebhooks === "boolean") config.dupWebhooks = patch.dupWebhooks;
+      const { mediaDelayMs, storageFailN, statusFailN, dropWebhooks, dupWebhooks } = config;
+      return json(res, 200, { mediaDelayMs, storageFailN, statusFailN, dropWebhooks, dupWebhooks });
     }
 
     const publicObject = path.match(/^\/storage\/v1\/object\/public\/([^/]+)\/(.+)$/);
@@ -372,6 +413,11 @@ export function createFakeHiggsfield(config: Config): Server {
       if (!job) return json(res, 404, { detail: "Request not found" });
       if (request[2] === "status" && method === "GET") {
         countPoll(job, apiKey);
+        if (statusFails > 0) {
+          statusFails--;
+          stats.statusPolls.failed++;
+          return json(res, 503, { detail: "fake status refused this call" });
+        }
         return json(res, 200, statusBody(job, Date.now()));
       }
       if (request[2] === "cancel" && method === "POST") {

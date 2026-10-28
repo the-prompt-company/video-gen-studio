@@ -2,39 +2,50 @@
  * Checks the promises of src/lib/generations.ts against a fake Higgsfield and the .env.local database.
  *
  *   npx dotenv -e .env.local -- tsx scripts/lifecycle-check.ts
+ *   npx dotenv -e .env.local -- tsx scripts/lifecycle-check.ts --triggers
  *   HIGGSFIELD_BASE_URL=http://localhost:4010 SUPABASE_URL=http://localhost:4010 SUPABASE_SERVICE_ROLE_KEY=fake npx dotenv -e .env.local -- tsx scripts/lifecycle-check.ts
  *   HIGGSFIELD_BASE_URL=http://localhost:4010 npx dotenv -e .env.local -- tsx scripts/lifecycle-check.ts --measure http://localhost:3100
  *
  * Without HIGGSFIELD_BASE_URL it starts its own fake (scripts/fake-higgsfield.ts). The copy checks upload to the same
  * fake's Supabase Storage subset: SUPABASE_URL is set to the fake when unset and refused when it points anywhere else.
  * The rows it creates belong to ADMIN_USERNAME, whose Higgsfield key must be set (the fake accepts any key), carry
- * prompts starting with "GP-4 ", and are deleted before it exits. It exits non-zero at the first failed check.
- * The stalled-copy check waits out the 240 s fetch timeout, so a full run takes about six minutes.
+ * prompts starting with "GP-5 ", and are deleted before it exits. It exits non-zero at the first failed check.
+ * The stalled-copy check waits out the 240 s fetch timeout, so a full run takes about seven minutes.
  * If the test model's price is 0 it sets 0.0123 USD/s for the cost check and restores the stored price afterwards.
+ *
+ * The webhook and sweep checks (--triggers runs only those) point PUBLIC_BASE_URL at a receiver inside this process
+ * that answers like src/app/api/hooks/higgsfield/route.ts, so the fake's webhooks reach the owner without a server.
+ * The earlier checks run with PUBLIC_BASE_URL unset, because a webhook would add status calls they count.
+ * sweep settles every due row in the database, so each sweep check first refuses to run while any row this run did
+ * not create could be due.
  *
  * --measure <base> inserts 15 live rows, keeps /playground of the app at <base> open for 60 s in a headless browser
  * (Playwright from the verify-video-gen-studio skill), and prints the app requests and the fake's status calls.
  * The app at <base> must use the same HIGGSFIELD_BASE_URL, and the fake's FAKE_HF_DURATION_MS must outlast the window.
  */
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createServer, type IncomingHttpHeaders, type IncomingMessage, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { eq, inArray, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, isNotNull, isNull, notInArray, or, sql } from "drizzle-orm";
 import { getDb, schema } from "../src/db";
 import type { Generation, User } from "../src/db/schema";
 import { coerceParams, findModel } from "../src/lib/catalog";
-import { isLive } from "../src/lib/generation-status";
-import { configFromEnv, createFakeHiggsfield } from "./fake-higgsfield";
+import { signToken } from "../src/lib/crypto";
+import { isLive, LIVE_STATUSES } from "../src/lib/generation-status";
+import { configFromEnv, createFakeHiggsfield, type Config } from "./fake-higgsfield";
 
 type Owner = typeof import("../src/lib/generations");
 type Proxy = ReturnType<typeof startProxy>;
+type Hooks = ReturnType<typeof startHookReceiver>;
 type Stats = {
   statusPolls: { byRequest: Record<string, { total: number; perSecondMax: number }>; byApiKey: Record<string, number> };
+  webhooks: { sent: number; dropped: number; failed: number; retried: number; byRequest: Record<string, number[]> };
   media: { downloads: number };
   storage: { byKey: Record<string, { writes: number; size: number; sha256: string }> };
 };
+type Knobs = Partial<Pick<Config, "mediaDelayMs" | "storageFailN" | "statusFailN" | "dropWebhooks" | "dupWebhooks">>;
 type Schedule = (task: () => Promise<void>) => void;
 type BrowserResponse = { url(): string; status(): number; request(): { method(): string } };
 type BrowserPage = {
@@ -52,7 +63,9 @@ type Chromium = {
   }>;
 };
 
-const TAG = "GP-4 ";
+const TAG = "GP-5 ";
+const SWEEP_BUDGET_MS = 240_000;
+const HOOK_HTTP = { done: 204, unauthorized: 401, retry: 503 } as const;
 const MODEL = "minimax/hailuo-2.3/standard/image-to-video";
 const CHECK_GAP_MS = 15_000;
 const MIRROR_LEASE_S = 360;
@@ -166,7 +179,7 @@ async function providerReaches(upstream: string, requestId: string, want: string
   }
 }
 
-async function setFake(upstream: string, knobs: { mediaDelayMs?: number }): Promise<void> {
+async function setFake(upstream: string, knobs: Knobs): Promise<void> {
   await fetch(`${upstream}/_config`, { method: "POST", body: JSON.stringify(knobs) });
 }
 
@@ -476,6 +489,359 @@ async function stalledCopy(owner: Owner, admin: User, upstream: string) {
   );
 }
 
+/** Answers webhooks the way src/app/api/hooks/higgsfield/route.ts does, with a recorder in place of after(). */
+function startHookReceiver(owner: Owner) {
+  const rec = recorder();
+  const server = createServer(async (req, res) => {
+    await readAll(req);
+    try {
+      const outcome = await owner.onProviderHook(new URL(req.url ?? "/", "http://receiver.local"), rec.schedule);
+      res.writeHead(HOOK_HTTP[outcome]).end();
+    } catch (e) {
+      console.error(`hook receiver: ${e instanceof Error ? e.message : e}`);
+      res.writeHead(500).end();
+    }
+  });
+  return { server, rec };
+}
+
+function hookUrlFor(id: string, token = signToken("hf-hook", id)): URL {
+  return new URL(`${process.env.PUBLIC_BASE_URL}/api/hooks/higgsfield?g=${id}&t=${token}`);
+}
+
+function statusCalls(s: Stats, requestId: string | null): number {
+  return s.statusPolls.byRequest[requestId ?? ""]?.total ?? 0;
+}
+
+/** The HTTP status of each webhook delivery for one request, in order, once there are at least `n`. */
+async function deliveries(upstream: string, requestId: string, n: number, withinMs: number): Promise<number[]> {
+  const until = Date.now() + withinMs;
+  for (;;) {
+    const codes = (await stats(upstream)).webhooks.byRequest[requestId] ?? [];
+    if (codes.length >= n) return codes;
+    if (Date.now() > until) throw new Error(`FAIL request ${requestId} got ${codes.length} of ${n} webhook deliveries in ${withinMs} ms`);
+    await sleep(250);
+  }
+}
+
+async function withKnobs<T>(upstream: string, knobs: Knobs, reset: Knobs, run: () => Promise<T>): Promise<T> {
+  await setFake(upstream, knobs);
+  try {
+    return await run();
+  } finally {
+    await setFake(upstream, reset);
+  }
+}
+
+async function submitWithoutHook(owner: Owner, admin: User, label: string): Promise<Generation> {
+  const base = process.env.PUBLIC_BASE_URL;
+  delete process.env.PUBLIC_BASE_URL;
+  try {
+    return await submit(owner, admin, label);
+  } finally {
+    process.env.PUBLIC_BASE_URL = base;
+  }
+}
+
+async function removeCreated(): Promise<number> {
+  if (created.length === 0) return 0;
+  const g = schema.generations;
+  const removed = await getDb().delete(g).where(inArray(g.id, created)).returning({ id: g.id });
+  created.length = 0;
+  return removed.length;
+}
+
+/**
+ * sweep settles every due row of every user, and a row the fake does not know turns failed. Refuse to sweep while a
+ * row this run did not create is live with a request id, or is an unstored, unexpired result, whatever its clocks say.
+ */
+async function assertSweepScope(): Promise<void> {
+  const g = schema.generations;
+  const foreign = await getDb()
+    .select({ id: g.id, status: g.status, prompt: g.prompt })
+    .from(g)
+    .where(
+      and(
+        isNotNull(g.requestId),
+        or(
+          inArray(g.status, LIVE_STATUSES),
+          and(eq(g.status, "completed"), isNull(g.storagePath), isNotNull(g.resultUrl), or(isNull(g.expiresAt), gt(g.expiresAt, sql`now()`))),
+        ),
+        created.length > 0 ? notInArray(g.id, created) : undefined,
+      ),
+    );
+  if (foreign.length > 0) {
+    const sample = foreign.slice(0, 5).map((r) => `${r.id} ${r.status} "${r.prompt.slice(0, 30)}"`).join("; ");
+    throw new Error(`FAIL refusing to sweep: ${foreign.length} rows this run did not create could be due: ${sample}`);
+  }
+}
+
+function sweepDeadline() {
+  return { deadline: Date.now() + SWEEP_BUDGET_MS };
+}
+
+async function hookRefusals(owner: Owner, admin: User, proxy: Proxy) {
+  const row = await submitWithoutHook(owner, admin, "훅 거절");
+  const [bare] = await getDb()
+    .insert(schema.generations)
+    .values({ userId: admin.id, modelId: MODEL, prompt: `${TAG}request_id 없는 행의 훅`, status: "in_progress", durationS: 6, costUsd: "0" })
+    .returning();
+  created.push(bare.id);
+  const before = proxy.requests();
+  const token = signToken("hf-hook", row.id);
+  const tampered = `${token.slice(0, -1)}${token.endsWith("A") ? "B" : "A"}`;
+  const post = (url: URL) => fetch(url, { method: "POST", body: JSON.stringify({ status: "completed" }) }).then((r) => r.status);
+  const refused = [await post(hookUrlFor(row.id, tampered)), await post(hookUrlFor(row.id, signToken("hf-hook", bare.id)))];
+  check(refused.every((c) => c === 401), "a webhook with a tampered token, or with another row's token, gets 401", refused.join(","));
+  const noRequestId = await post(hookUrlFor(bare.id));
+  check(noRequestId === 503, "a webhook for a live row without request_id gets 503, so Higgsfield delivers it again");
+  const notInserted = await owner.onProviderHook(hookUrlFor(randomUUID()), recorder().schedule);
+  check(notInserted === "retry", "a webhook for a row that is not inserted yet asks for redelivery", notInserted);
+  const after = await readRow(row.id);
+  check(
+    proxy.requests() === before && after.status === row.status && after.nextCheckAt.getTime() === row.nextCheckAt.getTime(),
+    "none of them made a Higgsfield call or wrote the row",
+    `${proxy.requests() - before} requests`,
+  );
+}
+
+async function oneWebhookNoPoll(owner: Owner, admin: User, upstream: string, hooks: Hooks) {
+  const before = hooks.rec.tasks.length;
+  const row = await submit(owner, admin, "웹훅 한 번, 폴링 없음");
+  const codes = await deliveries(upstream, row.requestId ?? "", 1, 20_000);
+  await Promise.all(hooks.rec.tasks);
+  const final = await readRow(row.id);
+  const price = await owner.priceFor(final.modelId);
+  check(
+    codes.join() === "204" && final.status === "completed" && final.storagePath === `${row.id}.mp4`,
+    "with no poll at all, one webhook completes the row and its after() copy stores it",
+    `deliveries ${codes.join(",")}`,
+  );
+  check(
+    statusCalls(await stats(upstream), row.requestId) === 1 && hooks.rec.tasks.length - before === 1,
+    "the fake saw only the hook's one status call, and the follow-up was scheduled once",
+  );
+  check(price > 0 && final.costUsd === (price * final.durationS).toFixed(4), "the webhook recorded cost_usd as price × duration", `${final.costUsd}`);
+}
+
+async function duplicateWebhooks(owner: Owner, admin: User, upstream: string, hooks: Hooks) {
+  await withKnobs(upstream, { dupWebhooks: true }, { dupWebhooks: false }, async () => {
+    const before = hooks.rec.tasks.length;
+    const row = await submit(owner, admin, "중복 웹훅");
+    const codes = await deliveries(upstream, row.requestId ?? "", 2, 20_000);
+    await Promise.all(hooks.rec.tasks);
+    const final = await readRow(row.id);
+    check(codes.join() === "204,204", "both deliveries of a duplicated webhook get 204", codes.join(","));
+    check(
+      hooks.rec.tasks.length - before === 1 && final.mirrorAttempts === 1 && (await writesOf(upstream, row.id)) === 1,
+      "the two webhooks made one transition: one follow-up, one copy claim, one upload",
+      `${hooks.rec.tasks.length - before} follow-up, completed_at ${final.completedAt?.toISOString()}`,
+    );
+  });
+}
+
+/**
+ * Another caller completes the row after the webhook read it and before the webhook's forced claim: a row lock holds
+ * the claim while the row moves, as when a duplicate delivery loses the race. The webhook must judge the row as it
+ * stands, not as it read it.
+ */
+async function hookAfterAnotherCallerFinished(owner: Owner, admin: User, upstream: string) {
+  await withKnobs(upstream, { dropWebhooks: 1 }, { dropWebhooks: 0 }, async () => {
+    const row = await submit(owner, admin, "읽은 뒤 다른 호출자가 끝낸 행의 훅");
+    const callsBefore = statusCalls(await stats(upstream), row.requestId);
+    const pending: Promise<string>[] = [];
+    await getDb().transaction(async (tx) => {
+      await tx.execute(sql`select id from generations where id = ${row.id} for update`);
+      pending.push(owner.onProviderHook(hookUrlFor(row.id), recorder().schedule));
+      await sleep(1000);
+      await tx.execute(sql`update generations set status = 'completed', completed_at = now() where id = ${row.id}`);
+    });
+    const outcome = await pending[0];
+    check(outcome === "done", "a webhook whose row another caller completed between its read and its claim answers done, not 503", outcome);
+    check(statusCalls(await stats(upstream), row.requestId) === callsBefore, "and asks Higgsfield nothing");
+  });
+}
+
+async function redeliveryAfter503(owner: Owner, admin: User, upstream: string, hooks: Hooks) {
+  await withKnobs(upstream, { statusFailN: 1 }, { statusFailN: 0 }, async () => {
+    const row = await submit(owner, admin, "503 뒤 재전송");
+    const codes = await deliveries(upstream, row.requestId ?? "", 2, 30_000);
+    await Promise.all(hooks.rec.tasks);
+    const final = await readRow(row.id);
+    check(
+      codes.join() === "503,204" && final.status === "completed" && final.storagePath === `${row.id}.mp4`,
+      "a webhook whose status call fails gets 503, and the redelivery completes and stores the row",
+      codes.join(","),
+    );
+  });
+}
+
+async function sweepTicks(owner: Owner, admin: User, upstream: string) {
+  await withKnobs(upstream, { dropWebhooks: 1 }, { dropWebhooks: 0 }, async () => {
+    const rows = await Promise.all(Array.from({ length: 5 }, (_, i) => submit(owner, admin, `웹훅 유실 ${i + 1}/5`)));
+    await assertSweepScope();
+    const tick1 = Date.now();
+    const [a, b] = await Promise.all([owner.sweep(sweepDeadline()), owner.sweep(sweepDeadline())]);
+    const s1 = await stats(upstream);
+    const calls = rows.map((r) => statusCalls(s1, r.requestId));
+    check(
+      calls.every((n) => n === 1) && a.checked + b.checked === rows.length,
+      "two overlapping sweeps asked Higgsfield once per row",
+      `status calls ${calls.join(",")}, checked ${a.checked} + ${b.checked}`,
+    );
+    const live = (await Promise.all(rows.map((r) => readRow(r.id)))).filter((g) => isLive(g.status)).length;
+    await Promise.all(rows.map((r) => providerReaches(upstream, r.requestId ?? "", "completed", 12_000)));
+    await sleep(Math.max(0, tick1 + CHECK_GAP_MS + 1000 - Date.now()));
+    await assertSweepScope();
+    const tick2 = await owner.sweep(sweepDeadline());
+    const final = await Promise.all(rows.map((r) => readRow(r.id)));
+    const dropped = (await stats(upstream)).webhooks.dropped;
+    const writes = await Promise.all(rows.map((r) => writesOf(upstream, r.id)));
+    check(
+      final.every((g) => g.status === "completed" && g.storagePath === `${g.id}.mp4`) && dropped >= rows.length,
+      "with every webhook dropped, the next sweep completes and stores every row",
+      JSON.stringify(tick2),
+    );
+    check(writes.every((n) => n === 1), "each row was uploaded once", `writes ${writes.join(",")}`);
+    check(
+      tick2.checked === live && tick2.moved === live && tick2.stored === live && a.failures + b.failures + tick2.failures === 0 && !tick2.truncated,
+      `that sweep reports checked, moved and stored ${live}, no failure, and truncated false`,
+    );
+  });
+}
+
+/**
+ * The poll claims the check and asks first, but its answer is held until the webhook has completed the row, so the
+ * poll's apply matches zero rows. Only the caller that moved the row may schedule the follow-up.
+ */
+async function pollAnsweredAfterHook(owner: Owner, admin: User, upstream: string, proxy: Proxy) {
+  await withKnobs(upstream, { dropWebhooks: 1 }, { dropWebhooks: 0 }, async () => {
+    const row = await submit(owner, admin, "웹훅 뒤에 도착한 폴링 답");
+    const requestId = row.requestId ?? "";
+    await providerReaches(upstream, requestId, "completed", 12_000);
+    const rec = recorder();
+    const held = proxy.hold(requestId);
+    const late = owner.settle(row, rec.schedule);
+    await held.arrival;
+    const hook = await owner.onProviderHook(hookUrlFor(row.id), rec.schedule);
+    held.release();
+    const polled = await late;
+    await Promise.all(rec.tasks);
+    const final = await readRow(row.id);
+    check(
+      hook === "done" && polled.status === "completed" && polled.completedAt?.getTime() === final.completedAt?.getTime(),
+      "a poll answer that arrives after the webhook completed the row returns the row as it stands, completed_at unchanged",
+    );
+    check(
+      rec.tasks.length === 1 && final.mirrorAttempts === 1 && (await writesOf(upstream, row.id)) === 1,
+      "only the webhook, which moved the row, scheduled the follow-up: one follow-up, one copy claim, one upload",
+      `${rec.tasks.length} follow-ups`,
+    );
+  });
+}
+
+async function hookPollSweepRace(owner: Owner, admin: User, upstream: string) {
+  await withKnobs(upstream, { dropWebhooks: 1 }, { dropWebhooks: 0 }, async () => {
+    const row = await submit(owner, admin, "훅, 폴링, sweep 동시");
+    await providerReaches(upstream, row.requestId ?? "", "completed", 12_000);
+    await assertSweepScope();
+    const rec = recorder();
+    const [hook, polled, report] = await Promise.all([
+      owner.onProviderHook(hookUrlFor(row.id), rec.schedule),
+      owner.settle(row, rec.schedule),
+      owner.sweep(sweepDeadline()),
+    ]);
+    await Promise.all(rec.tasks);
+    const final = await readRow(row.id);
+    const stamps = new Set([polled, final].filter((g) => g.status === "completed").map((g) => g.completedAt?.toISOString()));
+    check(
+      hook === "done" && final.status === "completed" && stamps.size === 1,
+      "a webhook, a poll and a sweep on the same finished row end completed with one completed_at",
+      `hook ${hook}, poll returned ${polled.status}, sweep moved ${report.moved}`,
+    );
+    check(
+      rec.tasks.length <= 1 && final.storagePath === `${row.id}.mp4` && (await writesOf(upstream, row.id)) === 1 && report.failures === 0,
+      "and the row was uploaded once",
+      `${rec.tasks.length} follow-up from the hook or the poll`,
+    );
+  });
+}
+
+async function sweepCopies(owner: Owner, admin: User, upstream: string) {
+  await withKnobs(upstream, { dropWebhooks: 1 }, { dropWebhooks: 0, storageFailN: 0 }, async () => {
+    const [alone, raced, failing] = await Promise.all([
+      completedWithoutCopy(owner, admin, "sweep 복사: after() 복사가 사라진 행"),
+      completedWithoutCopy(owner, admin, "sweep 복사: after() 복사와 경쟁"),
+      completedWithoutCopy(owner, admin, "sweep 복사: 실패 뒤 재시도"),
+    ]);
+    await setFake(upstream, { storageFailN: 1 });
+    const failed = await owner.storeVideo(failing);
+    if (!failed.mirrorError || failed.storagePath) throw new Error("FAIL setup: the first copy did not fail");
+    await getDb().execute(sql`update generations set mirror_next_at = now() where id = ${failing.id}`);
+    const [mock] = await getDb()
+      .insert(schema.generations)
+      .values({
+        userId: admin.id,
+        modelId: MODEL,
+        prompt: `${TAG}목업 모양 완료 행`,
+        status: "completed",
+        resultUrl: "/mock/result-landscape.webm",
+        durationS: 6,
+        costUsd: "0",
+        completedAt: new Date(),
+      })
+      .returning();
+    created.push(mock.id);
+    await assertSweepScope();
+    const [, report] = await Promise.all([owner.storeVideo(raced), owner.sweep(sweepDeadline())]);
+    await owner.storeVideo(mock);
+    const [a, r, f, m] = await Promise.all([alone, raced, failing, mock].map((g) => readRow(g.id)));
+    check(a.storagePath === `${a.id}.mp4` && a.mirrorAttempts === 1, "the sweep copies a completed row whose after() copy never ran");
+    check(
+      r.storagePath === `${r.id}.mp4` && r.mirrorAttempts === 1 && (await writesOf(upstream, r.id)) === 1,
+      "a sweep racing an after() copy of the same row uploads it once",
+    );
+    check(
+      f.storagePath === `${f.id}.mp4` && f.mirrorError === null && f.mirrorAttempts === 2,
+      "the sweep retries a failed copy once its lease ran out, and clears mirror_error",
+    );
+    const mockVideo = owner.publicGeneration(m).video;
+    check(
+      m.storagePath === null && m.mirrorAttempts === 0 && m.mirrorError === null && (await writesOf(upstream, m.id)) === 0,
+      "a completed row without request_id (the mock shape) is claimed by neither the sweep nor a direct storeVideo",
+    );
+    check(mockVideo?.kind === "provider" && !mockVideo.storing, "and it promises no copy, so the playground does not keep polling it");
+    check(report.failures === 0 && report.stored >= 2 && !report.truncated, "the sweep reports the copies and no failure", JSON.stringify(report));
+  });
+}
+
+async function sweepPastDeadline(owner: Owner, admin: User, upstream: string) {
+  await withKnobs(upstream, { dropWebhooks: 1 }, { dropWebhooks: 0 }, async () => {
+    const row = await submit(owner, admin, "deadline 지난 sweep");
+    await assertSweepScope();
+    const report = await owner.sweep({ deadline: Date.now() - 1 });
+    check(
+      report.truncated && report.checked === 0 && statusCalls(await stats(upstream), row.requestId) === 0,
+      "a sweep past its deadline starts no row and reports truncated",
+      JSON.stringify(report),
+    );
+  });
+}
+
+async function triggerChecks(owner: Owner, admin: User, upstream: string, proxy: Proxy, hooks: Hooks) {
+  await hookRefusals(owner, admin, proxy);
+  await withKnownPrice(MODEL, () => oneWebhookNoPoll(owner, admin, upstream, hooks));
+  await duplicateWebhooks(owner, admin, upstream, hooks);
+  await hookAfterAnotherCallerFinished(owner, admin, upstream);
+  await redeliveryAfter503(owner, admin, upstream, hooks);
+  await pollAnsweredAfterHook(owner, admin, upstream, proxy);
+  console.log(`removed ${await removeCreated()} ${TAG.trim()} rows before the sweep checks, so every due row is this run's`);
+  await sweepTicks(owner, admin, upstream);
+  await hookPollSweepRace(owner, admin, upstream);
+  await sweepCopies(owner, admin, upstream);
+  await sweepPastDeadline(owner, admin, upstream);
+}
+
 async function measure(owner: Owner, admin: User, upstream: string, base: string) {
   const rows = Number(process.env.MEASURE_ROWS ?? 15);
   const seconds = Number(process.env.MEASURE_SECONDS ?? 60);
@@ -554,29 +920,36 @@ async function main() {
     }
   }
   process.env.HIGGSFIELD_BASE_URL = proxy ? await listen(proxy.server) : upstream;
+  delete process.env.PUBLIC_BASE_URL;
+  delete process.env.VERCEL_PROJECT_PRODUCTION_URL;
   const owner: Owner = await import("../src/lib/generations");
   const admin = await adminUser();
   console.log(`fake ${ownFake ? `in-process at ${upstream}` : upstream}, owner talks to ${process.env.HIGGSFIELD_BASE_URL}`);
+  let hooks: Hooks | null = null;
   try {
     if (!proxy) {
       await measure(owner, admin, upstream, base ?? "");
     } else {
-      await withKnownPrice(MODEL, () => fiftyCallers(owner, admin, upstream));
-      await reversedObservations(owner, admin, upstream, proxy);
-      await cancelRaces(owner, admin, upstream);
-      await cancelAfterAnotherCallerFinished(owner, admin, upstream);
-      await rowWithoutRequestId(owner, admin, proxy);
-      await copyOnCompletion(owner, admin, upstream);
-      await tenConcurrentCopies(owner, admin, upstream);
-      await storageOff(owner, admin, upstream);
-      await stalledCopy(owner, admin, upstream);
+      if (!process.argv.includes("--triggers")) {
+        await withKnownPrice(MODEL, () => fiftyCallers(owner, admin, upstream));
+        await reversedObservations(owner, admin, upstream, proxy);
+        await cancelRaces(owner, admin, upstream);
+        await cancelAfterAnotherCallerFinished(owner, admin, upstream);
+        await rowWithoutRequestId(owner, admin, proxy);
+        await copyOnCompletion(owner, admin, upstream);
+        await tenConcurrentCopies(owner, admin, upstream);
+        await storageOff(owner, admin, upstream);
+        await stalledCopy(owner, admin, upstream);
+      }
+      hooks = startHookReceiver(owner);
+      process.env.PUBLIC_BASE_URL = await listen(hooks.server);
+      console.log(`webhooks go to the receiver at ${process.env.PUBLIC_BASE_URL}`);
+      await triggerChecks(owner, admin, upstream, proxy, hooks);
       console.log(`all checks passed (${proxy.requests()} Higgsfield requests went through the counter)`);
     }
   } finally {
-    const removed = created.length
-      ? await getDb().delete(schema.generations).where(inArray(schema.generations.id, created)).returning({ id: schema.generations.id })
-      : [];
-    console.log(`removed ${removed.length} ${TAG.trim()} rows`);
+    console.log(`removed ${await removeCreated()} ${TAG.trim()} rows`);
+    hooks?.server.close();
     proxy?.server.close();
     ownFake?.close();
   }
