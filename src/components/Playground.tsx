@@ -5,7 +5,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ModelSpec, ParamSpec } from "@/lib/catalog";
 import { defaultParams } from "@/lib/catalog";
 import type { PublicGeneration } from "@/lib/generations";
-import { usd, STATUS_LABEL, shortModel } from "@/lib/format";
+import { usd, shortModel } from "@/lib/format";
+import { isLive, STATUS_LABEL } from "@/lib/generation-status";
 import { Button, ErrorText, Field, Input, Select, Textarea } from "@/components/ui";
 import { StatusBadge } from "@/components/StatusBadge";
 
@@ -41,7 +42,6 @@ function readImageSize(file: File): Promise<{ w: number; h: number } | null> {
 const SMALL = 4 * 1024 * 1024;
 const MAX_IMAGES = 6;
 const MAX_VIDEOS = 3;
-const LIVE = new Set(["queued", "in_progress"]);
 const FEED_LIMIT = 12;
 
 async function uploadFile(file: File, largeUploads: boolean): Promise<string> {
@@ -152,10 +152,10 @@ const I = {
 };
 
 function FeedItem({ g, index, total, active, now, modelName }: { g: PublicGeneration; index: number; total: number; active: boolean; now: number; modelName: string }) {
-  const live = LIVE.has(g.status);
+  const live = isLive(g.status);
   const started = new Date(g.createdAt).getTime();
   const took = g.completedAt ? new Date(g.completedAt).getTime() - started : now - started;
-  const label = STATUS_LABEL[g.status] ?? g.status;
+  const label = STATUS_LABEL[g.status];
   return (
     <article data-id={g.id} aria-current={active ? "true" : undefined} aria-label={`${index + 1}번째 결과: ${label}`} className="relative flex h-[calc(100%_-_72px)] w-full flex-col overflow-hidden bg-surface lg:block">
       {/* Peek strip: what shows when this item waits one snap below. */}
@@ -375,7 +375,7 @@ export function Playground({ models, hasApiKey, largeUploads, galleryCount }: { 
       .finally(() => setLoaded(true));
   }, []);
 
-  const liveIds = useMemo(() => items.filter((i) => LIVE.has(i.status)).map((i) => i.id), [items]);
+  const liveIds = useMemo(() => items.filter((i) => isLive(i.status)).map((i) => i.id), [items]);
   const liveKey = liveIds.join(",");
 
   // Poll every live item with backoff (2s → ×1.5 → cap 10s), as Higgsfield recommends.

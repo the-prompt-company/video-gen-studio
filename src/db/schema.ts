@@ -10,6 +10,7 @@ import {
   uuid,
   index,
 } from "drizzle-orm/pg-core";
+import { GENERATION_STATUSES } from "../lib/generation-status";
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -44,11 +45,7 @@ export const generations = pgTable(
     params: jsonb("params").$type<Record<string, unknown>>().notNull().default({}),
     imageRefs: jsonb("image_refs").$type<string[]>().notNull().default([]),
     videoRefs: jsonb("video_refs").$type<string[]>().notNull().default([]),
-    status: text("status", {
-      enum: ["queued", "in_progress", "completed", "failed", "nsfw", "canceled"],
-    })
-      .notNull()
-      .default("queued"),
+    status: text("status", { enum: GENERATION_STATUSES }).notNull().default("queued"),
     requestId: text("request_id"),
     resultUrl: text("result_url"),
     blobUrl: text("blob_url"),
@@ -68,4 +65,3 @@ export const generations = pgTable(
 export type User = typeof users.$inferSelect;
 export type Model = typeof models.$inferSelect;
 export type Generation = typeof generations.$inferSelect;
-export type GenerationStatus = Generation["status"];
