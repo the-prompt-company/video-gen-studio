@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { cookies } from "next/headers";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
@@ -61,7 +62,8 @@ export async function requireAdmin() {
 
 export function errorResponse(e: unknown): Response {
   if (e instanceof HttpError) return Response.json({ error: e.message }, { status: e.status });
-  const msg = e instanceof Error ? e.message : String(e);
-  console.error(e);
-  return Response.json({ error: msg }, { status: 500 });
+  // An unexpected error can carry SQL text or server paths. The browser gets a reference; the log keeps the detail.
+  const ref = randomUUID().slice(0, 8);
+  console.error(JSON.stringify({ evt: "unhandled_error", ref, error: e instanceof Error ? (e.stack ?? e.message) : String(e) }));
+  return Response.json({ error: `서버 오류가 발생했습니다 (참조 ${ref})` }, { status: 500 });
 }
