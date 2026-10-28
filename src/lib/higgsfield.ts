@@ -8,7 +8,7 @@
  * Outputs are deleted 7 days after the request finishes (`expires_at`).
  */
 
-const BASE = "https://api.higgsfield.ai";
+const BASE = process.env.HIGGSFIELD_BASE_URL || "https://api.higgsfield.ai"; // "" (a copied .env.example) means unset
 
 export type HfStatus = "queued" | "in_progress" | "completed" | "failed" | "nsfw" | "canceled";
 

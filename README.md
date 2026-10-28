@@ -31,11 +31,34 @@ Higgsfield API 위에 올린 팀용 영상 생성 사이트. Next.js 16 (App Rou
 ```bash
 cd web
 npm install
-cp .env.example .env.local      # DATABASE_URL(Supabase pooler URI), AUTH_SECRET, (선택) BLOB_READ_WRITE_TOKEN, ADMIN_*
+cp .env.example .env.local      # DATABASE_URL(Supabase pooler URI), AUTH_SECRET, ADMIN_*, (선택) BLOB_READ_WRITE_TOKEN, HIGGSFIELD_BASE_URL
 npm run db:migrate              # drizzle/ 의 SQL 적용
 npm run db:seed                 # 모델 행 + ADMIN_USERNAME/ADMIN_PASSWORD 관리자
 npm run dev
 ```
+
+### 가짜 Higgsfield로 돌리기
+
+API 키 없이 생성 흐름을 끝까지 보려면 `scripts/fake-higgsfield.ts`를 띄우고 앱이 그쪽을 보게 합니다. 실제 API와 같은 경로와 응답 모양(`POST /{model_id}`, `GET /requests/{id}/status`, `POST /requests/{id}/cancel`, `Idempotency-Key`)을 씁니다.
+
+```bash
+npm run fake:hf                                        # fake higgsfield on http://localhost:4010
+HIGGSFIELD_BASE_URL=http://localhost:4010 npm run dev  # 또는 .env.local에 적기
+```
+
+어드민에서 사용자에게 `fake:key` 같은 임의의 `id:secret` 문자열을 API 키로 넣으면 생성하기가 동작합니다. 요청은 `FAKE_HF_DURATION_MS`(기본 `3000-8000`) 안에 대기 → 생성 중 → 완료로 바뀌고 결과 영상은 가짜 서버의 `/media/{id}.mp4`(`FAKE_HF_VIDEO_BYTES`, 기본 2 MB)입니다. `HIGGSFIELD_BASE_URL`을 비우면 실제 `https://api.higgsfield.ai`로 갑니다.
+
+| 환경 변수 | 기본 | 동작 |
+|---|---|---|
+| `FAKE_HF_PORT` | `4010` | 포트 |
+| `FAKE_HF_DURATION_MS` | `3000-8000` | 제출부터 완료까지 걸리는 시간(범위 또는 고정값) |
+| `FAKE_HF_429_FIRST_N` | `0` | API 키별 처음 N건 제출에 429와 `Retry-After: 5` |
+| `FAKE_HF_DROP_WEBHOOKS` | `0` | `?hf_webhook=` 웹훅을 이 비율만큼 보내지 않음 |
+| `FAKE_HF_DUP_WEBHOOKS` | 없음 | `1`이면 완료 웹훅을 두 번 보냄 |
+| `FAKE_HF_VIDEO_BYTES` | `2097152` | `/media/` 응답 크기 |
+| `FAKE_HF_MEDIA_DELAY_MS` | `0` | `/media/` 응답 지연 |
+
+`GET /_stats`는 Idempotency-Key별 수락 수, 요청별·키별 상태 조회 수(초당 최대 포함), 웹훅 전송 수, 미디어 다운로드 수를 돌려주고 `POST /_reset`은 모두 비웁니다. 단위 테스트는 `node --test --import tsx scripts/fake-higgsfield.test.ts`입니다.
 
 ## Vercel 배포 (Hobby 기준)
 
