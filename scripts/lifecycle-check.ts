@@ -1090,6 +1090,54 @@ async function submitDeadline(owner: Owner, admin: User, upstream: string, proxy
   await Promise.all(rec.tasks);
 }
 
+/** Run with this process's clock moved by `offsetMs`, the way an app server whose clock drifted from the database's sees time. */
+async function withAppClock<T>(offsetMs: number, run: () => Promise<T>): Promise<T> {
+  const Real = Date;
+  class Skewed extends Real {
+    constructor(...args: [] | [string | number | Date]) {
+      if (args.length === 0) super(Real.now() + offsetMs);
+      else super(args[0]);
+    }
+    static now() {
+      return Real.now() + offsetMs;
+    }
+  }
+  globalThis.Date = Skewed as unknown as DateConstructor;
+  try {
+    return await run();
+  } finally {
+    globalThis.Date = Real;
+  }
+}
+
+/** The 30-minute deadline counts from created_at, which the database's clock wrote, so it must be read on that clock. */
+async function deadlineOnDatabaseClock(owner: Owner, admin: User, upstream: string) {
+  const rec = recorder();
+  const skew = 31 * 60_000;
+  const fresh = await insertRow(admin, "app 시계가 31분 빠를 때 방금 만든 제출 대기", { status: "pending", nextCheckAt: sql`now()`, error: RATE_LIMITED });
+  const old = await insertRow(admin, "app 시계가 31분 느릴 때 31분 된 제출 대기", {
+    status: "pending",
+    nextCheckAt: sql`now()`,
+    error: RATE_LIMITED,
+    createdAt: sql`now() - interval '31 minutes'`,
+  });
+  const ahead = await withKnobs(upstream, { firstN429: 1, retryAfterS: 5 }, { firstN429: 0, retryAfterS: 5 }, () =>
+    withAppClock(skew, () => owner.settle(fresh, rec.schedule)),
+  );
+  check(
+    ahead.status === "pending" && ahead.error !== DEADLINE_ERROR,
+    "with the app clock 31 minutes ahead of the database, a row made a moment ago is sent, not failed by the deadline",
+    `${ahead.status}: ${ahead.error}`,
+  );
+  const behind = await withAppClock(-skew, () => owner.settle(old, rec.schedule));
+  check(
+    behind.status === "failed" && behind.error === DEADLINE_ERROR,
+    "with the app clock 31 minutes behind, a row the database made 31 minutes ago still fails",
+    `${behind.status}: ${behind.error}`,
+  );
+  await Promise.all(rec.tasks);
+}
+
 /** The fake accepts the row's exact submit with its Idempotency-Key, as a submit whose answer never came back would. */
 async function acceptedAtFake(upstream: string, row: Generation): Promise<string> {
   const spec = findModel(row.modelId);
@@ -1224,6 +1272,7 @@ async function submitChecks(owner: Owner, admin: User, upstream: string, proxy: 
     ["cancelAfterDeadSubmitter", () => cancelAfterDeadSubmitter(owner, admin, upstream)],
     ["bodyMismatch", () => bodyMismatch(owner, admin, upstream)],
     ["deadlineAfterLostAnswer", () => deadlineAfterLostAnswer(owner, admin, upstream, proxy)],
+    ["deadlineOnDatabaseClock", () => deadlineOnDatabaseClock(owner, admin, upstream)],
     [
       "submitDeadline",
       async () => {
