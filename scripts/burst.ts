@@ -5,7 +5,8 @@
  *
  *   HIGGSFIELD_BASE_URL=http://localhost:4010 BURST_BASE=http://localhost:3100 npx dotenv -e .env.local -- tsx scripts/burst.ts
  *
- * The app at BURST_BASE must use the same fake for HIGGSFIELD_BASE_URL and SUPABASE_URL, and PUBLIC_BASE_URL pointing
+ * The app at BURST_BASE must use the same fake for HIGGSFIELD_BASE_URL and for Blob (VERCEL_BLOB_API_URL=<fake>/api/blob,
+ * BLOB_PUBLIC_BASE_URL=<fake>/blob, BLOB_READ_WRITE_TOKEN any vercel_blob_rw_<id>_<secret>), and PUBLIC_BASE_URL pointing
  * at itself so the fake's webhooks reach it. Start the fake with the conditions under test, for example
  * FAKE_HF_429_FIRST_N=5 FAKE_HF_DROP_WEBHOOKS=0.1 FAKE_HF_DUP_WEBHOOKS=1.
  *
@@ -21,6 +22,7 @@ import { randomBytes } from "node:crypto";
 import { getDb, schema } from "../src/db";
 import { encrypt, hashPassword } from "../src/lib/crypto";
 import { isLive, LIVE_STATUSES, type GenerationStatus } from "../src/lib/generation-status";
+import { videoKey } from "../src/lib/storage";
 
 type Item = {
   id: string;
@@ -271,7 +273,7 @@ async function main() {
 
     check(rows.length === USERS * PER_USER, `all ${USERS * PER_USER} submits made a row`, `${rows.length}`);
     check(rows.every((r) => !isLive(r.status)), "every row ended terminal", JSON.stringify(byStatus));
-    check(completed.length > 0 && completed.every((r) => r.storagePath === `${r.id}.mp4`), "every completed row is stored", `${completed.filter((r) => r.storagePath).length}/${completed.length}`);
+    check(completed.length > 0 && completed.every((r) => r.storagePath === videoKey(r.id)), "every completed row is stored", `${completed.filter((r) => r.storagePath).length}/${completed.length}`);
     check(accepted.every((n) => n === 1), "the fake accepted exactly one submit per Idempotency-Key", `${accepted.filter((n) => n !== 1).length} keys off`);
     check(overCalls.length === 0, "status calls per row stay within 1 per 15 s plus 1 per webhook delivery", overCalls.slice(0, 3).join("; "));
     check((codes[502] ?? 0) === 0, "no submit answered 502", JSON.stringify(codes));

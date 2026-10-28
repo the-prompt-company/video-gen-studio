@@ -5,14 +5,16 @@
  *   npx dotenv -e .env.local -- tsx scripts/lifecycle-check.ts --triggers
  *   npx dotenv -e .env.local -- tsx scripts/lifecycle-check.ts --submits
  *   npx dotenv -e .env.local -- tsx scripts/lifecycle-check.ts --only cancelAfterLostAnswer,submitDeadline
- *   HIGGSFIELD_BASE_URL=http://localhost:4010 SUPABASE_URL=http://localhost:4010 SUPABASE_SERVICE_ROLE_KEY=fake npx dotenv -e .env.local -- tsx scripts/lifecycle-check.ts
+ *   HIGGSFIELD_BASE_URL=http://localhost:4010 npx dotenv -e .env.local -- tsx scripts/lifecycle-check.ts
  *   HIGGSFIELD_BASE_URL=http://localhost:4010 npx dotenv -e .env.local -- tsx scripts/lifecycle-check.ts --measure http://localhost:3100
  *
  * Without HIGGSFIELD_BASE_URL it starts its own fake (scripts/fake-higgsfield.ts). The copy checks upload to the same
- * fake's Supabase Storage subset: SUPABASE_URL is set to the fake when unset and refused when it points anywhere else.
+ * fake's Vercel Blob subset: VERCEL_BLOB_API_URL and BLOB_PUBLIC_BASE_URL are set to the fake when unset and refused
+ * when they point anywhere else, and BLOB_READ_WRITE_TOKEN is replaced by a fake token, so a real store or a real
+ * token from .env.local is never used.
  * The rows it creates belong to ADMIN_USERNAME, whose Higgsfield key must be set (the fake accepts any key), carry
  * prompts starting with "GP-6 ", and are deleted before it exits. It exits non-zero at the first failed check.
- * The stalled-copy check waits out the 240 s fetch timeout, so a full run takes about seven minutes.
+ * The stalled-copy check waits out the 240 s copy timeout, so a full run takes about seven minutes.
  * If the test model's price is 0 it sets 0.0123 USD/s for the cost check and restores the stored price afterwards.
  *
  * The submit checks (--submits runs only those) drive pending rows: a lost accept, 429s, the deadline, cancel during
@@ -31,7 +33,8 @@
  * The app at <base> must use the same HIGGSFIELD_BASE_URL, and the fake's FAKE_HF_DURATION_MS must outlast the window.
  *
  * --copy-peak copies one completed result into storage while sampling this process's memory every 5 ms, prints the
- * peak arrayBuffers and rss over the baseline, and checks the stored object's size and sha256 against the source. The
+ * peak arrayBuffers and rss over the baseline, checks the stored object's size and sha256 against the source, and
+ * checks that arrayBuffers rose less than 256 MB (scripts/storage.test.ts measures about 120 MB at any size). The
  * fake runs in its own process, so its copies of the bytes stay out of the sample:
  *   FAKE_HF_VIDEO_BYTES=314572800 npm run fake:hf
  *   HIGGSFIELD_BASE_URL=http://localhost:4010 npx dotenv -e .env.local -- tsx --expose-gc scripts/lifecycle-check.ts --copy-peak
@@ -43,12 +46,14 @@ import { createServer, type IncomingHttpHeaders, type IncomingMessage, type Serv
 import type { AddressInfo } from "node:net";
 import { resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { put } from "@vercel/blob";
 import { and, desc, eq, gt, inArray, isNotNull, isNull, notInArray, or, sql, type SQL } from "drizzle-orm";
 import { getDb, schema } from "../src/db";
 import type { Generation, User } from "../src/db/schema";
 import { buildArguments, coerceParams, findModel } from "../src/lib/catalog";
 import { signToken } from "../src/lib/crypto";
 import { isLive, LIVE_STATUSES } from "../src/lib/generation-status";
+import { videoKey } from "../src/lib/storage";
 import { configFromEnv, createFakeHiggsfield, type Config } from "./fake-higgsfield";
 
 type Owner = typeof import("../src/lib/generations");
@@ -60,7 +65,7 @@ type Stats = {
   statusPolls: { byRequest: Record<string, { total: number; perSecondMax: number }>; byApiKey: Record<string, number> };
   webhooks: { sent: number; dropped: number; failed: number; retried: number; byRequest: Record<string, number[]> };
   media: { downloads: number };
-  storage: { byKey: Record<string, { writes: number; size: number; sha256: string }> };
+  storage: { deleted: string[]; byKey: Record<string, { writes: number; size: number; sha256: string }> };
 };
 type Knobs = Partial<
   Pick<
@@ -106,7 +111,8 @@ const DEADLINE_ERROR = "Higgsfield가 30분 동안 요청을 받지 않았습니
 const RATE_LIMITED = "Higgsfield 429: Too many requests";
 const REF = "https://example.com/gp3-ref.jpg";
 const COPY_TIMEOUT_MS = 240_000;
-const STORAGE_ENV = ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"] as const;
+const STORAGE_ENV = ["BLOB_READ_WRITE_TOKEN"] as const;
+const FAKE_BLOB_TOKEN = "vercel_blob_rw_lifecyclecheck_fake";
 const TEST_PRICE = "0.0123";
 const created: string[] = [];
 
@@ -242,12 +248,8 @@ async function setFake(upstream: string, knobs: Knobs): Promise<void> {
   await fetch(`${upstream}/_config`, { method: "POST", body: JSON.stringify(knobs) });
 }
 
-function objectName(id: string): string {
-  return `${process.env.SUPABASE_VIDEO_BUCKET || "videos"}/${id}.mp4`;
-}
-
 async function writesOf(upstream: string, id: string): Promise<number> {
-  return (await stats(upstream)).storage.byKey[objectName(id)]?.writes ?? 0;
+  return (await stats(upstream)).storage.byKey[videoKey(id)]?.writes ?? 0;
 }
 
 function sha256(bytes: ArrayBuffer): string {
@@ -286,14 +288,14 @@ async function adminUser(): Promise<User> {
   return u;
 }
 
-async function submit(owner: Owner, admin: User, label: string): Promise<Generation> {
+async function submit(owner: Owner, admin: User, label: string, imageUrls = [REF]): Promise<Generation> {
   const spec = findModel(MODEL);
   if (!spec) throw new Error(`FAIL ${MODEL} missing from the catalog`);
   const row = await owner.submitGeneration(admin, {
     spec,
     prompt: `${TAG}${label}`,
     params: coerceParams(spec, {}),
-    imageUrls: [REF],
+    imageUrls,
     videoUrls: [],
   }, (task) => void task());
   created.push(row.id);
@@ -476,10 +478,10 @@ async function copyOnCompletion(owner: Owner, admin: User, upstream: string) {
     "of 5 settle calls per second, only the one that completed the row copied it, once",
     `${rec.tasks.length} task`,
   );
-  check(final.storagePath === `${row.id}.mp4` && final.mirrorAttempts === 1 && final.mirrorError === null, "storage_path is the object key <id>.mp4 after one attempt");
+  check(final.storagePath === videoKey(row.id) && final.mirrorAttempts === 1 && final.mirrorError === null, "storage_path is the object key videos/<id>.mp4 after one attempt");
   check(
-    video?.kind === "stored" && video.url === `${process.env.SUPABASE_URL}/storage/v1/object/public/${objectName(row.id)}`,
-    "the next read returns video.kind stored with the public object URL",
+    video?.kind === "stored" && video.url === `${process.env.BLOB_PUBLIC_BASE_URL}/${videoKey(row.id)}`,
+    "the next read returns video.kind stored with the public Blob URL",
     video?.url,
   );
 }
@@ -500,7 +502,7 @@ async function tenConcurrentCopies(owner: Owner, admin: User, upstream: string) 
   );
 
   const media = await (await fetch(`${upstream}/media/${row.requestId}.mp4`)).arrayBuffer();
-  const object = (await stats(upstream)).storage.byKey[objectName(row.id)];
+  const object = (await stats(upstream)).storage.byKey[videoKey(row.id)];
   check(
     object.sha256 === sha256(media) && object.size === media.byteLength && final.sizeBytes === media.byteLength,
     "the stored object has the media's sha256 and size_bytes matches it",
@@ -513,9 +515,36 @@ async function tenConcurrentCopies(owner: Owner, admin: User, upstream: string) 
   const download = await fetch(video.downloadUrl);
   await download.arrayBuffer();
   check(
-    video.downloadUrl.endsWith(`?download=${row.id}.mp4`) && /attachment/.test(download.headers.get("content-disposition") ?? ""),
-    "downloadUrl asks for <id>.mp4 and is served as an attachment",
+    video.downloadUrl === `${video.url}?download=1` && download.headers.get("content-disposition") === `attachment; filename="${row.id}.mp4"`,
+    "downloadUrl is Blob's ?download=1 and is served as an attachment named <id>.mp4",
   );
+  return final;
+}
+
+/**
+ * imageRefs hold whatever URLs the browser sent, and reference uploads share the Blob store with stored videos. A row
+ * that names another row's stored video as its reference must not delete it when it finishes; a row with a real
+ * reference upload still deletes that.
+ */
+async function cleanupKeepsVideos(owner: Owner, admin: User, upstream: string, stored: Generation) {
+  const video = owner.publicGeneration(stored).video;
+  if (video?.kind !== "stored") throw new Error("FAIL setup: the row to protect is not stored");
+  const ref = await put(`refs/${Date.now()}-lifecycle.png`, Buffer.from("reference bytes"), {
+    access: "public",
+    addRandomSuffix: true,
+    token: process.env.BLOB_READ_WRITE_TOKEN,
+  });
+  const rec = recorder();
+  const rows = [await submit(owner, admin, "보관 영상을 레퍼런스로", [video.url]), await submit(owner, admin, "Blob 레퍼런스", [ref.url])];
+  for (const r of rows) await settleUntilDone(owner, r.id, rec.schedule, 30_000);
+  await Promise.all(rec.tasks);
+  const { deleted } = (await stats(upstream)).storage;
+  check(
+    deleted.includes(ref.pathname) && !deleted.includes(videoKey(stored.id)),
+    "cleanupRefs deleted the reference upload and never the stored video another row named as its reference",
+    `del asked for ${deleted.join(", ")}`,
+  );
+  check((await fetch(video.url)).ok && (await fetch(ref.url)).status === 404, "the stored video still plays and the reference upload is gone");
 }
 
 async function storageOff(owner: Owner, admin: User, upstream: string) {
@@ -570,7 +599,7 @@ async function stalledCopy(owner: Owner, admin: User, upstream: string) {
   await getDb().execute(sql`update generations set mirror_next_at = now() where id = ${row.id}`);
   const retried = await owner.storeVideo(await readRow(row.id));
   check(
-    retried.storagePath === `${row.id}.mp4` && retried.mirrorError === null && retried.mirrorAttempts === 2 && (await writesOf(upstream, row.id)) === 1,
+    retried.storagePath === videoKey(row.id) && retried.mirrorError === null && retried.mirrorAttempts === 2 && (await writesOf(upstream, row.id)) === 1,
     "after the lease runs out (mirror_next_at moved to now instead of waiting 360 s) the retry copies it and clears mirror_error",
   );
 }
@@ -705,7 +734,7 @@ async function oneWebhookNoPoll(owner: Owner, admin: User, upstream: string, hoo
   const final = await readRow(row.id);
   const price = await owner.priceFor(final.modelId);
   check(
-    codes.join() === "204" && final.status === "completed" && final.storagePath === `${row.id}.mp4`,
+    codes.join() === "204" && final.status === "completed" && final.storagePath === videoKey(row.id),
     "with no poll at all, one webhook completes the row and its after() copy stores it",
     `deliveries ${codes.join(",")}`,
   );
@@ -770,7 +799,7 @@ async function redeliveryAfter503(owner: Owner, admin: User, upstream: string, h
     await Promise.all(hooks.rec.tasks);
     const final = await readRow(row.id);
     check(
-      codes.join() === "503,204" && final.status === "completed" && final.storagePath === `${row.id}.mp4`,
+      codes.join() === "503,204" && final.status === "completed" && final.storagePath === videoKey(row.id),
       "a webhook whose status call fails gets 503, and the redelivery completes and stores the row",
       codes.join(","),
     );
@@ -799,7 +828,7 @@ async function sweepTicks(owner: Owner, admin: User, upstream: string) {
     const dropped = (await stats(upstream)).webhooks.dropped;
     const writes = await Promise.all(rows.map((r) => writesOf(upstream, r.id)));
     check(
-      final.every((g) => g.status === "completed" && g.storagePath === `${g.id}.mp4`) && dropped >= rows.length,
+      final.every((g) => g.status === "completed" && g.storagePath === videoKey(g.id)) && dropped >= rows.length,
       "with every webhook dropped, the next sweep completes and stores every row",
       JSON.stringify(tick2),
     );
@@ -862,7 +891,7 @@ async function hookPollSweepRace(owner: Owner, admin: User, upstream: string) {
       `hook ${hook}, poll returned ${polled.status}, sweep moved ${report.moved}`,
     );
     check(
-      rec.tasks.length <= 1 && final.storagePath === `${row.id}.mp4` && (await writesOf(upstream, row.id)) === 1 && report.failures === 0,
+      rec.tasks.length <= 1 && final.storagePath === videoKey(row.id) && (await writesOf(upstream, row.id)) === 1 && report.failures === 0,
       "and the row was uploaded once",
       `${rec.tasks.length} follow-up from the hook or the poll`,
     );
@@ -898,13 +927,13 @@ async function sweepCopies(owner: Owner, admin: User, upstream: string) {
     const [, report] = await Promise.all([owner.storeVideo(raced), owner.sweep(sweepDeadline())]);
     await owner.storeVideo(mock);
     const [a, r, f, m] = await Promise.all([alone, raced, failing, mock].map((g) => readRow(g.id)));
-    check(a.storagePath === `${a.id}.mp4` && a.mirrorAttempts === 1, "the sweep copies a completed row whose after() copy never ran");
+    check(a.storagePath === videoKey(a.id) && a.mirrorAttempts === 1, "the sweep copies a completed row whose after() copy never ran");
     check(
-      r.storagePath === `${r.id}.mp4` && r.mirrorAttempts === 1 && (await writesOf(upstream, r.id)) === 1,
+      r.storagePath === videoKey(r.id) && r.mirrorAttempts === 1 && (await writesOf(upstream, r.id)) === 1,
       "a sweep racing an after() copy of the same row uploads it once",
     );
     check(
-      f.storagePath === `${f.id}.mp4` && f.mirrorError === null && f.mirrorAttempts === 2,
+      f.storagePath === videoKey(f.id) && f.mirrorError === null && f.mirrorAttempts === 2,
       "the sweep retries a failed copy once its lease ran out, and clears mirror_error",
     );
     const mockVideo = owner.publicGeneration(m).video;
@@ -1334,7 +1363,7 @@ async function crashAfterAccept(owner: Owner, admin: User, upstream: string, pro
     codes.join(","),
   );
   check(
-    final.status === "completed" && final.requestId === seen.requestId && (await acceptedFor(upstream, row.id)) === 1 && final.storagePath === `${row.id}.mp4`,
+    final.status === "completed" && final.requestId === seen.requestId && (await acceptedFor(upstream, row.id)) === 1 && final.storagePath === videoKey(row.id),
     "that redelivery sent the row again, got the original request_id, completed and stored it: one accepted submit for the key",
   );
 }
@@ -1515,7 +1544,7 @@ async function copyPeak(owner: Owner, admin: User, upstream: string) {
   clearInterval(timer);
   const ms = Date.now() - t0;
   const source = await streamedDigest(completed.resultUrl);
-  const object = (await stats(upstream)).storage.byKey[objectName(row.id)];
+  const object = (await stats(upstream)).storage.byKey[videoKey(row.id)];
   const mb = (n: number) => Math.round(n / 2 ** 20);
   console.log(
     `COPY_PEAK ${JSON.stringify({ bytes: source.size, ms, gcBaseline: gc !== undefined, arrayBuffersPeakMb: mb(peak.arrayBuffers - base.arrayBuffers), rssPeakMb: mb(peak.rss - base.rss), sizeMb: mb(source.size) })}`,
@@ -1525,12 +1554,26 @@ async function copyPeak(owner: Owner, admin: User, upstream: string) {
     "the stored copy has the source's size and sha256, and size_bytes records it",
     `${stored.sizeBytes} bytes, sha256 ${object?.sha256.slice(0, 12)}`,
   );
+  check(peak.arrayBuffers - base.arrayBuffers < 256 * 2 ** 20, "the copy streamed: arrayBuffers rose less than 256 MB", `${mb(peak.arrayBuffers - base.arrayBuffers)} MB for ${mb(source.size)} MB`);
 }
 
 /** Child mode for crashAfterAccept: submit one row through the proxy in HIGGSFIELD_BASE_URL and wait to be killed. */
 async function submitOnce(label: string) {
   const owner: Owner = await import("../src/lib/generations");
   await submit(owner, await adminUser(), label);
+}
+
+/** The copy checks write test objects, so storage.ts only ever talks to the fake's Blob subset, with a fake token. */
+function pointBlobAtFake(upstream: string) {
+  const fake = { VERCEL_BLOB_API_URL: `${upstream}/api/blob`, BLOB_PUBLIC_BASE_URL: `${upstream}/blob` };
+  for (const [name, value] of Object.entries(fake)) {
+    const set = process.env[name];
+    if (set && new URL(set).origin !== new URL(upstream).origin) {
+      throw new Error(`FAIL ${name} is ${new URL(set).origin}; the copy checks write test objects, so point it at the fake ${upstream}`);
+    }
+    process.env[name] = value;
+  }
+  process.env.BLOB_READ_WRITE_TOKEN = FAKE_BLOB_TOKEN;
 }
 
 async function main() {
@@ -1548,15 +1591,7 @@ async function main() {
     upstream = await listen(ownFake);
   }
   const proxy = base ? null : startProxy(upstream);
-  if (proxy) {
-    const storageUrl = process.env.SUPABASE_URL;
-    if (!storageUrl) {
-      process.env.SUPABASE_URL = upstream;
-      process.env.SUPABASE_SERVICE_ROLE_KEY ||= "fake";
-    } else if (new URL(storageUrl).origin !== new URL(upstream).origin) {
-      throw new Error(`FAIL SUPABASE_URL is ${new URL(storageUrl).origin}; the copy checks write test objects, so point it at the fake ${upstream}`);
-    }
-  }
+  if (proxy) pointBlobAtFake(upstream);
   process.env.HIGGSFIELD_BASE_URL = proxy ? await listen(proxy.server) : upstream;
   delete process.env.PUBLIC_BASE_URL;
   delete process.env.VERCEL_PROJECT_PRODUCTION_URL;
@@ -1582,7 +1617,7 @@ async function main() {
         await cancelAfterAnotherCallerFinished(owner, admin, upstream);
         await rowWithoutRequestId(owner, admin, proxy);
         await copyOnCompletion(owner, admin, upstream);
-        await tenConcurrentCopies(owner, admin, upstream);
+        await cleanupKeepsVideos(owner, admin, upstream, await tenConcurrentCopies(owner, admin, upstream));
         await storageOff(owner, admin, upstream);
         await stalledCopy(owner, admin, upstream);
       }
