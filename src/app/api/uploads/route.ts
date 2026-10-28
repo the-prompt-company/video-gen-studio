@@ -25,6 +25,7 @@ export async function POST(req: Request) {
     const url = await hf.uploadBytes(apiKeyFor(user), await file.arrayBuffer(), type);
     return Response.json({ url, name: file.name, size: file.size, type });
   } catch (e) {
+    if (e instanceof hf.HiggsfieldError) return errorResponse(new HttpError(502, e.message));
     return errorResponse(e);
   }
 }
