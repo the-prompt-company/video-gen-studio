@@ -47,7 +47,7 @@ export const generations = pgTable(
     params: jsonb("params").$type<Record<string, unknown>>().notNull().default({}),
     imageRefs: jsonb("image_refs").$type<string[]>().notNull().default([]),
     videoRefs: jsonb("video_refs").$type<string[]>().notNull().default([]),
-    status: text("status", { enum: GENERATION_STATUSES }).notNull().default("queued"),
+    status: text("status", { enum: GENERATION_STATUSES }).notNull().default("pending"),
     requestId: text("request_id").$type<RequestId>(),
     /** Earliest time any caller may ask Higgsfield about this row. A conditional UPDATE on it is the per-row check claim. */
     nextCheckAt: timestamp("next_check_at", { withTimezone: true }).notNull().defaultNow(),

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { GENERATION_STATUSES, isLive, predecessorsOf, STATUS_LABEL, STATUS_TONE, type GenerationStatus } from "./generation-status";
 
 const LIVE: Record<GenerationStatus, boolean> = {
+  pending: true,
   queued: true,
   in_progress: true,
   completed: false,
@@ -12,12 +13,13 @@ const LIVE: Record<GenerationStatus, boolean> = {
 };
 
 const MAY_MOVE_FROM: Record<GenerationStatus, GenerationStatus[]> = {
-  queued: [],
-  in_progress: ["queued"],
-  completed: ["queued", "in_progress"],
-  failed: ["queued", "in_progress"],
-  nsfw: ["queued", "in_progress"],
-  canceled: ["queued", "in_progress"],
+  pending: [],
+  queued: ["pending"],
+  in_progress: ["pending", "queued"],
+  completed: ["pending", "queued", "in_progress"],
+  failed: ["pending", "queued", "in_progress"],
+  nsfw: ["pending", "queued", "in_progress"],
+  canceled: ["pending", "queued", "in_progress"],
 };
 
 test("isLive is true only while Higgsfield still owes an answer", () => {
