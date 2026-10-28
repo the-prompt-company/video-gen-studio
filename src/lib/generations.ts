@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, gt, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, isNotNull, isNull, lte, notInArray, or, sql } from "drizzle-orm";
 import { del } from "@vercel/blob";
 import { getDb, schema } from "@/db";
 import type { Generation, User } from "@/db/schema";
@@ -134,6 +134,41 @@ export async function onProviderHook(url: URL, schedule: Scheduler): Promise<Hoo
 }
 
 /**
+ * checked: status calls Higgsfield answered. moved: rows whose status changed during the visit. stored: rows that
+ * gained a stored copy during the visit. failures: status calls with no usable answer, copies that failed, and visits
+ * that threw. truncated: the deadline stopped the sweep before every due row was visited.
+ */
+export type SweepReport = { checked: number; moved: number; stored: number; failures: number; truncated: boolean };
+
+/** Rows per due query. The sweep reads pages until none is left, so this bounds a query, not the work. */
+const SWEEP_PAGE = 100;
+
+/**
+ * Visit every due row once, oldest first and one at a time, until none is left or `deadline` passes. A row is due
+ * when it is live and its check clock ran out, or when it is a completed result whose copy lease ran out. Copies run
+ * inline. Sweeps that overlap each other, a hook, or a poll converge, because every step goes through the same claims.
+ */
+export async function sweep({ deadline }: { deadline: number }): Promise<SweepReport> {
+  const started = Date.now();
+  const report: SweepReport = { checked: 0, moved: 0, stored: 0, failures: 0, truncated: false };
+  const visited: string[] = [];
+  while (!report.truncated) {
+    const due = await dueRows(visited);
+    if (due.length === 0) break;
+    for (const row of due) {
+      if (Date.now() >= deadline) {
+        report.truncated = true;
+        break;
+      }
+      visited.push(row.id);
+      await visit(row, report);
+    }
+  }
+  console.info(JSON.stringify({ evt: "sweep", ...report, ms: Date.now() - started }));
+  return report;
+}
+
+/**
  * Copy the completed result into our bucket. Any number of actors may call this: one conditional UPDATE on
  * mirror_next_at picks the single copier per lease, and an expired lease means that copier died, so the next
  * claimant uploads the same bytes to the same key again. Writes only the media columns, never status.
@@ -199,13 +234,18 @@ function publicVideo(g: Generation): PublicVideo | null {
   return { kind: "provider", url: g.resultUrl, downloadUrl: g.resultUrl, expiresAt: g.expiresAt, storing: storage.storageEnabled() && unexpired };
 }
 
-/** Who asks a row to move. The webhook forces a check, because it rings only once Higgsfield has an answer. */
-type SettleReason = "poll" | "hook";
+/**
+ * Who asks a row to move: an open tab, Higgsfield's webhook, or the cron sweep. Only the webhook forces a check,
+ * because it rings once Higgsfield has an answer. Where the copy runs is the caller's Scheduler: `after` in a route,
+ * inline in the sweep.
+ */
+type SettleReason = "poll" | "hook" | "sweep";
 type Policy = { forceCheck: boolean };
 
 const POLICY = {
   poll: { forceCheck: false },
   hook: { forceCheck: true },
+  sweep: { forceCheck: false },
 } as const satisfies Record<SettleReason, Policy>;
 
 type LifecyclePatch = Partial<
@@ -309,31 +349,90 @@ async function refresh(gen: Generation, policy: Policy, schedule: Scheduler): Pr
   return { row, call: "answered" };
 }
 
+/** A live row Higgsfield can be asked about. Mock rows carry no request id and are never asked. */
+function checkable() {
+  const g = schema.generations;
+  return and(inArray(g.status, LIVE_STATUSES), isNotNull(g.requestId));
+}
+
+/** A checkable row whose check clock has run out. The unforced check claim and the sweep read the same rule. */
+function checkDue() {
+  return and(checkable(), lte(schema.generations.nextCheckAt, sql`now()`));
+}
+
+/**
+ * A completed Higgsfield result that is unstored, unexpired, and whose copy lease has run out. The copy claim and the
+ * sweep read the same rule. Mock rows carry no request id and are never copied.
+ */
+function copyDue() {
+  const g = schema.generations;
+  return and(
+    eq(g.status, "completed"),
+    isNotNull(g.requestId),
+    isNotNull(g.resultUrl),
+    isNull(g.storagePath),
+    or(isNull(g.mirrorNextAt), lte(g.mirrorNextAt, sql`now()`)),
+    or(isNull(g.expiresAt), gt(g.expiresAt, sql`now()`)),
+  );
+}
+
+/** Due rows this sweep has not visited, oldest first. Copies are due only while storage is configured. */
+async function dueRows(visited: string[]): Promise<Generation[]> {
+  const g = schema.generations;
+  return getDb()
+    .select()
+    .from(g)
+    .where(
+      and(
+        or(checkDue(), storage.storageEnabled() ? copyDue() : undefined),
+        visited.length > 0 ? notInArray(g.id, visited) : undefined,
+      ),
+    )
+    .orderBy(g.createdAt)
+    .limit(SWEEP_PAGE);
+}
+
+/** One sweep step: check a live row and await its copy, or copy a completed one. Counts into `report`, never throws. */
+async function visit(row: Generation, report: SweepReport): Promise<void> {
+  try {
+    let settled: Generation;
+    if (isLive(row.status)) {
+      const tasks: Promise<void>[] = [];
+      const look = await settleAs(row, "sweep", (task) => void tasks.push(task()));
+      if (look.call === "answered") report.checked++;
+      if (look.call === "unavailable") report.failures++;
+      if (look.row.status !== row.status) report.moved++;
+      await Promise.all(tasks);
+      settled = tasks.length > 0 ? await current(look.row) : look.row;
+    } else {
+      settled = await storeVideo(row);
+    }
+    if (settled.storagePath && !row.storagePath) report.stored++;
+    else if (settled.mirrorError && settled.mirrorAttempts > row.mirrorAttempts) report.failures++;
+  } catch (e) {
+    report.failures++;
+    console.warn(JSON.stringify({ evt: "sweep_failed", id: row.id, error: e instanceof Error ? e.message : String(e) }));
+  }
+}
+
 /**
  * Push next_check_at CHECK_GAP_S ahead. Unforced, it matches only when the row is due, so of any number of concurrent
- * callers exactly one wins per gap. Forced (a cancel Higgsfield refused) it always wins and resets the gap.
+ * callers exactly one wins per gap. Forced (the hook, or a cancel Higgsfield refused) it always wins and resets the gap.
  */
 async function claimCheck(id: string, force: boolean): Promise<boolean> {
   const g = schema.generations;
   const claimed = await getDb()
     .update(g)
     .set({ nextCheckAt: sql`now() + make_interval(secs => ${CHECK_GAP_S})` })
-    .where(
-      and(
-        eq(g.id, id),
-        inArray(g.status, LIVE_STATUSES),
-        isNotNull(g.requestId),
-        force ? undefined : lte(g.nextCheckAt, sql`now()`),
-      ),
-    )
+    .where(and(eq(g.id, id), force ? checkable() : checkDue()))
     .returning({ id: g.id });
   return claimed.length > 0;
 }
 
 /**
- * The copy claim. It matches only a completed, unstored, unexpired row whose lease has run out, counts the attempt,
- * and pushes the lease max(MIRROR_LEASE_S, 60·2^attempts, capped at 6 h) ahead. Of any number of concurrent callers
- * exactly one gets the row back.
+ * The copy claim. It matches only a row that copyDue accepts, counts the attempt, and pushes the lease
+ * max(MIRROR_LEASE_S, 60·2^attempts, capped at 6 h) ahead. Of any number of concurrent callers exactly one gets the
+ * row back.
  */
 async function claimCopy(id: string): Promise<Generation | null> {
   const g = schema.generations;
@@ -341,16 +440,7 @@ async function claimCopy(id: string): Promise<Generation | null> {
   const [row] = await getDb()
     .update(g)
     .set({ mirrorAttempts: sql`${g.mirrorAttempts} + 1`, mirrorNextAt: sql`now() + make_interval(secs => ${backoff})` })
-    .where(
-      and(
-        eq(g.id, id),
-        eq(g.status, "completed"),
-        isNotNull(g.resultUrl),
-        isNull(g.storagePath),
-        or(isNull(g.mirrorNextAt), lte(g.mirrorNextAt, sql`now()`)),
-        or(isNull(g.expiresAt), gt(g.expiresAt, sql`now()`)),
-      ),
-    )
+    .where(and(eq(g.id, id), copyDue()))
     .returning();
   return row ?? null;
 }
