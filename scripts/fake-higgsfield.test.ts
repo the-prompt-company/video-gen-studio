@@ -39,7 +39,7 @@ async function stats(base: string) {
   return (await (await fetch(`${base}/_stats`)).json()) as {
     accepted: { total: number; byIdempotencyKey: Record<string, number> };
     rejected: { 429: number; 422: number };
-    webhooks: { sent: number; dropped: number; failed: number };
+    webhooks: { sent: number; dropped: number; failed: number; retried: number; byRequest: Record<string, number[]> };
     media: { downloads: number };
   };
 }
@@ -116,6 +116,59 @@ test("FAKE_HF_DUP_WEBHOOKS posts the completion webhook twice", async () => {
       assert.match(r.payload.video.url, /\/media\/.+\.mp4$/);
     }
     assert.equal((await stats(f.base)).webhooks.sent, 2);
+  } finally {
+    f.close();
+    hook.close();
+  }
+});
+
+test("a webhook answered with 5xx is redelivered until it gets a 2xx, and a 4xx is never redelivered", async () => {
+  const answers: Record<string, number[]> = { "/retry": [503, 503, 204], "/reject": [401, 204] };
+  const hook = createServer((req, res) => {
+    req.resume();
+    req.on("end", () => res.writeHead(answers[req.url ?? ""]?.shift() ?? 500).end());
+  });
+  const hookBase = await listen(hook);
+  const f = await fake({ webhookRetryMs: 50 });
+  try {
+    const retried = await submit(f.base, "k1", { prompt: "a" }, `?hf_webhook=${encodeURIComponent(`${hookBase}/retry`)}`);
+    const rejected = await submit(f.base, "k2", { prompt: "a" }, `?hf_webhook=${encodeURIComponent(`${hookBase}/reject`)}`);
+    await sleep(800);
+    const s = (await stats(f.base)).webhooks;
+    assert.deepEqual(s.byRequest[retried.body.request_id ?? ""], [503, 503, 204], "redelivered after each 503, 50 then 100 ms apart");
+    assert.deepEqual(s.byRequest[rejected.body.request_id ?? ""], [401], "a 401 ends the delivery");
+    assert.deepEqual({ sent: s.sent, failed: s.failed, retried: s.retried }, { sent: 1, failed: 3, retried: 2 });
+  } finally {
+    f.close();
+    hook.close();
+  }
+});
+
+test("POST /_config statusFailN answers 503 to that many status calls, and dropWebhooks stops deliveries", async () => {
+  const delivered: string[] = [];
+  const hook = createServer((req, res) => {
+    req.resume();
+    req.on("end", () => {
+      delivered.push(req.url ?? "");
+      res.writeHead(204).end();
+    });
+  });
+  const hookBase = await listen(hook);
+  const f = await fake();
+  try {
+    const knobs = await fetch(`${f.base}/_config`, { method: "POST", body: JSON.stringify({ statusFailN: 2, dropWebhooks: 1 }) });
+    assert.deepEqual(await knobs.json(), { mediaDelayMs: 0, storageFailN: 0, statusFailN: 2, dropWebhooks: 1, dupWebhooks: false });
+    const { body } = await submit(f.base, "k1", { prompt: "a" }, `?hf_webhook=${encodeURIComponent(`${hookBase}/hook`)}`);
+    const codes = [];
+    for (let i = 0; i < 3; i++) {
+      codes.push((await fetch(`${f.base}/requests/${body.request_id}/status`, { headers: { Authorization: `Key ${KEY}` } })).status);
+    }
+    assert.deepEqual(codes, [503, 503, 200]);
+    await sleep(400);
+    assert.deepEqual(delivered, []);
+    const s = (await (await fetch(`${f.base}/_stats`)).json()) as { statusPolls: { failed: number }; webhooks: { dropped: number } };
+    assert.equal(s.statusPolls.failed, 2);
+    assert.equal(s.webhooks.dropped, 1);
   } finally {
     f.close();
     hook.close();
