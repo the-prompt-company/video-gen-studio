@@ -4,6 +4,7 @@
  *   GET  /requests/{id}/status       queued -> in_progress -> completed on a timer
  *   POST /requests/{id}/cancel       queued only
  *   GET  /media/{id}.mp4             deterministic bytes once completed
+ *   POST /files/generate-upload-url  then PUT the bytes to upload_url, GET public_url
  *   GET  /_stats, POST /_reset       test hooks, not part of the real API
  *
  *   npm run fake:hf   then   HIGGSFIELD_BASE_URL=http://localhost:4010 npm run dev
@@ -99,6 +100,7 @@ export function createFakeHiggsfield(config: Config): Server {
   const byIdempotencyKey = new Map<string, string>();
   const submitsByApiKey = new Map<string, number>();
   const pollSecond = new Map<string, { second: number; count: number }>();
+  const uploads = new Map<string, { contentType: string; bytes: Buffer }>();
   const video = deterministicBytes(config.videoBytes);
   let stats = newStats();
   const server = createHttpServer((req, res) => {
@@ -118,6 +120,7 @@ export function createFakeHiggsfield(config: Config): Server {
     byIdempotencyKey.clear();
     submitsByApiKey.clear();
     pollSecond.clear();
+    uploads.clear();
     stats = newStats();
   }
 
@@ -263,6 +266,22 @@ export function createFakeHiggsfield(config: Config): Server {
       return;
     }
 
+    const file = path === "/files/generate-upload-url" ? null : path.match(/^\/files\/([^/]+)$/);
+    const upload = file ? uploads.get(file[1]) : undefined;
+    if (file && !upload) return json(res, 404, { detail: "Not found" });
+    if (upload && method === "PUT") {
+      const chunks: Buffer[] = [];
+      for await (const c of req) chunks.push(c as Buffer);
+      upload.bytes = Buffer.concat(chunks);
+      res.writeHead(200).end();
+      return;
+    }
+    if (upload && method === "GET") {
+      res.writeHead(200, { "Content-Type": upload.contentType, "Content-Length": String(upload.bytes.length) });
+      res.end(upload.bytes);
+      return;
+    }
+
     const auth = req.headers.authorization?.match(/^Key (.+)$/);
     if (!auth) return json(res, 401, { detail: "Unauthorized" });
     const apiKey = auth[1];
@@ -286,6 +305,17 @@ export function createFakeHiggsfield(config: Config): Server {
       return json(res, 405, { detail: "Method not allowed" });
     }
 
+    if (method === "POST" && path === "/files/generate-upload-url") {
+      const id = randomUUID();
+      let contentType = "application/octet-stream";
+      try {
+        contentType = String((JSON.parse(await readBody(req)) as { content_type?: string }).content_type ?? contentType);
+      } catch {
+        return json(res, 400, { detail: "body must be JSON" });
+      }
+      uploads.set(id, { contentType, bytes: Buffer.alloc(0) });
+      return json(res, 200, { public_url: `${base()}/files/${id}`, upload_url: `${base()}/files/${id}`, content_type: contentType });
+    }
     if (method === "POST" && path.length > 1) return submit(req, res, url, apiKey);
     return json(res, 404, { detail: "Not found" });
   }

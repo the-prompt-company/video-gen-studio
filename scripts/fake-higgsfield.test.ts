@@ -155,3 +155,24 @@ test("cancel works while queued and is 409 afterwards", async () => {
     f.close();
   }
 });
+
+test("reference upload: ticket, PUT bytes, then GET public_url returns them", async () => {
+  const f = await fake();
+  try {
+    const ticket = (await (
+      await fetch(`${f.base}/files/generate-upload-url`, {
+        method: "POST",
+        headers: { Authorization: `Key ${KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ content_type: "image/png" }),
+      })
+    ).json()) as { public_url: string; upload_url: string; content_type: string };
+    assert.equal(ticket.content_type, "image/png");
+    const put = await fetch(ticket.upload_url, { method: "PUT", headers: { "Content-Type": "image/png" }, body: Buffer.from("png-bytes") });
+    assert.equal(put.status, 200);
+    const got = await fetch(ticket.public_url);
+    assert.equal(got.headers.get("content-type"), "image/png");
+    assert.equal(await got.text(), "png-bytes");
+  } finally {
+    f.close();
+  }
+});
