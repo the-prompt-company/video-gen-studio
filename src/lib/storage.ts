@@ -49,8 +49,10 @@ export function videoKey(generationId: string): ObjectKey {
  * written is the store videoUrls points at, and an answer at another URL fails the upload instead of recording a key
  * nobody can play.
  *
- * The body is cut into 8 MB parts as it is read, and at most PARTS_IN_FLIGHT parts upload at once, so a copy peaks
- * near 120 MB whatever the size (measured from 64 MB to 1000 MB). Handing the stream itself to put(), in one request
+ * The body is cut into 8 MB parts as it is read, and at most PARTS_IN_FLIGHT parts upload at once, so a copy holds about
+ * 104 MB whatever the size: 4 parts at 24 MB in flight plus the part being filled. Overlapping part requests briefly
+ * reach about 165 MB, and copies V8 has not collected yet put the measured peak at 117-256 MB for 300 MB and 600 MB
+ * results (README, 완료 영상 보관). Handing the stream itself to put(), in one request
  * or with multipart: true, holds all of it: the SDK's fetch clones each request for redirects, which tees the body,
  * and the branch nobody reads keeps every chunk until the request ends. A body that fits in one part is one put().
  */
