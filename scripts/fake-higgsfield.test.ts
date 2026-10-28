@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createServer, type Server } from "node:http";
 import { once } from "node:events";
 import { createHash } from "node:crypto";
-import { StorageClient } from "@supabase/storage-js";
+import { BlobNotFoundError, del, getDownloadUrl, head, put } from "@vercel/blob";
 import { createFakeHiggsfield, configFromEnv, type Config } from "./fake-higgsfield";
 
 const KEY = "fake:key";
@@ -274,39 +274,64 @@ test("reference upload: ticket, PUT bytes, then GET public_url returns them", as
   }
 });
 
-test("the Supabase Storage subset answers the real storage-js client", async () => {
+test("the Vercel Blob subset answers the real @vercel/blob client", async () => {
   const f = await fake();
-  const bucket = new StorageClient(`${f.base}/storage/v1`, { apikey: "k", Authorization: "Bearer k" }).from("videos");
-  const opts = { contentType: "video/mp4", cacheControl: "31536000" };
+  process.env.VERCEL_BLOB_API_URL = `${f.base}/api/blob`;
+  const token = "vercel_blob_rw_fakestore_secret";
+  const opts = { access: "public", token, addRandomSuffix: false, contentType: "video/mp4", cacheControlMaxAge: 31536000 } as const;
   const first = Buffer.from("first bytes");
   const second = Buffer.from("second, longer bytes");
+  const digest = (b: Buffer) => createHash("sha256").update(b).digest("hex");
+  type ByKey = Record<string, { writes: number; size: number; sha256: string; contentType: string; cacheControlMaxAge: number | null; allowOverwrite: boolean; parts: number }>;
+  const blobStats = async () => ((await (await fetch(`${f.base}/_stats`)).json()) as { storage: { failed: number; deleted: string[]; byKey: ByKey } }).storage;
   try {
-    assert.equal((await bucket.upload("a.mp4", first, opts)).error, null);
-    assert.ok((await bucket.upload("a.mp4", second, opts)).error, "a second write without upsert is refused");
-    assert.equal((await bucket.upload("a.mp4", second, { ...opts, upsert: true })).error, null);
-    const s = (await (await fetch(`${f.base}/_stats`)).json()) as {
-      storage: { byKey: Record<string, { writes: number; size: number; sha256: string; cacheControl: string; upsert: boolean }> };
-    };
-    assert.deepEqual(s.storage.byKey["videos/a.mp4"], {
+    const a = await put("videos/a.mp4", first, opts);
+    assert.equal(a.url, `${f.base}/blob/videos/a.mp4`);
+    await assert.rejects(put("videos/a.mp4", second, opts), /already exists/, "a second write without allowOverwrite is refused");
+    await put("videos/a.mp4", new Blob([second]).stream(), { ...opts, allowOverwrite: true });
+    assert.deepEqual((await blobStats()).byKey["videos/a.mp4"], {
       writes: 2,
       size: second.length,
-      sha256: createHash("sha256").update(second).digest("hex"),
+      sha256: digest(second),
       contentType: "video/mp4",
-      cacheControl: "max-age=31536000",
-      upsert: true,
+      cacheControlMaxAge: 31536000,
+      allowOverwrite: true,
+      parts: 1,
     });
-    const download = await fetch(bucket.getPublicUrl("a.mp4", { download: "a.mp4" }).data.publicUrl);
+    const meta = await head(a.url, { token });
+    assert.equal(meta.size, second.length);
+    assert.equal(meta.contentType, "video/mp4");
+
+    const download = await fetch(getDownloadUrl(a.url));
     assert.equal(download.status, 200);
     assert.equal(download.headers.get("content-disposition"), 'attachment; filename="a.mp4"');
+    assert.equal(download.headers.get("cache-control"), "public, max-age=31536000");
     assert.deepEqual(Buffer.from(await download.arrayBuffer()), second);
-    const part = await fetch(bucket.getPublicUrl("a.mp4").data.publicUrl, { headers: { Range: "bytes=0-4" } });
+    const part = await fetch(a.url, { headers: { Range: "bytes=0-4" } });
     assert.equal(part.status, 206, "a <video> range request gets a partial answer, as from a CDN");
     assert.equal(part.headers.get("content-range"), `bytes 0-4/${second.length}`);
     assert.deepEqual(Buffer.from(await part.arrayBuffer()), second.subarray(0, 5));
+
+    const big = Buffer.alloc(20 * 1024 * 1024);
+    for (let i = 0; i < big.length; i += 4096) big[i] = (i / 4096) & 255;
+    const multi = await put("videos/big.mp4", new Blob([big]).stream(), { ...opts, multipart: true });
+    assert.equal(multi.url, `${f.base}/blob/videos/big.mp4`);
+    const stored = (await blobStats()).byKey["videos/big.mp4"];
+    assert.deepEqual({ size: stored.size, sha256: stored.sha256, parts: stored.parts }, { size: big.length, sha256: digest(big), parts: 3 }, "8 MB parts, in order");
+
+    const ref = await put("refs/1-clip.mp4", first, { ...opts, addRandomSuffix: true });
+    assert.match(ref.pathname, /^refs\/1-clip-[0-9a-f]+\.mp4$/);
+    await del([ref.url], { token });
+    await assert.rejects(head(ref.url, { token }), BlobNotFoundError);
+    assert.deepEqual((await blobStats()).deleted, [ref.pathname]);
+
     await fetch(`${f.base}/_config`, { method: "POST", body: JSON.stringify({ storageFailN: 1 }) });
-    assert.match((await bucket.upload("b.mp4", first, { ...opts, upsert: true })).error?.message ?? "", /refused/);
-    assert.equal((await bucket.upload("b.mp4", first, { ...opts, upsert: true })).error, null, "only the next N writes fail");
+    await assert.rejects(put("videos/b.mp4", first, opts), /refused/);
+    await put("videos/b.mp4", first, opts);
+    assert.equal((await blobStats()).failed, 1, "only the next N writes fail");
+    await assert.rejects(put("videos/c.mp4", first, { ...opts, token: "not-a-blob-token" }), /Access denied/);
   } finally {
+    delete process.env.VERCEL_BLOB_API_URL;
     f.close();
   }
 });
