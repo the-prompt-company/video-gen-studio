@@ -1,55 +1,45 @@
+import { after } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
+import type { User } from "@/db/schema";
 import { requireUser, errorResponse, HttpError } from "@/lib/auth";
-import { apiKeyFor, publicGeneration, syncStatus } from "@/lib/generations";
-import * as hf from "@/lib/higgsfield";
+import { cancelGeneration, isGenerationId, publicGeneration, settle } from "@/lib/generations";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-async function ownRow(id: string, userId: number, role: string) {
+async function ownRow(id: string, user: User) {
+  if (!isGenerationId(id)) throw new HttpError(404, "없는 생성 건입니다");
   const db = getDb();
-  const where = role === "admin"
+  const where = user.role === "admin"
     ? eq(schema.generations.id, id)
-    : and(eq(schema.generations.id, id), eq(schema.generations.userId, userId));
+    : and(eq(schema.generations.id, id), eq(schema.generations.userId, user.id));
   const [row] = await db.select().from(schema.generations).where(where).limit(1);
   if (!row) throw new HttpError(404, "없는 생성 건입니다");
   return row;
 }
 
-/** GET /api/generations/:id — returns the row, polling Higgsfield once if still running. */
+/** GET /api/generations/:id — returns the row after settling it. */
 export async function GET(_req: Request, { params }: Ctx) {
   try {
     const user = await requireUser();
     const { id } = await params;
-    let row = await ownRow(id, user.id, user.role);
-    const live = row.status === "queued" || row.status === "in_progress";
-    if (row.userId === user.id && live && row.requestId) {
-      row = await syncStatus(row, apiKeyFor(user));
-    }
-    return Response.json({ item: publicGeneration(row) });
+    return Response.json({ item: publicGeneration(await settle(await ownRow(id, user), after)) });
   } catch (e) {
     return errorResponse(e);
   }
 }
 
-/** DELETE /api/generations/:id — cancel while queued. */
+/** DELETE /api/generations/:id — cancel while queued. 409 with the current row when Higgsfield already started it. */
 export async function DELETE(_req: Request, { params }: Ctx) {
   try {
     const user = await requireUser();
     const { id } = await params;
-    const row = await ownRow(id, user.id, user.role);
+    const row = await ownRow(id, user);
     if (row.userId !== user.id) throw new HttpError(403, "본인 생성 건만 취소할 수 있습니다");
-    if (row.status !== "queued" || !row.requestId) throw new HttpError(409, "대기 중인 건만 취소할 수 있습니다");
-    await hf.cancel(apiKeyFor(user), row.requestId);
-    const db = getDb();
-    const [updated] = await db
-      .update(schema.generations)
-      .set({ status: "canceled", completedAt: new Date(), costUsd: "0" })
-      .where(eq(schema.generations.id, row.id))
-      .returning();
-    return Response.json({ item: publicGeneration(updated) });
+    const current = await cancelGeneration(row, after);
+    if (current.status === "canceled") return Response.json({ item: publicGeneration(current) });
+    return Response.json({ item: publicGeneration(current), error: "이미 생성이 시작돼 취소할 수 없습니다" }, { status: 409 });
   } catch (e) {
-    if (e instanceof hf.HiggsfieldError) return Response.json({ error: e.message }, { status: 409 });
     return errorResponse(e);
   }
 }

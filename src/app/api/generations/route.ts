@@ -1,10 +1,8 @@
 import { and, desc, eq, lt } from "drizzle-orm";
-import { randomUUID } from "node:crypto";
 import { getDb, schema } from "@/db";
 import { requireUser, errorResponse, HttpError } from "@/lib/auth";
-import { findModel, coerceParams, buildArguments } from "@/lib/catalog";
-import * as hf from "@/lib/higgsfield";
-import { apiKeyFor, priceFor, publicGeneration } from "@/lib/generations";
+import { findModel, coerceParams } from "@/lib/catalog";
+import { priceFor, publicGeneration, submitGeneration } from "@/lib/generations";
 
 const MAX_IMAGES = 6;
 const MAX_VIDEOS = 3;
@@ -73,47 +71,15 @@ export async function POST(req: Request) {
     const videoUrls = urlList(body.videoUrls, spec.videos ? Math.min(MAX_VIDEOS, spec.videos.max) : 0, "영상");
 
     let params: Record<string, unknown>;
-    let args: Record<string, unknown>;
     try {
       params = coerceParams(spec, body.params ?? {});
-      args = buildArguments(spec, prompt, params, imageUrls, videoUrls);
     } catch (e) {
       throw new HttpError(400, e instanceof Error ? e.message : String(e));
     }
 
-    const apiKey = apiKeyFor(user);
-    const durationS = Number(params[spec.durationKey] ?? 0);
-    const idem = randomUUID();
-
-    let submitted: hf.HfSubmitResponse;
-    try {
-      submitted = await hf.submit(apiKey, spec.id, args, idem);
-    } catch (e) {
-      if (e instanceof hf.HiggsfieldError) {
-        const hint = e.status === 429 ? ` (큐가 가득 참, ${e.retryAfterS ?? 30}초 후 재시도)` : "";
-        throw new HttpError(502, e.message + hint);
-      }
-      throw e;
-    }
-
-    const [row] = await db
-      .insert(schema.generations)
-      .values({
-        userId: user.id,
-        modelId: spec.id,
-        prompt,
-        params,
-        imageRefs: imageUrls,
-        videoRefs: videoUrls,
-        status: "queued",
-        requestId: submitted.request_id,
-        durationS,
-        costUsd: "0",
-      })
-      .returning();
-
+    const row = await submitGeneration(user, { spec, prompt, params, imageUrls, videoUrls });
     const price = await priceFor(spec.id);
-    return Response.json({ item: publicGeneration(row), estimatedCostUsd: price * durationS }, { status: 201 });
+    return Response.json({ item: publicGeneration(row), estimatedCostUsd: price * row.durationS }, { status: 201 });
   } catch (e) {
     return errorResponse(e);
   }

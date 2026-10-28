@@ -11,6 +11,7 @@ import {
   index,
 } from "drizzle-orm/pg-core";
 import { GENERATION_STATUSES } from "../lib/generation-status";
+import type { RequestId } from "../lib/higgsfield";
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -46,7 +47,7 @@ export const generations = pgTable(
     imageRefs: jsonb("image_refs").$type<string[]>().notNull().default([]),
     videoRefs: jsonb("video_refs").$type<string[]>().notNull().default([]),
     status: text("status", { enum: GENERATION_STATUSES }).notNull().default("queued"),
-    requestId: text("request_id"),
+    requestId: text("request_id").$type<RequestId>(),
     /** Earliest time any caller may ask Higgsfield about this row. A conditional UPDATE on it is the per-row check claim. */
     nextCheckAt: timestamp("next_check_at", { withTimezone: true }).notNull().defaultNow(),
     resultUrl: text("result_url"),
