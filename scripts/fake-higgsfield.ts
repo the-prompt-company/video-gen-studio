@@ -6,11 +6,17 @@
  *   GET  /media/{id}.mp4             deterministic bytes once completed
  *   POST /files/generate-upload-url  then PUT the bytes to upload_url, GET public_url
  *   GET  /_stats, POST /_reset       test hooks, not part of the real API
+ *   POST /_config                    test hook: {"mediaDelayMs"?, "storageFailN"?} changes those knobs while running
+ *
+ * Plus the subset of Supabase Storage that src/lib/storage.ts uses, so SUPABASE_URL can point here too:
+ *   POST|PUT /storage/v1/object/{bucket}/{key}   x-upsert honored, sha256 and size kept, writes counted per key
+ *   GET  /storage/v1/object/public/{bucket}/{key}  ?download=<name> adds Content-Disposition
  *
  *   npm run fake:hf   then   HIGGSFIELD_BASE_URL=http://localhost:4010 npm run dev
  */
 import { createServer as createHttpServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
 export type Config = {
@@ -20,7 +26,9 @@ export type Config = {
   dropWebhooks: number;
   dupWebhooks: boolean;
   videoBytes: number;
+  videoFile: string | null;
   mediaDelayMs: number;
+  storageFailN: number;
 };
 
 export function configFromEnv(env: Record<string, string | undefined>): Config {
@@ -32,7 +40,9 @@ export function configFromEnv(env: Record<string, string | undefined>): Config {
     dropWebhooks: Number(env.FAKE_HF_DROP_WEBHOOKS ?? 0),
     dupWebhooks: env.FAKE_HF_DUP_WEBHOOKS === "1",
     videoBytes: Number(env.FAKE_HF_VIDEO_BYTES ?? 2 * 1024 * 1024),
+    videoFile: env.FAKE_HF_VIDEO_FILE || null,
     mediaDelayMs: Number(env.FAKE_HF_MEDIA_DELAY_MS ?? 0),
+    storageFailN: Number(env.FAKE_HF_STORAGE_FAIL_N ?? 0),
   };
 }
 
@@ -92,6 +102,10 @@ function newStats() {
     },
     webhooks: { sent: 0, dropped: 0, failed: 0 },
     media: { downloads: 0 },
+    storage: {
+      failed: 0,
+      byKey: {} as Record<string, { writes: number; size: number; sha256: string; contentType: string; cacheControl: string | null; upsert: boolean }>,
+    },
   };
 }
 
@@ -101,8 +115,11 @@ export function createFakeHiggsfield(config: Config): Server {
   const submitsByApiKey = new Map<string, number>();
   const pollSecond = new Map<string, { second: number; count: number }>();
   const uploads = new Map<string, { contentType: string; bytes: Buffer }>();
-  const video = deterministicBytes(config.videoBytes);
+  const objects = new Map<string, { contentType: string; bytes: Buffer }>();
+  const video = config.videoFile ? readFileSync(config.videoFile) : deterministicBytes(config.videoBytes);
+  const videoType = config.videoFile?.endsWith(".webm") ? "video/webm" : "video/mp4";
   let stats = newStats();
+  let storageWrites = 0;
   const server = createHttpServer((req, res) => {
     const started = Date.now();
     res.on("finish", () => console.log(`${req.method} ${req.url} -> ${res.statusCode} ${Date.now() - started}ms`));
@@ -121,12 +138,32 @@ export function createFakeHiggsfield(config: Config): Server {
     submitsByApiKey.clear();
     pollSecond.clear();
     uploads.clear();
+    objects.clear();
     stats = newStats();
+    storageWrites = 0;
   }
 
   function json(res: ServerResponse, status: number, body: unknown, headers: Record<string, string> = {}) {
     res.writeHead(status, { "Content-Type": "application/json", ...headers });
     res.end(JSON.stringify(body));
+  }
+
+  /** Serves bytes the way a CDN does. A <video> asks for `Range: bytes=0-` and holds a 200 open, so 206 matters. */
+  function sendBytes(req: IncomingMessage, res: ServerResponse, bytes: Buffer, headers: Record<string, string>) {
+    const range = /^bytes=(\d+)-(\d*)$/.exec(req.headers.range ?? "");
+    const start = range ? Number(range[1]) : 0;
+    const end = range?.[2] ? Math.min(Number(range[2]), bytes.length - 1) : bytes.length - 1;
+    if (start >= bytes.length && bytes.length > 0) {
+      res.writeHead(416, { "Content-Range": `bytes */${bytes.length}` }).end();
+      return;
+    }
+    res.writeHead(range ? 206 : 200, {
+      ...headers,
+      "Accept-Ranges": "bytes",
+      "Content-Length": String(end - start + 1),
+      ...(range && { "Content-Range": `bytes ${start}-${end}/${bytes.length}` }),
+    });
+    res.end(bytes.subarray(start, end + 1));
   }
 
   function statusBody(job: Job, now: number): StatusBody {
@@ -253,16 +290,59 @@ export function createFakeHiggsfield(config: Config): Server {
       reset();
       return json(res, 200, { ok: true });
     }
+    if (method === "POST" && path === "/_config") {
+      const patch = JSON.parse((await readBody(req)) || "{}") as Partial<Pick<Config, "mediaDelayMs" | "storageFailN">>;
+      if (typeof patch.mediaDelayMs === "number") config.mediaDelayMs = patch.mediaDelayMs;
+      if (typeof patch.storageFailN === "number") {
+        config.storageFailN = patch.storageFailN;
+        storageWrites = 0;
+      }
+      return json(res, 200, { mediaDelayMs: config.mediaDelayMs, storageFailN: config.storageFailN });
+    }
+
+    const publicObject = path.match(/^\/storage\/v1\/object\/public\/([^/]+)\/(.+)$/);
+    if (method === "GET" && publicObject) {
+      const object = objects.get(`${publicObject[1]}/${publicObject[2]}`);
+      if (!object) return json(res, 404, { statusCode: "404", error: "not_found", message: "Object not found" });
+      const download = url.searchParams.get("download");
+      return sendBytes(req, res, object.bytes, {
+        "Content-Type": object.contentType,
+        "Cache-Control": "public, max-age=31536000",
+        ...(download !== null && { "Content-Disposition": `attachment; filename="${download || publicObject[2]}"` }),
+      });
+    }
+    const objectWrite = path.match(/^\/storage\/v1\/object\/([^/]+)\/(.+)$/);
+    if ((method === "POST" || method === "PUT") && objectWrite) {
+      const key = `${objectWrite[1]}/${objectWrite[2]}`;
+      const chunks: Buffer[] = [];
+      for await (const c of req) chunks.push(c as Buffer);
+      const bytes = Buffer.concat(chunks);
+      if (++storageWrites <= config.storageFailN) {
+        stats.storage.failed++;
+        return json(res, 500, { statusCode: "500", error: "InternalError", message: "fake storage refused this write" });
+      }
+      const upsert = method === "PUT" || req.headers["x-upsert"] === "true";
+      if (objects.has(key) && !upsert) return json(res, 400, { statusCode: "409", error: "Duplicate", message: "The resource already exists" });
+      const contentType = req.headers["content-type"] ?? "application/octet-stream";
+      objects.set(key, { contentType, bytes });
+      const entry = stats.storage.byKey[key];
+      stats.storage.byKey[key] = {
+        writes: (entry?.writes ?? 0) + 1,
+        size: bytes.length,
+        sha256: createHash("sha256").update(bytes).digest("hex"),
+        contentType,
+        cacheControl: req.headers["cache-control"] ?? null,
+        upsert,
+      };
+      return json(res, 200, { Key: key, Id: randomUUID() });
+    }
 
     const media = path.match(/^\/media\/([^/]+)\.mp4$/);
     if (method === "GET" && media) {
       const job = jobs.get(media[1]);
       if (!job || statusOf(job, Date.now()) !== "completed") return json(res, 404, { detail: "Not found" });
       stats.media.downloads++;
-      setTimeout(() => {
-        res.writeHead(200, { "Content-Type": "video/mp4", "Content-Length": String(video.length) });
-        res.end(video);
-      }, config.mediaDelayMs);
+      setTimeout(() => sendBytes(req, res, video, { "Content-Type": videoType }), config.mediaDelayMs);
       return;
     }
 
