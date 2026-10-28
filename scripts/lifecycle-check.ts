@@ -18,7 +18,8 @@
  * If the test model's price is 0 it sets 0.0123 USD/s for the cost check and restores the stored price afterwards.
  *
  * The submit checks (--submits runs only those) drive pending rows: a lost accept, 429s, the deadline, cancel during
- * and after a submit, cancel and the deadline after an answer was lost or a submitter died, a 422 body mismatch, and
+ * and after a submit, cancel and the deadline after an answer was lost or a submitter died, an owner whose key was
+ * removed (a temporary keyless user, deleted with its rows afterwards), a 422 body mismatch, and
  * a submitter killed after the fake accepted (a child process of this script, started with --submit-once, killed by
  * the proxy's tap). --only runs the named submit checks and nothing else.
  *
@@ -52,7 +53,7 @@ import { and, desc, eq, gt, inArray, isNotNull, isNull, notInArray, or, sql, typ
 import { getDb, schema } from "../src/db";
 import type { Generation, User } from "../src/db/schema";
 import { buildArguments, coerceParams, findModel } from "../src/lib/catalog";
-import { signToken } from "../src/lib/crypto";
+import { encrypt, hashPassword, signToken } from "../src/lib/crypto";
 import { isLive, LIVE_STATUSES } from "../src/lib/generation-status";
 import { videoKey } from "../src/lib/storage";
 import { configFromEnv, createFakeHiggsfield, type Config } from "./fake-higgsfield";
@@ -110,6 +111,7 @@ const MIRROR_LEASE_S = 360;
 const SUBMIT_LEASE_S = 30;
 const DEADLINE_ERROR = "Higgsfield가 30분 동안 요청을 받지 않았습니다";
 const RATE_LIMITED = "Higgsfield 429: Too many requests";
+const NO_KEY_ERROR = "API 키가 아직 할당되지 않았습니다. 관리자에게 문의하세요";
 const REF = "https://example.com/gp3-ref.jpg";
 const COPY_TIMEOUT_MS = 240_000;
 /** 50% above the worst copy peak measured (256 MB), which V8's collection timing sets, not the result's size. */
@@ -1159,13 +1161,16 @@ async function deadlineOnDatabaseClock(owner: Owner, admin: User, upstream: stri
     error: RATE_LIMITED,
     createdAt: sql`now() - interval '31 minutes'`,
   });
+  const refusedBefore = (await stats(upstream)).rejected[429];
   const ahead = await withKnobs(upstream, { firstN429: 1, retryAfterS: 5 }, { firstN429: 0, retryAfterS: 5 }, () =>
     withAppClock(skew, () => owner.settle(fresh, rec.schedule)),
   );
+  const refused = (await stats(upstream)).rejected[429] - refusedBefore;
+  const wait = await secondsUntilNextCheck(fresh.id);
   check(
-    ahead.status === "pending" && ahead.error !== DEADLINE_ERROR,
-    "with the app clock 31 minutes ahead of the database, a row made a moment ago is sent, not failed by the deadline",
-    `${ahead.status}: ${ahead.error}`,
+    ahead.status === "pending" && refused === 1 && wait > 4 && wait <= 5,
+    "with the app clock 31 minutes ahead of the database, a row made a moment ago is sent, not failed by the deadline: the fake refused that one submit with 429, and the row waits out its Retry-After",
+    `${ahead.status}: ${ahead.error}; ${refused} submits refused, next try in ${wait.toFixed(1)} s`,
   );
   const behind = await withAppClock(-skew, () => owner.settle(old, rec.schedule));
   check(
@@ -1299,6 +1304,74 @@ async function deadlineAfterLostAnswer(owner: Owner, admin: User, upstream: stri
   await Promise.all(rec.tasks);
 }
 
+/** A member with no Higgsfield key, as one is after an admin removes theirs. Deleted with its rows after `run`. */
+async function withKeylessUser(run: (user: User) => Promise<void>): Promise<void> {
+  const u = schema.users;
+  const g = schema.generations;
+  const [user] = await getDb()
+    .insert(u)
+    .values({ username: `nokey-${randomUUID().slice(0, 8)}`, passwordHash: hashPassword(randomUUID()), active: false, note: "lifecycle-check 임시 사용자" })
+    .returning();
+  try {
+    await run(user);
+  } finally {
+    await getDb().delete(g).where(eq(g.userId, user.id));
+    await getDb().delete(u).where(eq(u.id, user.id));
+    const left = await getDb().select({ id: u.id }).from(u).where(eq(u.id, user.id));
+    check(left.length === 0, `the keyless user ${user.username} and its rows are deleted`);
+  }
+}
+
+/**
+ * An admin can remove a member's key while a row of theirs is pending. Higgsfield may hold a job for a row whose answer
+ * was lost, so without the key that row waits and is sent again once the key is back, and fails only past the 30-minute
+ * deadline. A row Higgsfield only ever refused holds no job and fails at once, as before.
+ */
+async function noKeyWaitsWhileMaybeAccepted(owner: Owner, upstream: string, proxy: Proxy) {
+  await withKeylessUser(async (user) => {
+    const rec = recorder();
+    const refusedOnly = await insertRow(user, "키 없는 사용자의 429만 받은 제출 대기", { status: "pending", nextCheckAt: sql`now()`, error: RATE_LIMITED });
+    const late = await insertRow(user, "키 없는 사용자의 31분 된 죽은 제출자 행", {
+      status: "pending",
+      nextCheckAt: sql`now()`,
+      createdAt: sql`now() - interval '31 minutes'`,
+    });
+    const before = proxy.requests();
+    const failed = await owner.settle(refusedOnly, rec.schedule);
+    check(failed.status === "failed" && failed.error === NO_KEY_ERROR, "a row Higgsfield only refused (429) fails at once when its owner has no key", `${failed.status}: ${failed.error}`);
+    const expired = await owner.settle(late, rec.schedule);
+    check(
+      expired.status === "failed" && expired.error === NO_KEY_ERROR,
+      "a row Higgsfield may have accepted, whose owner has no key, still fails once the 30-minute deadline has passed",
+      `${expired.status}: ${expired.error}`,
+    );
+
+    const maybe = await insertRow(user, "키 없는 사용자의 죽은 제출자 행", { status: "pending", nextCheckAt: sql`now()` });
+    const requestId = await acceptedAtFake(upstream, maybe);
+    const waiting = await owner.settle(maybe, rec.schedule);
+    const wait = await secondsUntilNextCheck(maybe.id);
+    check(
+      waiting.status === "pending" && waiting.maybeAccepted && waiting.error === NO_KEY_ERROR && wait > 50 && wait <= 60,
+      "a row Higgsfield may have accepted stays pending without its owner's key, records why, and waits a minute instead of failing",
+      `${waiting.status}: ${waiting.error}; next look in ${wait.toFixed(1)} s`,
+    );
+    const refused = await cancelOutcome(owner, waiting, rec.schedule);
+    const held = await readRow(maybe.id);
+    check(/^403 /.test(refused) && held.status === "pending", "a cancel of that row answers 403 and leaves it pending, since only the key can find the job", `cancel ${refused}; row ${held.status}`);
+    await getDb().execute(sql`update generations set next_check_at = now() where id = ${maybe.id}`);
+    const again = await owner.settle(await readRow(maybe.id), rec.schedule);
+    check(again.status === "pending" && (await secondsUntilNextCheck(maybe.id)) > 50, "when the wait runs out with still no key, it waits again", again.status);
+    check(proxy.requests() === before, "no keyless row made a Higgsfield call", `${proxy.requests() - before} requests`);
+
+    await getDb().update(schema.users).set({ apiKeyEnc: encrypt("fake:key") }).where(eq(schema.users.id, user.id));
+    await getDb().execute(sql`update generations set next_check_at = now() where id = ${maybe.id}`);
+    const found = await owner.settle(await readRow(maybe.id), rec.schedule);
+    const end = await endsTracked(owner, upstream, maybe.id, requestId, rec.schedule);
+    check(found.requestId === requestId && end.ok, "once the key is back, the next resend gets the original request_id and the row tracks that job", end.detail);
+    await Promise.all(rec.tasks);
+  });
+}
+
 async function submitChecks(owner: Owner, admin: User, upstream: string, proxy: Proxy, only: string[] | null) {
   const checks: [string, () => Promise<void>][] = [
     ["firstCheckDue", () => firstCheckDue(owner, admin)],
@@ -1310,6 +1383,7 @@ async function submitChecks(owner: Owner, admin: User, upstream: string, proxy: 
     ["cancelAfterDeadSubmitter", () => cancelAfterDeadSubmitter(owner, admin, upstream)],
     ["bodyMismatch", () => bodyMismatch(owner, admin, upstream)],
     ["deadlineAfterLostAnswer", () => deadlineAfterLostAnswer(owner, admin, upstream, proxy)],
+    ["noKeyWaitsWhileMaybeAccepted", () => noKeyWaitsWhileMaybeAccepted(owner, upstream, proxy)],
     ["deadlineOnDatabaseClock", () => deadlineOnDatabaseClock(owner, admin, upstream)],
     [
       "submitDeadline",
