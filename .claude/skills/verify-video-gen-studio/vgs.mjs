@@ -10,10 +10,11 @@
  * Journeys live in ./journeys/<name>.mjs. Evidence lands in <web>/.verify/evidence/<run-id>/<journey>/.
  * Env: VGS_PORT (3100), VGS_USER / VGS_PASS (default: ADMIN_USERNAME / ADMIN_PASSWORD from .env.local),
  *      VGS_RUN_ID (default: timestamp), VGS_MOBILE=1 (390×844 touch viewport), VGS_CHROME (chromium exe path),
- *      VGS_ALLOW_SPEND=1 (lets the playground journey actually submit a paid generation).
+ *      VGS_ALLOW_SPEND=1 (lets the playground journey actually submit a paid generation),
+ *      VGS_VIDEO=1 (records the journey to <evidence>/video.webm).
  */
 import { spawn, execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, openSync, appendFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, openSync, appendFileSync, renameSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import net from "node:net";
@@ -229,7 +230,12 @@ async function run(name) {
   mkdirSync(dir, { recursive: true });
   const { chromium } = await import("playwright");
   const browser = await chromium.launch({ headless: true, executablePath: process.env.VGS_CHROME || undefined });
-  const context = await browser.newContext(mobile ? { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true } : { viewport: { width: 1440, height: 900 } });
+  const viewport = mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 };
+  const context = await browser.newContext({
+    viewport,
+    ...(mobile ? { hasTouch: true, isMobile: true } : {}),
+    ...(process.env.VGS_VIDEO === "1" ? { recordVideo: { dir, size: viewport } } : {}),
+  });
   const page = await context.newPage();
   const consoleLog = join(dir, "console.txt");
   page.on("console", (m) => appendFileSync(consoleLog, `[${m.type()}] ${m.text()}\n`));
@@ -292,6 +298,9 @@ async function run(name) {
   } finally {
     result.finishedAt = new Date().toISOString();
     writeFileSync(join(dir, "result.json"), JSON.stringify(result, null, 2));
+    const video = page.video();
+    await context.close();
+    if (video) renameSync(await video.path(), join(dir, "video.webm"));
     await browser.close();
   }
   console.log(`${result.ok ? "PASS" : "FAIL"} ${name} → ${dir}${result.error ? "\n  " + result.error : ""}`);

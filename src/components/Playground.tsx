@@ -381,7 +381,7 @@ export function Playground({ models, hasApiKey, largeUploads, galleryCount }: { 
   // Poll every live item with backoff (2s → ×1.5 → cap 10s), as Higgsfield recommends.
   useEffect(() => {
     if (!liveKey) return;
-    const ids = liveKey.split(",").map(Number);
+    const ids = liveKey.split(",");
     let delay = 2000;
     let stopped = false;
     let t = 0;
