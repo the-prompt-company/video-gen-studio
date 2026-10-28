@@ -1,17 +1,39 @@
-import { and, desc, eq, lt } from "drizzle-orm";
+import { after } from "next/server";
+import { and, desc, eq, inArray, lt } from "drizzle-orm";
 import { getDb, schema } from "@/db";
+import type { User } from "@/db/schema";
 import { requireUser, errorResponse, HttpError } from "@/lib/auth";
 import { findModel, coerceParams } from "@/lib/catalog";
-import { priceFor, publicGeneration, submitGeneration } from "@/lib/generations";
+import { isGenerationId, priceFor, publicGeneration, settle, submitGeneration } from "@/lib/generations";
 
 const MAX_IMAGES = 6;
 const MAX_VIDEOS = 3;
+const MAX_IDS = 24;
 
-/** GET /api/generations?before=<iso>&limit=24&status=completed — the caller's own rows. */
+/** Settle the listed rows the caller may see. The client poll sends every live id in one request per tick. */
+async function pollRows(user: User, raw: string) {
+  const ids = raw.split(",").filter((s) => s !== "");
+  if (ids.length > MAX_IDS) throw new HttpError(400, `ids는 최대 ${MAX_IDS}개입니다`);
+  const valid = ids.filter(isGenerationId);
+  if (valid.length === 0) return [];
+  const g = schema.generations;
+  const rows = await getDb()
+    .select()
+    .from(g)
+    .where(user.role === "admin" ? inArray(g.id, valid) : and(inArray(g.id, valid), eq(g.userId, user.id)));
+  return Promise.all(rows.map((row) => settle(row, after)));
+}
+
+/**
+ * GET /api/generations?ids=<id>,<id> — settle and return those rows (max 24).
+ * GET /api/generations?before=<iso>&limit=24&status=completed — the caller's own rows.
+ */
 export async function GET(req: Request) {
   try {
     const user = await requireUser();
     const url = new URL(req.url);
+    const ids = url.searchParams.get("ids");
+    if (ids !== null) return Response.json({ items: (await pollRows(user, ids)).map((g) => publicGeneration(g)) });
     const limit = Math.min(60, Math.max(1, Number(url.searchParams.get("limit") ?? 24)));
     const before = url.searchParams.get("before");
     const status = url.searchParams.get("status");
