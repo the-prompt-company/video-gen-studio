@@ -18,7 +18,7 @@ Higgsfield API 위에 올린 팀용 영상 생성 사이트. Next.js 16 (App Rou
 - **생성 흐름**: `POST /api/generations` → Higgsfield `POST /{model_id}` (Idempotency-Key 포함) → `request_id` 저장. 브라우저가 `GET /api/generations/:id`를 2s→×1.5→최대 10s 간격으로 폴링하고, 서버가 그때 Higgsfield 상태를 한 번 조회해 DB를 갱신합니다. Hobby 플랜의 cron 제약(하루 1회) 때문에 서버 측 폴링은 두지 않았습니다.
 - **비용**: Higgsfield 응답에 비용이 없으므로 `models.price_per_sec_usd × 요청 길이(초)`로 계산합니다. 완료 건만 과금. 어드민 → 모델 탭에서 단가를 넣어야 0이 아닌 값이 나옵니다.
 - **레퍼런스 업로드**: 4 MB 이하 파일은 서버를 거쳐 Higgsfield 업로드 스토리지로 바로 갑니다(Blob 사용 안 함). 그보다 큰 mp4는 `BLOB_READ_WRITE_TOKEN`이 있을 때만 브라우저 → Vercel Blob 직접 업로드로 받고, 생성이 끝나면 삭제합니다.
-- **결과 보관**: Higgsfield는 결과를 7일 뒤 지웁니다. 갤러리에 남은 일수를 표시하고 다운로드 버튼을 둡니다. 결과를 영구 보관하려면 Blob 미러링을 켜야 하는데, Hobby의 Blob 1 GB 한도 때문에 기본으로 끄는 쪽을 권합니다(아래 Free 티어 검토).
+- **결과 보관**: Higgsfield는 결과를 7일 뒤 지웁니다. `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`가 있으면 완료 전이를 일으킨 요청이 응답 뒤(`after`)에 결과를 받아 Supabase Storage 공개 버킷에 `<생성 id>.mp4`로 복사하고, 갤러리와 피드는 그 복사본을 재생합니다(보관 "영구"). `SUPABASE_URL`이나 `SUPABASE_SERVICE_ROLE_KEY`가 비어 있으면 복사하지 않고 Higgsfield URL로 재생하며 갤러리에 남은 일수를 표시합니다(아래 완료 영상 보관).
 
 ## 데이터베이스 (Supabase)
 
@@ -56,9 +56,21 @@ HIGGSFIELD_BASE_URL=http://localhost:4010 npm run dev  # 또는 .env.local에 �
 | `FAKE_HF_DROP_WEBHOOKS` | `0` | `?hf_webhook=` 웹훅을 이 비율만큼 보내지 않음 |
 | `FAKE_HF_DUP_WEBHOOKS` | 없음 | `1`이면 완료 웹훅을 두 번 보냄 |
 | `FAKE_HF_VIDEO_BYTES` | `2097152` | `/media/` 응답 크기 |
+| `FAKE_HF_VIDEO_FILE` | 없음 | `/media/` 응답으로 보낼 실제 영상 파일. 브라우저에서 재생까지 보려면 `public/mock/result-landscape.webm` 같은 파일을 주고, 주면 `FAKE_HF_VIDEO_BYTES`는 무시 |
 | `FAKE_HF_MEDIA_DELAY_MS` | `0` | `/media/` 응답 지연 |
+| `FAKE_HF_STORAGE_FAIL_N` | `0` | 스토리지 쓰기 처음 N건에 500 |
 
-`GET /_stats`는 Idempotency-Key별 수락 수, 요청별·키별 상태 조회 수(초당 최대 포함), 웹훅 전송 수, 미디어 다운로드 수를 돌려주고 `POST /_reset`은 모두 비웁니다. 단위 테스트는 `node --test --import tsx scripts/fake-higgsfield.test.ts`입니다.
+가짜 서버는 Supabase Storage의 부분집합(`POST|PUT /storage/v1/object/{bucket}/{key}`, `GET /storage/v1/object/public/{bucket}/{key}`)도 받으므로 `SUPABASE_URL=http://localhost:4010 SUPABASE_SERVICE_ROLE_KEY=fake`로 복사 흐름까지 로컬에서 돌릴 수 있습니다. `GET /_stats`는 Idempotency-Key별 수락 수, 요청별·키별 상태 조회 수(초당 최대 포함), 웹훅 전송 수, 미디어 다운로드 수, 스토리지 키별 쓰기 횟수·크기·sha256을 돌려주고 `POST /_reset`은 모두 비웁니다. `POST /_config`에 `{"mediaDelayMs": 250000}`이나 `{"storageFailN": 3}`(다음 3건 실패)을 보내면 서버를 다시 띄우지 않고 그 값을 바꿉니다. 단위 테스트는 `node --test --import tsx scripts/fake-higgsfield.test.ts`, 생명주기와 복사 단정은 `HIGGSFIELD_BASE_URL=http://localhost:4010 SUPABASE_URL=http://localhost:4010 SUPABASE_SERVICE_ROLE_KEY=fake npx dotenv -e .env.local -- tsx scripts/lifecycle-check.ts`입니다.
+
+## 완료 영상 보관 (Supabase Storage)
+
+1. Supabase 대시보드 → Storage → New bucket. 이름 `videos`, **Public bucket** 켬. Storage Settings의 Global file size limit을 1 GB 이상으로 올립니다(복사는 1 GB 넘는 결과를 거부합니다). Free는 50 MB를 넘길 수 없고 Pro는 500 GB까지 올릴 수 있습니다.
+2. Project Settings → API에서 `SUPABASE_URL`(Project URL)과 `SUPABASE_SERVICE_ROLE_KEY`(service_role)를 `.env.local`과 Vercel 환경 변수에 넣습니다. 버킷 이름을 바꿨으면 `SUPABASE_VIDEO_BUCKET`도 넣습니다.
+3. 생성이 완료되면 몇 초 뒤 서버 로그에 `{"evt":"video_stored","id":...,"bytes":...,"fetchMs":...,"uploadMs":...,"attempt":1}` 한 줄이 찍히고, 갤러리 상세의 보관 행이 "영구"로 바뀝니다. 실패하면 `generations.mirror_error`에 이유가 남고 `mirror_next_at`(최소 6분, 시도마다 2배, 최대 6시간)이 지나야 다시 복사할 수 있습니다. 아직 자동 재시도는 없으므로 그 행은 만료 전까지 Higgsfield URL로 재생됩니다.
+
+복사는 완료 전이를 일으킨 요청 하나가 응답 뒤에 합니다(`maxDuration = 300`). 결과 전체를 메모리에 올리므로 1 GB를 넘는 결과는 거부합니다. 행은 URL이 아니라 객체 키(`<id>.mp4`)만 저장하므로 버킷이나 벤더를 옮길 때는 객체를 복사하고 env만 바꾸면 됩니다.
+
+공개 버킷이라 uuid를 아는 사람은 누구나 볼 수 있습니다(지금 Higgsfield URL과 같은 수준). 사내 영상을 링크로도 공유하면 안 되면 버킷을 Private으로 바꾸고 `src/lib/storage.ts`의 `videoUrls`가 `getPublicUrl` 대신 `createSignedUrl`(예: 1시간)을 쓰도록 고칩니다. 그러면 갤러리를 열 때마다 서명 요청이 한 번 더 가고, 오래 열어 둔 탭의 영상 주소는 만료됩니다.
 
 ## Vercel 배포 (Hobby 기준)
 
