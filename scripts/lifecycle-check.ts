@@ -225,7 +225,7 @@ async function submit(owner: Owner, admin: User, label: string): Promise<Generat
     params: coerceParams(spec, {}),
     imageUrls: ["https://example.com/gp3-ref.jpg"],
     videoUrls: [],
-  });
+  }, (task) => void task());
   created.push(row.id);
   return row;
 }
@@ -553,7 +553,8 @@ async function removeCreated(): Promise<number> {
 
 /**
  * sweep settles every due row of every user, and a row the fake does not know turns failed. Refuse to sweep while a
- * row this run did not create is live with a request id, or is an unstored, unexpired result, whatever its clocks say.
+ * row this run did not create is pending, is live with a request id, or is an unstored, unexpired result, whatever its
+ * clocks say.
  */
 async function assertSweepScope(): Promise<void> {
   const g = schema.generations;
@@ -562,10 +563,15 @@ async function assertSweepScope(): Promise<void> {
     .from(g)
     .where(
       and(
-        isNotNull(g.requestId),
         or(
-          inArray(g.status, LIVE_STATUSES),
-          and(eq(g.status, "completed"), isNull(g.storagePath), isNotNull(g.resultUrl), or(isNull(g.expiresAt), gt(g.expiresAt, sql`now()`))),
+          eq(g.status, "pending"),
+          and(
+            isNotNull(g.requestId),
+            or(
+              inArray(g.status, LIVE_STATUSES),
+              and(eq(g.status, "completed"), isNull(g.storagePath), isNotNull(g.resultUrl), or(isNull(g.expiresAt), gt(g.expiresAt, sql`now()`))),
+            ),
+          ),
         ),
         created.length > 0 ? notInArray(g.id, created) : undefined,
       ),
@@ -595,8 +601,8 @@ async function hookRefusals(owner: Owner, admin: User, proxy: Proxy) {
   check(refused.every((c) => c === 401), "a webhook with a tampered token, or with another row's token, gets 401", refused.join(","));
   const noRequestId = await post(hookUrlFor(bare.id));
   check(noRequestId === 503, "a webhook for a live row without request_id gets 503, so Higgsfield delivers it again");
-  const notInserted = await owner.onProviderHook(hookUrlFor(randomUUID()), recorder().schedule);
-  check(notInserted === "retry", "a webhook for a row that is not inserted yet asks for redelivery", notInserted);
+  const missing = await owner.onProviderHook(hookUrlFor(randomUUID()), recorder().schedule);
+  check(missing === "done", "a webhook for a row that does not exist answers done (204), since rows are inserted before Higgsfield sees their id", missing);
   const after = await readRow(row.id);
   check(
     proxy.requests() === before && after.status === row.status && after.nextCheckAt.getTime() === row.nextCheckAt.getTime(),

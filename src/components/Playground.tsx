@@ -182,6 +182,7 @@ function FeedItem({ g, index, total, active, now, modelName }: { g: PublicGenera
               <span aria-hidden className="h-14 w-14 animate-spin rounded-full border-2 border-foreground border-t-transparent [animation-duration:1.4s]" />
               <span className="font-display text-7xl leading-none text-foreground sm:text-8xl" aria-live="polite">{fmtElapsed(took)}</span>
               <span className="text-sm text-muted">{label} · 경과 시간</span>
+              {g.status === "pending" && <span className="max-w-xs text-xs text-muted">Higgsfield가 요청을 받는 대로 자동으로 시작합니다</span>}
             </>
           ) : (
             <>
@@ -484,12 +485,14 @@ export function Playground({ models, hasApiKey, largeUploads, galleryCount }: { 
         body: JSON.stringify({ modelId: model.id, prompt, params, imageUrls: images.map((r) => r.url), videoUrls: videos.map((r) => r.url) }),
       });
       const body = (await res.json().catch(() => ({}))) as { item?: PublicGeneration; error?: string };
+      if (body.item) {
+        pollDelay.current = POLL_FIRST_MS;
+        upsert(body.item);
+        setActiveId(body.item.id);
+        feedRef.current?.scrollTo({ top: 0, behavior: prefersReducedMotion() ? "auto" : "smooth" });
+        feedRef.current?.closest("section")?.scrollIntoView({ block: "start", behavior: prefersReducedMotion() ? "auto" : "smooth" });
+      }
       if (!res.ok || !body.item) throw new Error(body.error ?? `제출 실패 (${res.status})`);
-      pollDelay.current = POLL_FIRST_MS;
-      upsert(body.item);
-      setActiveId(body.item.id);
-      feedRef.current?.scrollTo({ top: 0, behavior: prefersReducedMotion() ? "auto" : "smooth" });
-      feedRef.current?.closest("section")?.scrollIntoView({ block: "start", behavior: prefersReducedMotion() ? "auto" : "smooth" });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -531,7 +534,7 @@ export function Playground({ models, hasApiKey, largeUploads, galleryCount }: { 
     return [undefined, undefined];
   })();
   const canGenerate = hasApiKey && !submitting && !uploading;
-  const canCancel = Boolean(active && active.status === "queued");
+  const canCancel = Boolean(active && (active.status === "pending" || active.status === "queued"));
   const activeStarted = active ? new Date(active.createdAt).getTime() : 0;
   const activeIndex = active ? items.findIndex((i) => i.id === active.id) : -1;
   const reuseCount = active ? items.filter((i) => i.prompt === active.prompt && i.modelId === active.modelId).length : 0;

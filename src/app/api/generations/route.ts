@@ -78,7 +78,10 @@ function urlList(v: unknown, max: number, label: string): string[] {
   return out;
 }
 
-/** POST /api/generations — submit one generation. */
+/**
+ * POST /api/generations — submit one generation. 201 when Higgsfield accepted it, 202 when it waits as 제출 대기 and
+ * submits itself again, 502 when Higgsfield refused it. Every answer carries the row as `item`.
+ */
 export async function POST(req: Request) {
   try {
     const user = await requireUser();
@@ -102,9 +105,13 @@ export async function POST(req: Request) {
       throw new HttpError(400, e instanceof Error ? e.message : String(e));
     }
 
-    const row = await submitGeneration(user, { spec, prompt, params, imageUrls, videoUrls });
+    const row = await submitGeneration(user, { spec, prompt, params, imageUrls, videoUrls }, after);
     const price = await priceFor(spec.id);
-    return Response.json({ item: publicGeneration(row), estimatedCostUsd: price * row.durationS }, { status: 201 });
+    const failed = row.status === "failed";
+    return Response.json(
+      { item: publicGeneration(row), error: failed ? row.error : undefined, estimatedCostUsd: price * row.durationS },
+      { status: failed ? 502 : row.status === "pending" ? 202 : 201 },
+    );
   } catch (e) {
     return errorResponse(e);
   }
