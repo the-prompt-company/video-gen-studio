@@ -23,7 +23,8 @@ function createDb() {
   // - idle_timeout / max_lifetime — drop idle sockets ourselves before the pooler
   //   does; otherwise the next query can hang for a minute on a half-closed socket.
   // - connect_timeout — fail fast instead of blocking a page render.
-  const options = { prepare: false, idle_timeout: 20, max_lifetime: 60 * 30, connect_timeout: 10 };
+  // - ssl: "require" encrypts the link to the pooler (no certificate check; the URL alone has no sslmode).
+  const options = { prepare: false, ssl: "require" as const, idle_timeout: 20, max_lifetime: 60 * 30, connect_timeout: 10 };
   const pooled = { ...options, max: poolMax(), max_pipeline: 0 };
   const client = postgres(url, pooled);
   // With max_pipeline 0, sql.begin() sends BEGIN but never reserves its connection
