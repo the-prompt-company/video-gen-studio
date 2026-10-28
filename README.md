@@ -55,7 +55,10 @@ HIGGSFIELD_BASE_URL=http://localhost:4010 npm run dev  # 또는 .env.local에 �
 |---|---|---|
 | `FAKE_HF_PORT` | `4010` | 포트 |
 | `FAKE_HF_DURATION_MS` | `3000-8000` | 제출부터 완료까지 걸리는 시간(범위 또는 고정값) |
-| `FAKE_HF_429_FIRST_N` | `0` | API 키별 처음 N건 제출에 429와 `Retry-After: 5` |
+| `FAKE_HF_429_FIRST_N` | `0` | API 키별 처음 N건 제출에 429와 `Retry-After` |
+| `FAKE_HF_RETRY_AFTER_S` | `5` | 429와 제출 5xx에 붙이는 `Retry-After` 초 |
+| `FAKE_HF_SUBMIT_FAIL_N` | `0` | 제출 처음 N건에 503(키와 상관없이) |
+| `FAKE_HF_SUBMIT_DELAY_MS` | `0` | 제출 응답 지연. 제출 lease 중 취소를 재현할 때 씀 |
 | `FAKE_HF_DROP_WEBHOOKS` | `0` | `?hf_webhook=` 웹훅을 이 비율만큼 보내지 않음 |
 | `FAKE_HF_DUP_WEBHOOKS` | 없음 | `1`이면 완료 웹훅을 두 번 보냄 |
 | `FAKE_HF_VIDEO_BYTES` | `2097152` | `/media/` 응답 크기 |
@@ -65,7 +68,7 @@ HIGGSFIELD_BASE_URL=http://localhost:4010 npm run dev  # 또는 .env.local에 �
 | `FAKE_HF_STATUS_FAIL_N` | `0` | 상태 조회 처음 N건에 503 |
 | `FAKE_HF_WEBHOOK_RETRY_MS` | `2000` | 웹훅이 5xx나 연결 오류를 받으면 이 간격부터 두 배씩 늘려 2시간 동안 다시 보냄. 4xx는 다시 보내지 않음(Higgsfield와 같음) |
 
-가짜 서버는 Supabase Storage의 부분집합(`POST|PUT /storage/v1/object/{bucket}/{key}`, `GET /storage/v1/object/public/{bucket}/{key}`)도 받으므로 `SUPABASE_URL=http://localhost:4010 SUPABASE_SERVICE_ROLE_KEY=fake`로 복사 흐름까지 로컬에서 돌릴 수 있습니다. `GET /_stats`는 Idempotency-Key별 수락 수, 요청별·키별 상태 조회 수(초당 최대 포함), 웹훅 전송·재전송 수와 요청별 응답 코드 목록, 미디어 다운로드 수, 스토리지 키별 쓰기 횟수·크기·sha256을 돌려주고 `POST /_reset`은 모두 비웁니다. `POST /_config`에 `{"mediaDelayMs": 250000}`, `{"storageFailN": 3}`(다음 3건 실패), `{"statusFailN": 1}`, `{"dropWebhooks": 1}`, `{"dupWebhooks": true}`를 보내면 서버를 다시 띄우지 않고 그 값을 바꿉니다. 단위 테스트는 `node --test --import tsx scripts/fake-higgsfield.test.ts`, 생명주기와 복사 단정은 `HIGGSFIELD_BASE_URL=http://localhost:4010 SUPABASE_URL=http://localhost:4010 SUPABASE_SERVICE_ROLE_KEY=fake npx dotenv -e .env.local -- tsx scripts/lifecycle-check.ts`입니다.
+가짜 서버는 Supabase Storage의 부분집합(`POST|PUT /storage/v1/object/{bucket}/{key}`, `GET /storage/v1/object/public/{bucket}/{key}`)도 받으므로 `SUPABASE_URL=http://localhost:4010 SUPABASE_SERVICE_ROLE_KEY=fake`로 복사 흐름까지 로컬에서 돌릴 수 있습니다. `GET /_stats`는 Idempotency-Key별 수락 수, 요청별·키별 상태 조회 수(초당 최대 포함), 웹훅 전송·재전송 수와 요청별 응답 코드 목록, 미디어 다운로드 수, 스토리지 키별 쓰기 횟수·크기·sha256을 돌려주고 `POST /_reset`은 모두 비웁니다. `POST /_config`에 `{"mediaDelayMs": 250000}`, `{"storageFailN": 3}`(다음 3건 실패), `{"statusFailN": 1}`, `{"dropWebhooks": 1}`, `{"dupWebhooks": true}`, `{"firstN429": 1}`(키별 횟수를 처음부터 다시 셈), `{"retryAfterS": 60}`, `{"submitFailN": 3}`, `{"submitDelayMs": 10000}`을 보내면 서버를 다시 띄우지 않고 그 값을 바꾸고, 응답으로 현재 값 전부를 돌려줍니다. 단위 테스트는 `node --test --import tsx scripts/fake-higgsfield.test.ts`, 생명주기와 복사 단정은 `HIGGSFIELD_BASE_URL=http://localhost:4010 SUPABASE_URL=http://localhost:4010 SUPABASE_SERVICE_ROLE_KEY=fake npx dotenv -e .env.local -- tsx scripts/lifecycle-check.ts`입니다.
 
 ## 완료 영상 보관 (Supabase Storage)
 

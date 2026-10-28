@@ -7,7 +7,8 @@
  *   POST /files/generate-upload-url  then PUT the bytes to upload_url, GET public_url
  *   GET  /_stats, POST /_reset       test hooks, not part of the real API
  *   POST /_config                    test hook: {"mediaDelayMs"?, "storageFailN"?, "statusFailN"?, "dropWebhooks"?,
- *                                    "dupWebhooks"?} changes those knobs while running
+ *                                    "dupWebhooks"?, "firstN429"?, "retryAfterS"?, "submitFailN"?, "submitDelayMs"?}
+ *                                    changes those knobs while running and answers with all of them
  *
  * Webhooks go to ?hf_webhook=<url> when a request completes. Like Higgsfield, a 5xx or network error is redelivered
  * (here after FAKE_HF_WEBHOOK_RETRY_MS, doubling, for up to 2 hours) and a 4xx is not.
@@ -27,6 +28,9 @@ export type Config = {
   port: number;
   durationMs: [number, number];
   firstN429: number;
+  retryAfterS: number;
+  submitFailN: number;
+  submitDelayMs: number;
   dropWebhooks: number;
   dupWebhooks: boolean;
   videoBytes: number;
@@ -43,6 +47,9 @@ export function configFromEnv(env: Record<string, string | undefined>): Config {
     port: Number(env.FAKE_HF_PORT ?? 4010),
     durationMs: [range[0], range[1] ?? range[0]],
     firstN429: Number(env.FAKE_HF_429_FIRST_N ?? 0),
+    retryAfterS: Number(env.FAKE_HF_RETRY_AFTER_S ?? 5),
+    submitFailN: Number(env.FAKE_HF_SUBMIT_FAIL_N ?? 0),
+    submitDelayMs: Number(env.FAKE_HF_SUBMIT_DELAY_MS ?? 0),
     dropWebhooks: Number(env.FAKE_HF_DROP_WEBHOOKS ?? 0),
     dupWebhooks: env.FAKE_HF_DUP_WEBHOOKS === "1",
     videoBytes: Number(env.FAKE_HF_VIDEO_BYTES ?? 2 * 1024 * 1024),
@@ -53,6 +60,9 @@ export function configFromEnv(env: Record<string, string | undefined>): Config {
     webhookRetryMs: Number(env.FAKE_HF_WEBHOOK_RETRY_MS ?? 2000),
   };
 }
+
+/** The submit knobs. firstN429 set through /_config starts a fresh count for every key. */
+type Submits = "firstN429" | "retryAfterS" | "submitFailN" | "submitDelayMs";
 
 type Status = "queued" | "in_progress" | "completed" | "canceled";
 
@@ -106,7 +116,7 @@ function deterministicBytes(n: number): Buffer {
 function newStats() {
   return {
     accepted: { total: 0, byIdempotencyKey: {} as Record<string, number> },
-    rejected: { 429: 0, 422: 0 },
+    rejected: { 429: 0, 422: 0, 503: 0 },
     statusPolls: {
       failed: 0,
       byRequest: {} as Record<string, { total: number; perSecondMax: number }>,
@@ -135,6 +145,7 @@ export function createFakeHiggsfield(config: Config): Server {
   let stats = newStats();
   let storageWrites = 0;
   let statusFails = config.statusFailN;
+  let submitFails = config.submitFailN;
   const server = createHttpServer((req, res) => {
     const started = Date.now();
     res.on("finish", () => console.log(`${req.method} ${req.url} -> ${res.statusCode} ${Date.now() - started}ms`));
@@ -159,6 +170,7 @@ export function createFakeHiggsfield(config: Config): Server {
     stats = newStats();
     storageWrites = 0;
     statusFails = config.statusFailN;
+    submitFails = config.submitFailN;
   }
 
   function json(res: ServerResponse, status: number, body: unknown, headers: Record<string, string> = {}) {
@@ -254,6 +266,13 @@ export function createFakeHiggsfield(config: Config): Server {
     } catch {
       return json(res, 400, { detail: "body must be JSON" });
     }
+    if (config.submitDelayMs > 0) await new Promise((r) => setTimeout(r, config.submitDelayMs));
+    const retryAfter = { "Retry-After": String(config.retryAfterS) };
+    if (submitFails > 0) {
+      submitFails--;
+      stats.rejected[503]++;
+      return json(res, 503, { detail: "fake submit refused this call" }, retryAfter);
+    }
     const idempotencyKey = req.headers["idempotency-key"]?.toString() ?? null;
     const existingId = idempotencyKey ? byIdempotencyKey.get(idempotencyKey) : undefined;
     const existing = existingId ? jobs.get(existingId) : undefined;
@@ -268,7 +287,7 @@ export function createFakeHiggsfield(config: Config): Server {
     submitsByApiKey.set(apiKey, attempts);
     if (attempts <= config.firstN429) {
       stats.rejected[429]++;
-      return json(res, 429, { detail: "Too many requests" }, { "Retry-After": "5" });
+      return json(res, 429, { detail: "Too many requests" }, retryAfter);
     }
     const now = Date.now();
     const [lo, hi] = config.durationMs;
@@ -327,7 +346,7 @@ export function createFakeHiggsfield(config: Config): Server {
     }
     if (method === "POST" && path === "/_config") {
       const patch = JSON.parse((await readBody(req)) || "{}") as Partial<
-        Pick<Config, "mediaDelayMs" | "storageFailN" | "statusFailN" | "dropWebhooks" | "dupWebhooks">
+        Pick<Config, "mediaDelayMs" | "storageFailN" | "statusFailN" | "dropWebhooks" | "dupWebhooks" | Submits>
       >;
       if (typeof patch.mediaDelayMs === "number") config.mediaDelayMs = patch.mediaDelayMs;
       if (typeof patch.storageFailN === "number") {
@@ -337,8 +356,15 @@ export function createFakeHiggsfield(config: Config): Server {
       if (typeof patch.statusFailN === "number") statusFails = config.statusFailN = patch.statusFailN;
       if (typeof patch.dropWebhooks === "number") config.dropWebhooks = patch.dropWebhooks;
       if (typeof patch.dupWebhooks === "boolean") config.dupWebhooks = patch.dupWebhooks;
-      const { mediaDelayMs, storageFailN, statusFailN, dropWebhooks, dupWebhooks } = config;
-      return json(res, 200, { mediaDelayMs, storageFailN, statusFailN, dropWebhooks, dupWebhooks });
+      if (typeof patch.firstN429 === "number") {
+        config.firstN429 = patch.firstN429;
+        submitsByApiKey.clear();
+      }
+      if (typeof patch.retryAfterS === "number") config.retryAfterS = patch.retryAfterS;
+      if (typeof patch.submitFailN === "number") submitFails = config.submitFailN = patch.submitFailN;
+      if (typeof patch.submitDelayMs === "number") config.submitDelayMs = patch.submitDelayMs;
+      const { mediaDelayMs, storageFailN, statusFailN, dropWebhooks, dupWebhooks, firstN429, retryAfterS, submitFailN, submitDelayMs } = config;
+      return json(res, 200, { mediaDelayMs, storageFailN, statusFailN, dropWebhooks, dupWebhooks, firstN429, retryAfterS, submitFailN, submitDelayMs });
     }
 
     const publicObject = path.match(/^\/storage\/v1\/object\/public\/([^/]+)\/(.+)$/);

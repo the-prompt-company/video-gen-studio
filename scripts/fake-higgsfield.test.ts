@@ -38,7 +38,7 @@ async function statusOf(base: string, id: string) {
 async function stats(base: string) {
   return (await (await fetch(`${base}/_stats`)).json()) as {
     accepted: { total: number; byIdempotencyKey: Record<string, number> };
-    rejected: { 429: number; 422: number };
+    rejected: { 429: number; 422: number; 503: number };
     webhooks: { sent: number; dropped: number; failed: number; retried: number; byRequest: Record<string, number[]> };
     media: { downloads: number };
   };
@@ -89,6 +89,38 @@ test("FAKE_HF_429_FIRST_N rejects the first N submits per key with Retry-After, 
     const s = await stats(f.base);
     assert.equal(s.rejected[429], 2);
     assert.equal(s.accepted.total, 2);
+  } finally {
+    f.close();
+  }
+});
+
+test("POST /_config submitFailN answers 503 with Retry-After to that many submits, then the same key is accepted once", async () => {
+  const f = await fake();
+  try {
+    await fetch(`${f.base}/_config`, { method: "POST", body: JSON.stringify({ submitFailN: 3, retryAfterS: 7 }) });
+    const tries = [];
+    for (let i = 0; i < 4; i++) tries.push(await submit(f.base, "k1", { prompt: "a" }));
+    assert.deepEqual(tries.map((t) => t.status), [503, 503, 503, 200]);
+    assert.equal(tries[0].retryAfter, "7");
+    const s = await stats(f.base);
+    assert.equal(s.rejected[503], 3);
+    assert.equal(s.accepted.byIdempotencyKey.k1, 1);
+  } finally {
+    f.close();
+  }
+});
+
+test("POST /_config submitDelayMs holds each submit answer, and firstN429 starts a fresh count with its Retry-After", async () => {
+  const f = await fake();
+  try {
+    await submit(f.base, "k0", { prompt: "a" });
+    await fetch(`${f.base}/_config`, { method: "POST", body: JSON.stringify({ submitDelayMs: 300, firstN429: 1, retryAfterS: 9 }) });
+    const t0 = Date.now();
+    const limited = await submit(f.base, "k1", { prompt: "a" });
+    assert.ok(Date.now() - t0 >= 290, `answered after ${Date.now() - t0} ms`);
+    assert.equal(limited.status, 429, "the key's earlier submit does not count toward the new firstN429");
+    assert.equal(limited.retryAfter, "9");
+    assert.equal((await submit(f.base, "k1", { prompt: "a" })).status, 200);
   } finally {
     f.close();
   }
@@ -157,7 +189,17 @@ test("POST /_config statusFailN answers 503 to that many status calls, and dropW
   const f = await fake();
   try {
     const knobs = await fetch(`${f.base}/_config`, { method: "POST", body: JSON.stringify({ statusFailN: 2, dropWebhooks: 1 }) });
-    assert.deepEqual(await knobs.json(), { mediaDelayMs: 0, storageFailN: 0, statusFailN: 2, dropWebhooks: 1, dupWebhooks: false });
+    assert.deepEqual(await knobs.json(), {
+      mediaDelayMs: 0,
+      storageFailN: 0,
+      statusFailN: 2,
+      dropWebhooks: 1,
+      dupWebhooks: false,
+      firstN429: 0,
+      retryAfterS: 5,
+      submitFailN: 0,
+      submitDelayMs: 0,
+    });
     const { body } = await submit(f.base, "k1", { prompt: "a" }, `?hf_webhook=${encodeURIComponent(`${hookBase}/hook`)}`);
     const codes = [];
     for (let i = 0; i < 3; i++) {
