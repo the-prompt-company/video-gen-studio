@@ -217,7 +217,7 @@ export async function storeVideo(gen: Generation): Promise<Generation> {
     const fetchMs = Date.now() - t0;
     const key = storage.videoKey(claimed.id);
     const t1 = Date.now();
-    await storage.putVideo(key, bytes, contentType);
+    await storage.putVideo(key, bytes, { contentType, size: bytes.byteLength });
     const uploadMs = Date.now() - t1;
     console.info(JSON.stringify({ evt: "video_stored", id: claimed.id, bytes: bytes.byteLength, fetchMs, uploadMs, attempt }));
     const [row] = await getDb()
@@ -262,7 +262,7 @@ export type PublicGeneration = ReturnType<typeof publicGeneration>;
  */
 function publicVideo(g: Generation): PublicVideo | null {
   if (g.status !== "completed") return null;
-  const stored = g.storagePath && storage.videoUrls(g.storagePath, `${g.id}.mp4`);
+  const stored = g.storagePath && storage.videoUrls(g.storagePath);
   if (stored) return { kind: "stored", ...stored };
   if (!g.resultUrl) return null;
   const unexpired = g.expiresAt === null || g.expiresAt.getTime() > Date.now();
@@ -632,7 +632,7 @@ async function claimCopy(id: string): Promise<Generation | null> {
 }
 
 /** Buffer the result, refusing anything over MAX_COPY_BYTES before or while it streams in. */
-async function fetchResult(url: string): Promise<{ bytes: Uint8Array; contentType: string }> {
+async function fetchResult(url: string): Promise<{ bytes: Buffer; contentType: string }> {
   const res = await fetch(url, { signal: AbortSignal.timeout(COPY_TIMEOUT_MS) });
   if (!res.ok || !res.body) throw new Error(`result fetch failed: HTTP ${res.status}`);
   const declared = Number(res.headers.get("content-length") ?? 0);
