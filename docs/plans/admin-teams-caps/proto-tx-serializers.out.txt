@@ -1,0 +1,14 @@
+PR #11 pooled client, jsonb param              "object"
+PR #11 db.transaction, jsonb param             "string"
+PR #11 pooled client, typed select             {"createdAtIsDate":true,"paramsType":"object","costUsdType":"string"}
+PR #11 db.transaction, typed select            {"createdAtIsDate":true,"paramsType":"object","costUsdType":"string"}
+with handlers copied, db.transaction, jsonb    "object"
+with handlers copied, db.transaction, select   {"createdAtIsDate":true,"paramsType":"object","costUsdType":"string"}
+database                                       {"db":"11 MB","generations":16,"users":2}
+lock + sum in a read-only transaction, ms      [115,131,126,136,119,119,124,123]
+the sum alone on the pooled client, ms         [34,33,44,33,33,35,33,32]
+Aggregate  (cost=3.24..3.25 rows=1 width=32) (actual time=0.035..0.035 rows=1 loops=1)
+  ->  Seq Scan on generations  (cost=0.00..3.20 rows=16 width=3) (actual time=0.012..0.025 rows=16 loops=1)
+        Filter: (user_id = 1)
+Planning Time: 0.121 ms
+Execution Time: 0.065 ms
