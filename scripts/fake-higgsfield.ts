@@ -22,6 +22,10 @@
  *   POST /api/blob/delete            del, {"urls": [...]}; every pathname asked for is listed in /_stats
  *   GET  /blob/{pathname}            the stored bytes, Range honored, ?download=1 serves them as an attachment
  * Writes keep size and sha256 per pathname and count writes. Bytes stream in and are hashed as they arrive.
+ * A browser upload carries a vercel_blob_client_ token from handleUpload instead. Like the real store, a write with it
+ * must name the token's pathname and gets the token's addRandomSuffix. The fake reads the token without checking its
+ * signature, and answers CORS preflights on /api/blob so a page on another port can upload
+ * (NEXT_PUBLIC_VERCEL_BLOB_API_URL points the browser's @vercel/blob here).
  *
  *   npm run fake:hf   then   HIGGSFIELD_BASE_URL=http://localhost:4010 npm run dev
  */
@@ -30,6 +34,7 @@ import { createHash, randomUUID, type Hash } from "node:crypto";
 import type { AddressInfo } from "node:net";
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
+import { getPayloadFromClientToken } from "@vercel/blob/client";
 
 export type Config = {
   port: number;
@@ -407,9 +412,9 @@ export function createFakeHiggsfield(config: Config): Server {
   }
 
   /** The final pathname of a write, or an error answer when it would overwrite without x-allow-overwrite: 1. */
-  function target(req: IncomingMessage, pathname: string): string | null {
+  function target(req: IncomingMessage, pathname: string, randomSuffix: boolean): string | null {
     let final = pathname;
-    if (req.headers["x-add-random-suffix"] === "1") {
+    if (randomSuffix) {
       const dot = pathname.lastIndexOf(".");
       const suffix = `-${randomUUID().replace(/-/g, "").slice(0, 22)}`;
       final = dot > pathname.lastIndexOf("/") ? `${pathname.slice(0, dot)}${suffix}${pathname.slice(dot)}` : `${pathname}${suffix}`;
@@ -446,20 +451,24 @@ export function createFakeHiggsfield(config: Config): Server {
   async function blobApi(req: IncomingMessage, res: ServerResponse, url: URL) {
     const method = req.method ?? "GET";
     const path = url.pathname.replace(/\/+$/, "");
-    if (!/^Bearer vercel_blob_rw_/.test(req.headers.authorization ?? "")) {
+    const auth = req.headers.authorization ?? "";
+    const client = auth.startsWith("Bearer vercel_blob_client_") ? getPayloadFromClientToken(auth.slice("Bearer ".length)) : null;
+    const writing = (method === "PUT" && path === "/api/blob") || (method === "POST" && path === "/api/blob/mpu");
+    const pathname = url.searchParams.get("pathname") ?? "";
+    const allowed = client ? writing && pathname === client.pathname : auth.startsWith("Bearer vercel_blob_rw_");
+    if (!allowed) {
       req.resume();
       return blobError(res, 403, "forbidden", "Access denied, please provide a valid token for this resource.");
     }
-    const writing = (method === "PUT" && path === "/api/blob") || (method === "POST" && path === "/api/blob/mpu");
     if (writing && ++storageWrites <= config.storageFailN) {
       await receive(req);
       stats.storage.failed++;
       return blobError(res, 400, "bad_request", "fake storage refused this write");
     }
-    const pathname = url.searchParams.get("pathname") ?? "";
+    const randomSuffix = client ? client.addRandomSuffix === true : req.headers["x-add-random-suffix"] === "1";
 
     if (method === "PUT" && path === "/api/blob") {
-      const final = target(req, pathname);
+      const final = target(req, pathname, randomSuffix);
       const body = await receive(req);
       if (final === null) return blobError(res, 400, "bad_request", "This blob already exists, use `allowOverwrite: true`");
       return json(res, 200, blobResult(req, final, store(req, final, body.chunks, body.size, body.hash.digest("hex"), 1)));
@@ -469,7 +478,7 @@ export function createFakeHiggsfield(config: Config): Server {
       const action = req.headers["x-mpu-action"];
       if (action === "create") {
         req.resume();
-        const final = target(req, pathname);
+        const final = target(req, pathname, randomSuffix);
         if (final === null) return blobError(res, 400, "bad_request", "This blob already exists, use `allowOverwrite: true`");
         const uploadId = randomUUID();
         multiparts.set(uploadId, { pathname: final, key: `${final}#${uploadId}`, parts: new Map() });
@@ -578,7 +587,15 @@ export function createFakeHiggsfield(config: Config): Server {
         ETag: object.etag,
       });
     }
-    if (path === "/api/blob" || path.startsWith("/api/blob/")) return blobApi(req, res, url);
+    if (path === "/api/blob" || path.startsWith("/api/blob/")) {
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      if (method !== "OPTIONS") return blobApi(req, res, url);
+      res.writeHead(204, {
+        "Access-Control-Allow-Methods": "GET, PUT, POST",
+        "Access-Control-Allow-Headers": req.headers["access-control-request-headers"] ?? "",
+      });
+      return res.end();
+    }
 
     const media = path.match(/^\/media\/([^/]+)\.mp4$/);
     if (method === "GET" && media) {

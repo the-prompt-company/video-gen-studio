@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { createServer, type Server } from "node:http";
 import { once } from "node:events";
 import { createHash } from "node:crypto";
-import { BlobNotFoundError, del, getDownloadUrl, head, put } from "@vercel/blob";
+import { BlobAccessError, BlobNotFoundError, del, getDownloadUrl, head, put } from "@vercel/blob";
+import { generateClientTokenFromReadWriteToken, put as clientPut } from "@vercel/blob/client";
 import { createFakeHiggsfield, configFromEnv, type Config } from "./fake-higgsfield";
 
 const KEY = "fake:key";
@@ -330,6 +331,30 @@ test("the Vercel Blob subset answers the real @vercel/blob client", async () => 
     await put("videos/b.mp4", first, opts);
     assert.equal((await blobStats()).failed, 1, "only the next N writes fail");
     await assert.rejects(put("videos/c.mp4", first, { ...opts, token: "not-a-blob-token" }), /Access denied/);
+  } finally {
+    delete process.env.VERCEL_BLOB_API_URL;
+    f.close();
+  }
+});
+
+test("a browser's client token writes only the pathname it was issued for, with its random suffix, past a CORS preflight", async () => {
+  const f = await fake();
+  process.env.VERCEL_BLOB_API_URL = `${f.base}/api/blob`;
+  try {
+    const token = await generateClientTokenFromReadWriteToken({ token: "vercel_blob_rw_fakestore_secret", pathname: "refs/7/clip.mp4", addRandomSuffix: true });
+    const ref = await clientPut("refs/7/clip.mp4", Buffer.from("ref bytes"), { access: "public", token, multipart: true });
+    assert.match(ref.pathname, /^refs\/7\/clip-[0-9a-f]+\.mp4$/);
+    assert.equal(await (await fetch(ref.url)).text(), "ref bytes");
+    await assert.rejects(clientPut("videos/x.mp4", Buffer.from("x"), { access: "public", token }), BlobAccessError);
+    await assert.rejects(head(ref.url, { token }), BlobAccessError, "a client token only writes");
+
+    const preflight = await fetch(`${f.base}/api/blob/mpu?pathname=refs%2F7%2Fclip.mp4`, {
+      method: "OPTIONS",
+      headers: { Origin: "http://localhost:3000", "Access-Control-Request-Method": "POST", "Access-Control-Request-Headers": "authorization,x-mpu-action" },
+    });
+    assert.equal(preflight.status, 204);
+    assert.equal(preflight.headers.get("access-control-allow-origin"), "*");
+    assert.equal(preflight.headers.get("access-control-allow-headers"), "authorization,x-mpu-action");
   } finally {
     delete process.env.VERCEL_BLOB_API_URL;
     f.close();
