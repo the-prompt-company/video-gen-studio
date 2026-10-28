@@ -1,4 +1,4 @@
-import { and, eq, gt, inArray, isNotNull, isNull, lte, notInArray, or, sql, type SQL } from "drizzle-orm";
+import { and, eq, getTableColumns, gt, inArray, isNotNull, isNull, lte, notInArray, or, sql, type SQL } from "drizzle-orm";
 import { del } from "@vercel/blob";
 import { getDb, schema } from "@/db";
 import type { Generation, User } from "@/db/schema";
@@ -289,12 +289,15 @@ type LifecyclePatch = Partial<
   Pick<typeof schema.generations.$inferInsert, "requestId" | "resultUrl" | "expiresAt" | "completedAt" | "costUsd" | "error">
 > & { nextCheckAt?: SQL };
 
-/** What a caller learned: a submit answer, a status answer, a user's cancel, or the clock (the submit deadline). */
+/**
+ * What a caller learned: a submit answer, a status answer, a user's cancel, or the clock, which the submit claim reads
+ * on the database's clock (`late` means past the submit deadline).
+ */
 type Observation =
   | { source: "submit"; outcome: hf.SubmitOutcome }
   | { source: "status"; state: hf.ProviderState }
   | { source: "cancel" }
-  | { source: "clock" };
+  | { source: "clock"; late: boolean };
 
 /**
  * `wait` keeps a pending row pending, records why, and lets nobody send it again for `afterS`. `maybeAccepted` says the
@@ -313,7 +316,7 @@ type Step =
  *   pending + submit rejected(error)   → move failed     { error, completedAt, costUsd 0 }
  *   pending maybe accepted + cancel    → none, so the caller sends it again and learns whether a job exists
  *   pending maybe accepted + clock     → none, likewise
- *   pending + clock past the deadline  → move failed     { error "Higgsfield가 30분 동안…", completedAt, costUsd 0 }
+ *   pending + clock late (DB clock)    → move failed     { error "Higgsfield가 30분 동안…", completedAt, costUsd 0 }
  *   live + running(s)                  → move s, only when s ranks above the row
  *   live + completed(url)              → move completed  { resultUrl, expiresAt, completedAt, costUsd = price × durationS }
  *   live + ended(s, error)             → move s          { error, expiresAt, completedAt, costUsd 0 }
@@ -329,10 +332,7 @@ function decide(gen: Generation, obs: Observation, ctx: { now: Date; pricePerSec
   });
   if ((obs.source === "cancel" || obs.source === "clock") && gen.status === "pending" && gen.maybeAccepted) return { kind: "none" };
   if (obs.source === "cancel") return end("canceled", {});
-  if (obs.source === "clock") {
-    const late = ctx.now.getTime() - gen.createdAt.getTime() >= SUBMIT_DEADLINE_MIN * 60_000;
-    return gen.status === "pending" && late ? end("failed", { error: SUBMIT_DEADLINE_ERROR }) : { kind: "none" };
-  }
+  if (obs.source === "clock") return gen.status === "pending" && obs.late ? end("failed", { error: SUBMIT_DEADLINE_ERROR }) : { kind: "none" };
   if (obs.source === "submit") {
     const o = obs.outcome;
     if (gen.status !== "pending") return { kind: "none" };
@@ -425,11 +425,12 @@ type Visit = { row: Generation; submit: Call; check: Call };
  */
 async function resubmit(gen: Generation, schedule: Scheduler, intent: "send" | "cancel" = "send"): Promise<Look> {
   if (gen.status !== "pending") return { row: gen, call: "none" };
-  const claimed = await claimSubmit(gen.id, intent === "cancel" ? notSubmitting() : submitDue());
-  if (!claimed) return { row: gen, call: "none" };
-  const stop = decide(claimed, { source: intent === "cancel" ? "cancel" : "clock" }, { now: new Date(), pricePerSecUsd: 0 });
-  if (stop.kind !== "none") return { row: await apply(claimed, stop, schedule), call: "none" };
-  return send(claimed, await ownerKey(claimed.userId), schedule);
+  const claim = await claimSubmit(gen.id, intent === "cancel" ? notSubmitting() : submitDue());
+  if (!claim) return { row: gen, call: "none" };
+  const obs: Observation = intent === "cancel" ? { source: "cancel" } : { source: "clock", late: claim.late };
+  const stop = decide(claim.row, obs, { now: new Date(), pricePerSecUsd: 0 });
+  if (stop.kind !== "none") return { row: await apply(claim.row, stop, schedule), call: "none" };
+  return send(claim.row, await ownerKey(claim.row.userId), schedule);
 }
 
 /**
@@ -579,11 +580,12 @@ async function visit(row: Generation, report: SweepReport): Promise<void> {
  * The submit claim: push next_check_at SUBMIT_LEASE_S ahead and clear the last deferral reason, which marks the row as
  * being submitted. It matches only a row `rule` accepts (submitDue, or notSubmitting for a cancel), so of any number of
  * concurrent callers exactly one gets it. A row with no reason to clear had a submitter that died holding the lease,
- * after a send Higgsfield may have accepted, so the claim marks it maybe accepted.
+ * after a send Higgsfield may have accepted, so the claim marks it maybe accepted. `late` is the submit deadline read on
+ * the database's clock, the one that wrote created_at.
  */
-async function claimSubmit(id: string, rule: SQL | undefined): Promise<Generation | null> {
+async function claimSubmit(id: string, rule: SQL | undefined): Promise<{ row: Generation; late: boolean } | null> {
   const g = schema.generations;
-  const [row] = await getDb()
+  const [claimed] = await getDb()
     .update(g)
     .set({
       nextCheckAt: sql`now() + make_interval(secs => ${SUBMIT_LEASE_S})`,
@@ -591,8 +593,10 @@ async function claimSubmit(id: string, rule: SQL | undefined): Promise<Generatio
       maybeAccepted: sql`${g.maybeAccepted} or ${g.error} is null`,
     })
     .where(and(eq(g.id, id), rule))
-    .returning();
-  return row ?? null;
+    .returning({ ...getTableColumns(g), late: sql<boolean>`${g.createdAt} <= now() - make_interval(mins => ${SUBMIT_DEADLINE_MIN})` });
+  if (!claimed) return null;
+  const { late, ...row } = claimed;
+  return { row, late };
 }
 
 /**
