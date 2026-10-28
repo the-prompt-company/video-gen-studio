@@ -8,6 +8,7 @@ import { defaultParams } from "@/lib/catalog";
 import type { PublicGeneration } from "@/lib/generations";
 import { usd, shortModel } from "@/lib/format";
 import { isLive, STATUS_LABEL } from "@/lib/generation-status";
+import { refUploadName } from "@/lib/ref-name";
 import { Button, ErrorText, Field, Input, Select, Textarea } from "@/components/ui";
 import { StatusBadge } from "@/components/StatusBadge";
 
@@ -60,7 +61,7 @@ async function uploadFile(file: File, largeUploadPrefix: string | null): Promise
   }
   if (largeUploadPrefix === null) throw new Error("4 MB를 넘는 파일은 Blob 스토어가 연결돼야 올릴 수 있습니다");
   const { upload: blobUpload } = await import("@vercel/blob/client");
-  const blob = await blobUpload(`${largeUploadPrefix}${Date.now()}-${file.name}`, file, { access: "public", handleUploadUrl: "/api/uploads/blob", multipart: true });
+  const blob = await blobUpload(`${largeUploadPrefix}${refUploadName(file.name)}`, file, { access: "public", handleUploadUrl: "/api/uploads/blob", multipart: true });
   return blob.url;
 }
 

@@ -18,6 +18,7 @@ import { createInterface } from "node:readline";
 import { put } from "@vercel/blob";
 import { configFromEnv, createFakeHiggsfield } from "./fake-higgsfield";
 import { byteLimit, copyVideo, deleteRefs, isRefPathname, putVideo, refPrefix, storageEnabled, videoKey, videoUrls } from "../src/lib/storage";
+import { refUploadName } from "../src/lib/ref-name";
 
 const MB = 1024 * 1024;
 /** MAX_COPY_BYTES and COPY_TIMEOUT_MS in src/lib/generations.ts. */
@@ -97,7 +98,7 @@ function pointBlobAt(base: string) {
 type ByKey = Record<string, { writes: number; size: number; sha256: string; contentType: string; cacheControlMaxAge: number | null; parts: number }>;
 
 async function blobStats(base: string) {
-  return ((await (await fetch(`${base}/_stats`)).json()) as { storage: { deleted: string[]; byKey: ByKey } }).storage;
+  return ((await (await fetch(`${base}/_stats`)).json()) as { storage: { deleted: string[]; deleteUrls: string[]; byKey: ByKey } }).storage;
 }
 
 test("videoUrls derives the public and download URLs from the token's store id, with no network call", () => {
@@ -290,6 +291,13 @@ test("deleteRefs deletes the row owner's refs/<id>/ upload and never another mem
       `${blob}/refs/${OWNER}/..%5C${MEMBER}%5C${name}`,
       `${blob}/refs/${OWNER}%2F..%2F${MEMBER}/${name}`,
       `${blob}/refs/${OWNER}/x/..%252F..%252F${MEMBER}%252F${name}`,
+      `${blob}/refs/${OWNER}//../${MEMBER}/${name}`,
+      `${blob}/refs/${OWNER}/${MEMBER}/${name}`,
+      `${blob}/refs/${OWNER}/%EF%BC%8E%EF%BC%8E/${MEMBER}/${name}`,
+      `${blob}/refs/${OWNER}/．．/${MEMBER}/${name}`,
+      `${blob}/refs/${OWNER}/..%2F${MEMBER}%2F${name}`,
+      `${own.url}?p=../../${MEMBER}/${name}`,
+      `${own.url}#/../../${MEMBER}/${name}`,
     ];
     const elsewhere = [
       own.url.replace("127.0.0.1", "localhost"),
@@ -298,7 +306,9 @@ test("deleteRefs deletes the row owner's refs/<id>/ upload and never another mem
     ];
     const deleted = await deleteRefs([...kept.map((b) => b.url), ...tricks, ...elsewhere, own.url], OWNER);
     assert.deepEqual(deleted, [own.url]);
-    assert.deepEqual((await fake.stats()).deleted, [own.pathname], "del() was asked for the owner's upload alone");
+    const store = await fake.stats();
+    assert.deepEqual(store.deleteUrls, [own.url], "del() sent the store the owner's upload URL alone, spelled canonically");
+    assert.deepEqual(store.deleted, [own.pathname], "del() was asked for the owner's upload alone");
     for (const b of kept) assert.equal((await fetch(b.url)).status, 200, `${b.pathname} is still served`);
     assert.equal((await fetch(own.url)).status, 404);
   } finally {
@@ -306,9 +316,9 @@ test("deleteRefs deletes the row owner's refs/<id>/ upload and never another mem
   }
 });
 
-test("isRefPathname admits one file name under the uploader's refs/<id>/ and nothing else", () => {
+test("isRefPathname admits one plain file name under the uploader's refs/<id>/ and nothing else", () => {
   assert.equal(refPrefix(OWNER), `refs/${OWNER}/`);
-  for (const p of [`refs/${OWNER}/1793200000000-clip.mp4`, `refs/${OWNER}/레퍼런스 영상.mp4`, `refs/${OWNER}/a..b.png`]) {
+  for (const p of [`refs/${OWNER}/1793200000000-clip.mp4`, `refs/${OWNER}/1793200000000-3f9a1c2b-0a1b2c3d4e5f.MP4`, `refs/${OWNER}/a..b.png`, `refs/${OWNER}/clip_1`]) {
     assert.equal(isRefPathname(p, OWNER), true, p);
   }
   for (const p of [
@@ -327,9 +337,26 @@ test("isRefPathname admits one file name under the uploader's refs/<id>/ and not
     `/refs/${OWNER}/x.mp4`,
     `REFS/${OWNER}/x.mp4`,
     `x/refs/${OWNER}/x.mp4`,
+    `refs/${OWNER}/레퍼런스 영상.mp4`,
+    `refs/${OWNER}/clip 1.mp4`,
+    `refs/${OWNER}/..%2F${MEMBER}%2Fx.mp4`,
+    `refs/${OWNER}/%2e%2e`,
+    `refs/${OWNER}/．．`,
+    `refs/${OWNER}/.hidden.mp4`,
+    `refs/${OWNER}/-x.mp4`,
+    `refs/${OWNER}/${"a".repeat(201)}`,
   ]) {
     assert.equal(isRefPathname(p, OWNER), false, p);
   }
+});
+
+test("refUploadName gives every file, however it is named, a name the upload route accepts", () => {
+  for (const file of ["레퍼런스 영상 최종본.MP4", "clip.mp4", "no extension", "../../videos/x.mp4", "a%2F..%2Fb.webp", "파일.MOV ", "．．.mp4"]) {
+    const name = refUploadName(file, 1793200000000);
+    assert.equal(isRefPathname(`${refPrefix(OWNER)}${name}`, OWNER), true, `${file} -> ${name}`);
+  }
+  assert.match(refUploadName("레퍼런스 영상 최종본.MP4", 1793200000000), /^1793200000000-[0-9a-f]{8}\.mp4$/);
+  assert.notEqual(refUploadName("clip.mp4", 1), refUploadName("clip.mp4", 1), "two uploads in the same millisecond get different names");
 });
 
 /** The fake in its own process, so the bytes it keeps stay out of this process's memory samples. */

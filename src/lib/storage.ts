@@ -3,6 +3,7 @@
  * Rows store an object key, never a URL, so moving to another store or vendor is an env change plus an object copy.
  */
 import { createMultipartUploader, del, getDownloadUrl, put, type Part } from "@vercel/blob";
+import { REF_NAME } from "./ref-name";
 
 export type ObjectKey = string & { readonly __brand: "ObjectKey" };
 
@@ -49,14 +50,12 @@ export function refPrefix(userId: number): string {
 }
 
 /**
- * The upload route's pathname rule: one file name directly under the uploader's refPrefix, so an upload never lands
- * under videos/ or under another member's prefix.
+ * The one pathname rule for references: a REF_NAME file name directly under the user's refPrefix. The upload route
+ * checks it before issuing a token and deleteRefs before deleting, so neither ever touches videos/ or another member.
  */
 export function isRefPathname(pathname: string, userId: number): boolean {
   const prefix = refPrefix(userId);
-  if (!pathname.startsWith(prefix)) return false;
-  const name = pathname.slice(prefix.length);
-  return name !== "" && name !== "." && name !== ".." && !/[/\\]/.test(name);
+  return pathname.startsWith(prefix) && REF_NAME.test(pathname.slice(prefix.length));
 }
 
 /**
@@ -248,16 +247,14 @@ export function videoUrls(key: ObjectKey): { url: string; downloadUrl: string } 
 
 /**
  * Delete the row owner's reference uploads, and return the URLs it deleted. imageRefs and videoRefs hold whatever URLs
- * the browser sent, so a URL is deleted only when it names a pathname in this store under refPrefix(ownerId), never a
- * stored video or another member's upload.
+ * the browser sent, so only the pathname a URL parses to in this store counts, it must pass isRefPathname for the
+ * owner, and del() gets the public URL rebuilt from that pathname, never the URL as sent.
  */
 export async function deleteRefs(urls: string[], ownerId: number): Promise<string[]> {
   const c = config();
   if (!c) return [];
-  const doomed = urls.filter((u) => {
-    const key = keyIn(c, u);
-    return key !== null && ownsRef(key, ownerId);
-  });
+  const keys = urls.map((u) => keyIn(c, u)).filter((k): k is string => k !== null && isRefPathname(k, ownerId));
+  const doomed = [...new Set(keys)].map((k) => publicUrl(c, k));
   if (doomed.length > 0) await del(doomed, { token: c.token });
   return doomed;
 }
@@ -273,26 +270,4 @@ function keyIn(c: Config, url: string): string | null {
   const base = new URL(`${c.publicBase}/`);
   if (u.origin !== base.origin || !u.pathname.startsWith(base.pathname)) return null;
   return u.pathname.slice(base.pathname.length);
-}
-
-/**
- * True when the key and every percent-decoding of it start with the owner's refPrefix and hold no backslash and no ..
- * segment, and the key decodes. A reference this refuses is left in the store, which costs a few MB, never another
- * member's file.
- */
-function ownsRef(key: string, ownerId: number): boolean {
-  const prefix = refPrefix(ownerId);
-  let k = key;
-  for (let i = 0; i < 4; i++) {
-    if (!k.startsWith(prefix) || k.includes("\\") || /(^|\/)\.\.(\/|$)/.test(k)) return false;
-    let next: string;
-    try {
-      next = decodeURIComponent(k);
-    } catch {
-      return false;
-    }
-    if (next === k) return true;
-    k = next;
-  }
-  return false;
 }

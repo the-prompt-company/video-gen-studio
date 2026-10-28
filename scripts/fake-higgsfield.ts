@@ -149,10 +149,14 @@ function newStats() {
     /** byRequest lists the HTTP status of every delivery in order, 0 for a network error or timeout. */
     webhooks: { sent: 0, dropped: 0, failed: 0, retried: 0, byRequest: {} as Record<string, number[]> },
     media: { downloads: 0 },
-    /** byKey is per pathname. deleted lists every pathname a del() asked for, in order, whether or not it existed. */
+    /**
+     * byKey is per pathname. deleted lists every pathname a del() asked for, in order, whether or not it existed, and
+     * deleteUrls the URLs exactly as del() sent them.
+     */
     storage: {
       failed: 0,
       deleted: [] as string[],
+      deleteUrls: [] as string[],
       byKey: {} as Record<
         string,
         { writes: number; size: number; sha256: string; contentType: string; cacheControlMaxAge: number | null; allowOverwrite: boolean; parts: number }
@@ -532,6 +536,7 @@ export function createFakeHiggsfield(config: Config): Server {
       const { urls = [] } = JSON.parse((await readBody(req)) || "{}") as { urls?: string[] };
       for (const u of urls) {
         const name = pathnameOf(u);
+        stats.storage.deleteUrls.push(u);
         stats.storage.deleted.push(name);
         objects.delete(name);
       }
