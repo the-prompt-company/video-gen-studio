@@ -2,17 +2,18 @@
  * The only module that knows the store, the auth and the URL format of Vercel Blob.
  * Rows store an object key, never a URL, so moving to another store or vendor is an env change plus an object copy.
  */
-import { del, getDownloadUrl, put } from "@vercel/blob";
+import { createMultipartUploader, del, getDownloadUrl, put, type Part } from "@vercel/blob";
 
 export type ObjectKey = string & { readonly __brand: "ObjectKey" };
 
 const ONE_YEAR_S = 365 * 24 * 3600;
 const VIDEO_PREFIX = "videos/";
-/** Vercel recommends multipart above 100 MB: 8 MB parts, uploaded in parallel, each retried on its own. */
-const MULTIPART_FROM_BYTES = 100 * 1024 * 1024;
+/** The SDK's own multipart part size. A body that fits in one part goes up in one request. */
+const PART_BYTES = 8 * 1024 * 1024;
+/** Parts uploading at once. The SDK's fetch copies and tees each part's body, so one in flight costs about 24 MB. */
+const PARTS_IN_FLIGHT = 4;
 
 type Config = { token: string; publicBase: string };
-type PutBody = Parameters<typeof put>[1];
 
 /**
  * BLOB_READ_WRITE_TOKEN reads vercel_blob_rw_<store id>_<secret>, and a public blob lives at
@@ -44,30 +45,123 @@ export function videoKey(generationId: string): ObjectKey {
 
 /**
  * Upload public under the exact key, overwriting what an earlier attempt left, with a one-year cache. Keys are
- * immutable, so a repeat writes the same bytes. A body over 100 MB, or of unknown `size`, goes up in parts. The token
- * is passed, not left to the SDK's OIDC lookup, so the store written is the store videoUrls points at, and an answer
- * at another URL fails the upload instead of recording a key nobody can play.
+ * immutable, so a repeat writes the same bytes. The token is passed, not left to the SDK's OIDC lookup, so the store
+ * written is the store videoUrls points at, and an answer at another URL fails the upload instead of recording a key
+ * nobody can play.
+ *
+ * The body is cut into 8 MB parts as it is read, and at most PARTS_IN_FLIGHT parts upload at once, so a copy peaks
+ * near 120 MB whatever the size (measured from 64 MB to 1000 MB). Handing the stream itself to put(), in one request
+ * or with multipart: true, holds all of it: the SDK's fetch clones each request for redirects, which tees the body,
+ * and the branch nobody reads keeps every chunk until the request ends. A body that fits in one part is one put().
  */
 export async function putVideo(
   key: ObjectKey,
-  body: PutBody,
-  opts: { contentType: string; size: number | null; abortSignal?: AbortSignal },
+  body: ReadableStream<Uint8Array>,
+  opts: { contentType: string; abortSignal?: AbortSignal },
 ): Promise<void> {
   const c = config();
   if (!c) throw new Error("Vercel Blob is not configured");
-  const blob = await put(key, body, {
+  const stop = new AbortController();
+  const onAbort = () => stop.abort();
+  opts.abortSignal?.addEventListener("abort", onAbort);
+  const options = {
     access: "public",
     token: c.token,
     addRandomSuffix: false,
     allowOverwrite: true,
     cacheControlMaxAge: ONE_YEAR_S,
     contentType: opts.contentType,
-    multipart: opts.size === null || opts.size > MULTIPART_FROM_BYTES,
-    abortSignal: opts.abortSignal,
-  });
-  const derived = publicUrl(c, key);
-  if (new URL(blob.url).href !== new URL(derived).href) {
-    throw new Error(`blob URL mismatch: the store answered ${blob.url}, videoUrls derives ${derived}`);
+    abortSignal: stop.signal,
+  } as const;
+  const parts = inParts(body, PART_BYTES);
+  try {
+    const first = await parts.next();
+    const second = first.done ? first : await parts.next();
+    const url = second.done
+      ? (await put(key, first.done ? Buffer.alloc(0) : first.value, options)).url
+      : await uploadInParts(key, options, [first.value as Buffer, second.value], parts, stop);
+    const derived = publicUrl(c, key);
+    if (new URL(url).href !== new URL(derived).href) {
+      throw new Error(`blob URL mismatch: the store answered ${url}, videoUrls derives ${derived}`);
+    }
+  } catch (e) {
+    stop.abort();
+    throw e;
+  } finally {
+    opts.abortSignal?.removeEventListener("abort", onAbort);
+    await parts.return(undefined);
+  }
+}
+
+/** Multipart through the SDK, in part order, never more than PARTS_IN_FLIGHT at once. A failed part stops the rest. */
+async function uploadInParts(
+  key: ObjectKey,
+  options: Parameters<typeof createMultipartUploader>[1],
+  read: Buffer[],
+  rest: AsyncGenerator<Buffer>,
+  stop: AbortController,
+): Promise<string> {
+  const upload = await createMultipartUploader(key, options);
+  const sent: Part[] = [];
+  const running = new Set<Promise<void>>();
+  let failure: unknown = null;
+  let partNumber = 0;
+  const send = (body: Buffer) => {
+    const task: Promise<void> = upload
+      .uploadPart(++partNumber, body)
+      .then(
+        (part) => void sent.push(part),
+        (e: unknown) => {
+          failure ??= e;
+          stop.abort();
+        },
+      )
+      .finally(() => running.delete(task));
+    running.add(task);
+  };
+  try {
+    for (const body of read) send(body);
+    for await (const body of rest) {
+      while (running.size >= PARTS_IN_FLIGHT && failure === null) await Promise.race(running);
+      if (failure !== null) break;
+      send(body);
+    }
+  } catch (e) {
+    failure ??= e;
+    stop.abort();
+  }
+  await Promise.all(running);
+  if (failure !== null) throw failure;
+  return (await upload.complete(sent.sort((a, b) => a.partNumber - b.partNumber))).url;
+}
+
+/** Fixed-size parts from a byte stream, the last one shorter. Stopping early cancels the stream. */
+async function* inParts(body: ReadableStream<Uint8Array>, size: number): AsyncGenerator<Buffer> {
+  const reader = body.getReader();
+  let part = Buffer.allocUnsafe(size);
+  let filled = 0;
+  let finished = false;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      for (let at = 0; at < value.byteLength; ) {
+        const n = Math.min(size - filled, value.byteLength - at);
+        part.set(value.subarray(at, at + n), filled);
+        filled += n;
+        at += n;
+        if (filled === size) {
+          yield part;
+          part = Buffer.allocUnsafe(size);
+          filled = 0;
+        }
+      }
+    }
+    finished = true;
+    if (filled > 0) yield part.subarray(0, filled);
+  } finally {
+    if (!finished) await reader.cancel().catch(() => {});
+    reader.releaseLock();
   }
 }
 
@@ -99,7 +193,6 @@ export async function copyVideo(sourceUrl: string, key: ObjectKey, limits: CopyL
   try {
     await putVideo(key, res.body.pipeThrough(limit.stream), {
       contentType: res.headers.get("content-type") ?? "video/mp4",
-      size: declared,
       abortSignal: stop.signal,
     });
     return limit.bytes();
