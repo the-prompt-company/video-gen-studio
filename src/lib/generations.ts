@@ -1,5 +1,4 @@
 import { and, eq, getTableColumns, gt, inArray, isNotNull, isNull, lte, notInArray, or, sql, type SQL } from "drizzle-orm";
-import { del } from "@vercel/blob";
 import { getDb, schema } from "@/db";
 import type { Generation, User } from "@/db/schema";
 import { HttpError } from "@/lib/auth";
@@ -634,17 +633,13 @@ async function onTerminal(row: Generation): Promise<void> {
   if (row.status === "completed") await storeVideo(row);
 }
 
-function isBlobUrl(u: string): boolean {
-  return /\.blob\.vercel-storage\.com\//.test(u);
-}
-
-/** Delete temporary reference uploads from Vercel Blob once the request is finished. */
+/**
+ * Delete temporary reference uploads from Vercel Blob once the request is finished. They share the store with stored
+ * videos, and a ref can be any URL the browser sent, so storage.deleteRefs refuses anything that could name a video.
+ */
 async function cleanupRefs(gen: Generation) {
-  if (!process.env.BLOB_READ_WRITE_TOKEN) return;
-  const urls = [...gen.imageRefs, ...gen.videoRefs].filter(isBlobUrl);
-  if (urls.length === 0) return;
   try {
-    await del(urls);
+    await storage.deleteRefs([...gen.imageRefs, ...gen.videoRefs]);
   } catch (e) {
     console.warn("blob cleanup failed", e);
   }

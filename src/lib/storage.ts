@@ -2,7 +2,7 @@
  * The only module that knows the store, the auth and the URL format of Vercel Blob.
  * Rows store an object key, never a URL, so moving to another store or vendor is an env change plus an object copy.
  */
-import { getDownloadUrl, put } from "@vercel/blob";
+import { del, getDownloadUrl, put } from "@vercel/blob";
 
 export type ObjectKey = string & { readonly __brand: "ObjectKey" };
 
@@ -135,4 +135,53 @@ export function videoUrls(key: ObjectKey): { url: string; downloadUrl: string } 
   if (!c) return null;
   const url = publicUrl(c, key);
   return { url, downloadUrl: getDownloadUrl(url) };
+}
+
+/**
+ * Delete temporary reference uploads, and return the URLs it deleted. imageRefs and videoRefs hold whatever URLs the
+ * browser sent, so only URLs in this store are deleted, and never one whose pathname could name a stored video.
+ */
+export async function deleteRefs(urls: string[]): Promise<string[]> {
+  const c = config();
+  if (!c) return [];
+  const doomed = urls.filter((u) => {
+    const key = keyIn(c, u);
+    return key !== null && !mayNameVideo(key);
+  });
+  if (doomed.length > 0) await del(doomed, { token: c.token });
+  return doomed;
+}
+
+/** The pathname a URL names in this store, or null for a URL anywhere else. */
+function keyIn(c: Config, url: string): string | null {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return null;
+  }
+  const base = new URL(`${c.publicBase}/`);
+  if (u.origin !== base.origin || !u.pathname.startsWith(base.pathname)) return null;
+  return u.pathname.slice(base.pathname.length);
+}
+
+/**
+ * True when the key, or any percent-decoding of it, contains videos/ (in any case, with either slash) or a .. segment,
+ * or does not decode. A reference this refuses is left in the store, which costs a few MB, never a video.
+ */
+function mayNameVideo(key: string): boolean {
+  let k = key;
+  for (let i = 0; i < 4; i++) {
+    const plain = k.toLowerCase().replace(/\\/g, "/");
+    if (plain.includes(VIDEO_PREFIX) || /(^|\/)\.\.(\/|$)/.test(plain)) return true;
+    let next: string;
+    try {
+      next = decodeURIComponent(k);
+    } catch {
+      return true;
+    }
+    if (next === k) return false;
+    k = next;
+  }
+  return true;
 }
