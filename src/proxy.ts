@@ -25,6 +25,6 @@ export async function proxy(request: NextRequest) {
   return NextResponse.next();
 }
 
-export const proxyConfig = {
+export const config = {
   matcher: ["/login", "/playground/:path*", "/gallery/:path*", "/dashboard/:path*", "/admin/:path*"],
 };
