@@ -71,6 +71,61 @@ export async function putVideo(
   }
 }
 
+export type CopyLimits = { maxBytes: number; timeoutMs: number };
+
+/**
+ * Stream the body at `sourceUrl` into `key` and return its size, without ever holding the whole body in memory. It
+ * refuses more than `maxBytes`, by Content-Length before anything is uploaded or by a running count that aborts the
+ * upload, and gives up `timeoutMs` after the fetch starts, upload included. A failure throws its cause, not the SDK's
+ * echo of it.
+ */
+export async function copyVideo(sourceUrl: string, key: ObjectKey, limits: CopyLimits): Promise<number> {
+  const timeout = AbortSignal.timeout(limits.timeoutMs);
+  const res = await fetch(sourceUrl, { signal: timeout });
+  if (!res.ok || !res.body) {
+    await res.body?.cancel();
+    throw new Error(`result fetch failed: HTTP ${res.status}`);
+  }
+  const declared = Number(res.headers.get("content-length")) || null;
+  if (declared !== null && declared > limits.maxBytes) {
+    await res.body.cancel();
+    throw new Error(`result too large: ${declared} bytes`);
+  }
+  // The SDK retries an upload that throws anything but an AbortError, so every stop goes through a plain abort.
+  const stop = new AbortController();
+  const limit = byteLimit(limits.maxBytes, () => stop.abort());
+  const onTimeout = () => stop.abort();
+  timeout.addEventListener("abort", onTimeout);
+  try {
+    await putVideo(key, res.body.pipeThrough(limit.stream), {
+      contentType: res.headers.get("content-type") ?? "video/mp4",
+      size: declared,
+      abortSignal: stop.signal,
+    });
+    return limit.bytes();
+  } catch (e) {
+    throw limit.error() ?? (timeout.aborted ? timeout.reason : e);
+  } finally {
+    timeout.removeEventListener("abort", onTimeout);
+  }
+}
+
+/** A pass-through that counts bytes, and errors the stream and calls `onOver` once more than `max` went by. */
+export function byteLimit(max: number, onOver: () => void = () => {}) {
+  let bytes = 0;
+  let over: Error | null = null;
+  const stream = new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, controller) {
+      bytes += chunk.byteLength;
+      if (bytes <= max) return controller.enqueue(chunk);
+      over = new Error(`result too large: over ${max} bytes`);
+      controller.error(over);
+      onOver();
+    },
+  });
+  return { stream, bytes: () => bytes, error: () => over };
+}
+
 /**
  * Public URL, plus Blob's ?download=1 one, which the CDN serves as an attachment named after the key's last segment
  * (<generation id>.mp4). Both come from the key alone, with no network call. Null while storage is off.
