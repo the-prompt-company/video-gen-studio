@@ -206,7 +206,9 @@ function stop() {
       else process.kill(-s.pid, "SIGTERM");
       console.log(`stopped pid ${s.pid} (port ${s.port})`);
     } catch (e) {
-      console.error(`could not kill pid ${s.pid}: ${e.message ?? e}`);
+      // taskkill fails with "no tasks" when the process exited between the liveness check and the kill.
+      if (pidAlive(s.pid)) console.error(`could not kill pid ${s.pid}: ${e.message ?? e}`);
+      else console.log(`pid ${s.pid} exited on its own (port ${s.port})`);
     }
   } else console.log(`pid ${s.pid} already gone`);
   rmSync(serverFile, { force: true });
