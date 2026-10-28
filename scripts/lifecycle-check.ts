@@ -34,9 +34,10 @@
  *
  * --copy-peak copies one completed result into storage while sampling this process's memory every 5 ms, prints the
  * peak arrayBuffers and rss over the baseline, checks the stored object's size and sha256 against the source, and
- * checks that arrayBuffers rose less than 256 MB (scripts/storage.test.ts measures about 120 MB at any size). The
+ * checks that arrayBuffers rose less than COPY_PEAK_BOUND_MB. Measured peaks were 117-256 MB for 300 MB and 600 MB
+ * results, so the bound is 384 MB, and the result must be larger than the bound or a buffered copy could pass. The
  * fake runs in its own process, so its copies of the bytes stay out of the sample:
- *   FAKE_HF_VIDEO_BYTES=314572800 npm run fake:hf
+ *   FAKE_HF_VIDEO_BYTES=629145600 npm run fake:hf
  *   HIGGSFIELD_BASE_URL=http://localhost:4010 npx dotenv -e .env.local -- tsx --expose-gc scripts/lifecycle-check.ts --copy-peak
  */
 import { spawn } from "node:child_process";
@@ -111,6 +112,8 @@ const DEADLINE_ERROR = "Higgsfield가 30분 동안 요청을 받지 않았습니
 const RATE_LIMITED = "Higgsfield 429: Too many requests";
 const REF = "https://example.com/gp3-ref.jpg";
 const COPY_TIMEOUT_MS = 240_000;
+/** 50% above the worst copy peak measured (256 MB), which V8's collection timing sets, not the result's size. */
+const COPY_PEAK_BOUND_MB = 384;
 const STORAGE_ENV = ["BLOB_READ_WRITE_TOKEN"] as const;
 const FAKE_BLOB_TOKEN = "vercel_blob_rw_lifecyclecheck_fake";
 const TEST_PRICE = "0.0123";
@@ -1554,7 +1557,14 @@ async function copyPeak(owner: Owner, admin: User, upstream: string) {
     "the stored copy has the source's size and sha256, and size_bytes records it",
     `${stored.sizeBytes} bytes, sha256 ${object?.sha256.slice(0, 12)}`,
   );
-  check(peak.arrayBuffers - base.arrayBuffers < 256 * 2 ** 20, "the copy streamed: arrayBuffers rose less than 256 MB", `${mb(peak.arrayBuffers - base.arrayBuffers)} MB for ${mb(source.size)} MB`);
+  if (source.size <= COPY_PEAK_BOUND_MB * 2 ** 20) {
+    throw new Error(`FAIL setup: a ${mb(source.size)} MB result fits under the ${COPY_PEAK_BOUND_MB} MB bound, so a buffered copy would pass; start the fake with FAKE_HF_VIDEO_BYTES=629145600`);
+  }
+  check(
+    peak.arrayBuffers - base.arrayBuffers < COPY_PEAK_BOUND_MB * 2 ** 20,
+    `the copy streamed: arrayBuffers rose less than ${COPY_PEAK_BOUND_MB} MB`,
+    `${mb(peak.arrayBuffers - base.arrayBuffers)} MB for ${mb(source.size)} MB`,
+  );
 }
 
 /** Child mode for crashAfterAccept: submit one row through the proxy in HIGGSFIELD_BASE_URL and wait to be killed. */
