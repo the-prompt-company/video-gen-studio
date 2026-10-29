@@ -14,6 +14,8 @@
  * token from .env.local is never used.
  * The rows it creates belong to ADMIN_USERNAME, whose Higgsfield key must be set (the fake accepts any key), carry
  * prompts starting with "GP-6 ", and are deleted before it exits. It exits non-zero at the first failed check.
+ * The reference cleanup check also creates an inactive user named refcheck-<random>, who owns no rows, and deletes it
+ * before the check returns.
  * The stalled-copy check waits out the 240 s copy timeout, so a full run takes about seven minutes.
  * If the test model's price is 0 it sets 0.0123 USD/s for the cost check and restores the stored price afterwards.
  *
@@ -49,7 +51,7 @@ import type { AddressInfo } from "node:net";
 import { resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { put } from "@vercel/blob";
-import { and, desc, eq, gt, inArray, isNotNull, isNull, notInArray, or, sql, type SQL } from "drizzle-orm";
+import { and, count, desc, eq, gt, inArray, isNotNull, isNull, like, notInArray, or, sql, type SQL } from "drizzle-orm";
 import { getDb, schema } from "../src/db";
 import type { Generation, User } from "../src/db/schema";
 import { buildArguments, coerceParams, findModel } from "../src/lib/catalog";
@@ -119,6 +121,7 @@ const COPY_PEAK_BOUND_MB = 384;
 const STORAGE_ENV = ["BLOB_READ_WRITE_TOKEN"] as const;
 const FAKE_BLOB_TOKEN = "vercel_blob_rw_lifecyclecheck_fake";
 const TEST_PRICE = "0.0123";
+const MEMBER_PREFIX = "refcheck-";
 const created: string[] = [];
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -527,29 +530,46 @@ async function tenConcurrentCopies(owner: Owner, admin: User, upstream: string) 
 }
 
 /**
- * imageRefs hold whatever URLs the browser sent, and reference uploads share the Blob store with stored videos. A row
- * that names another row's stored video as its reference must not delete it when it finishes; a row with a real
- * reference upload still deletes that.
+ * imageRefs hold whatever URLs the browser sent, and reference uploads share the Blob store with stored videos and with
+ * every member's uploads under refs/<user id>/. A finished row deletes its owner's reference upload, and never a stored
+ * video or another member's upload that it names as its reference.
  */
-async function cleanupKeepsVideos(owner: Owner, admin: User, upstream: string, stored: Generation) {
+async function cleanupKeepsOthersFiles(owner: Owner, admin: User, upstream: string, stored: Generation) {
   const video = owner.publicGeneration(stored).video;
   if (video?.kind !== "stored") throw new Error("FAIL setup: the row to protect is not stored");
-  const ref = await put(`refs/${Date.now()}-lifecycle.png`, Buffer.from("reference bytes"), {
-    access: "public",
-    addRandomSuffix: true,
-    token: process.env.BLOB_READ_WRITE_TOKEN,
-  });
-  const rec = recorder();
-  const rows = [await submit(owner, admin, "보관 영상을 레퍼런스로", [video.url]), await submit(owner, admin, "Blob 레퍼런스", [ref.url])];
-  for (const r of rows) await settleUntilDone(owner, r.id, rec.schedule, 30_000);
-  await Promise.all(rec.tasks);
-  const { deleted } = (await stats(upstream)).storage;
-  check(
-    deleted.includes(ref.pathname) && !deleted.includes(videoKey(stored.id)),
-    "cleanupRefs deleted the reference upload and never the stored video another row named as its reference",
-    `del asked for ${deleted.join(", ")}`,
-  );
-  check((await fetch(video.url)).ok && (await fetch(ref.url)).status === 404, "the stored video still plays and the reference upload is gone");
+  const [member] = await getDb()
+    .insert(schema.users)
+    .values({ username: `${MEMBER_PREFIX}${randomUUID().slice(0, 8)}`, passwordHash: hashPassword(randomUUID()), active: false, note: "lifecycle-check 임시 사용자" })
+    .returning();
+  try {
+    const upload = (userId: number, name: string) =>
+      put(`refs/${userId}/${Date.now()}-${name}`, Buffer.from(`${name} bytes`), { access: "public", addRandomSuffix: true, token: process.env.BLOB_READ_WRITE_TOKEN });
+    const own = await upload(admin.id, "lifecycle.png");
+    const theirs = await upload(member.id, "member.png");
+    const rec = recorder();
+    const rows = [
+      await submit(owner, admin, "보관 영상을 레퍼런스로", [video.url]),
+      await submit(owner, admin, "내 Blob 레퍼런스", [own.url]),
+      await submit(owner, admin, "다른 사용자의 Blob 레퍼런스", [theirs.url]),
+    ];
+    for (const r of rows) await settleUntilDone(owner, r.id, rec.schedule, 30_000);
+    await Promise.all(rec.tasks);
+    const watched = [own.pathname, theirs.pathname, videoKey(stored.id)];
+    const deleted = (await stats(upstream)).storage.deleted.filter((p) => watched.includes(p));
+    check(
+      deleted.length === 1 && deleted[0] === own.pathname,
+      `cleanupRefs deleted ${admin.username}'s reference upload, and neither the stored video nor ${member.username}'s upload that ${admin.username}'s rows named`,
+      `del asked for ${deleted.join(", ") || "nothing"}`,
+    );
+    check(
+      (await fetch(video.url)).ok && (await fetch(theirs.url)).ok && (await fetch(own.url)).status === 404,
+      `the stored video and ${member.username}'s upload are still served, and ${admin.username}'s upload is gone`,
+    );
+  } finally {
+    await getDb().delete(schema.users).where(eq(schema.users.id, member.id));
+    const [left] = await getDb().select({ n: count() }).from(schema.users).where(like(schema.users.username, `${MEMBER_PREFIX}%`));
+    check(left.n === 0, `no ${MEMBER_PREFIX}* user is left`, `${left.n} found`);
+  }
 }
 
 async function storageOff(owner: Owner, admin: User, upstream: string) {
@@ -1701,7 +1721,7 @@ async function main() {
         await cancelAfterAnotherCallerFinished(owner, admin, upstream);
         await rowWithoutRequestId(owner, admin, proxy);
         await copyOnCompletion(owner, admin, upstream);
-        await cleanupKeepsVideos(owner, admin, upstream, await tenConcurrentCopies(owner, admin, upstream));
+        await cleanupKeepsOthersFiles(owner, admin, upstream, await tenConcurrentCopies(owner, admin, upstream));
         await storageOff(owner, admin, upstream);
         await stalledCopy(owner, admin, upstream);
       }

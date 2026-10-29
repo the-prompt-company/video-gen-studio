@@ -8,6 +8,7 @@ import { defaultParams } from "@/lib/catalog";
 import type { PublicGeneration } from "@/lib/generations";
 import { usd, shortModel } from "@/lib/format";
 import { isLive, STATUS_LABEL } from "@/lib/generation-status";
+import { refUploadName } from "@/lib/ref-name";
 import { Button, ErrorText, Field, Input, Select, Textarea } from "@/components/ui";
 import { StatusBadge } from "@/components/StatusBadge";
 
@@ -49,7 +50,7 @@ const POLL_MAX_MS = 10000;
 const POLL_JITTER_MS = 400;
 const STORE_WAIT_MS = 120_000;
 
-async function uploadFile(file: File, largeUploads: boolean): Promise<string> {
+async function uploadFile(file: File, largeUploadPrefix: string | null): Promise<string> {
   if (file.size <= SMALL) {
     const fd = new FormData();
     fd.append("file", file);
@@ -58,9 +59,9 @@ async function uploadFile(file: File, largeUploads: boolean): Promise<string> {
     if (!res.ok || !body.url) throw new Error(body.error ?? (res.status === 413 ? "파일이 너무 큽니다 (4 MB 이하)" : `업로드 실패 (${res.status})`));
     return body.url;
   }
-  if (!largeUploads) throw new Error("4 MB를 넘는 파일은 Blob 스토어가 연결돼야 올릴 수 있습니다");
+  if (largeUploadPrefix === null) throw new Error("4 MB를 넘는 파일은 Blob 스토어가 연결돼야 올릴 수 있습니다");
   const { upload: blobUpload } = await import("@vercel/blob/client");
-  const blob = await blobUpload(`refs/${Date.now()}-${file.name}`, file, { access: "public", handleUploadUrl: "/api/uploads/blob", multipart: true });
+  const blob = await blobUpload(`${largeUploadPrefix}${refUploadName(file.name)}`, file, { access: "public", handleUploadUrl: "/api/uploads/blob", multipart: true });
   return blob.url;
 }
 
@@ -342,7 +343,7 @@ function RefDialog({ model, refs, images, videos, imageMax, videoMax, uploading,
   );
 }
 
-export function Playground({ models, hasApiKey, largeUploads, galleryCount }: { models: ModelWithPrice[]; hasApiKey: boolean; largeUploads: boolean; galleryCount: number }) {
+export function Playground({ models, hasApiKey, largeUploadPrefix, galleryCount }: { models: ModelWithPrice[]; hasApiKey: boolean; largeUploadPrefix: string | null; galleryCount: number }) {
   const [modelId, setModelId] = useState(models[0]?.id ?? "");
   const model = useMemo(() => models.find((m) => m.id === modelId) ?? models[0], [models, modelId]);
   const [params, setParams] = useState<Record<string, unknown>>(() => (model ? defaultParams(model) : {}));
@@ -464,7 +465,7 @@ export function Playground({ models, hasApiKey, largeUploads, galleryCount }: { 
     setError(null);
     try {
       for (const f of picked) {
-        const url = await uploadFile(f, largeUploads);
+        const url = await uploadFile(f, largeUploadPrefix);
         const size = kind === "image" ? await readImageSize(f) : null;
         setRefs((r) => [...r, { id: crypto.randomUUID(), url, name: f.name, kind, local: URL.createObjectURL(f), w: size?.w, h: size?.h }]);
       }
@@ -725,7 +726,7 @@ export function Playground({ models, hasApiKey, largeUploads, galleryCount }: { 
           imageMax={imageMax}
           videoMax={videoMax}
           uploading={uploading}
-          largeUploads={largeUploads}
+          largeUploads={largeUploadPrefix !== null}
           error={error}
           onAdd={addFiles}
           onRemove={(id) => setRefs((list) => list.filter((x) => x.id !== id))}

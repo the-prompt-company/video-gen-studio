@@ -3,6 +3,7 @@
  * Rows store an object key, never a URL, so moving to another store or vendor is an env change plus an object copy.
  */
 import { createMultipartUploader, del, getDownloadUrl, put, type Part } from "@vercel/blob";
+import { REF_NAME } from "./ref-name";
 
 export type ObjectKey = string & { readonly __brand: "ObjectKey" };
 
@@ -41,6 +42,20 @@ export function storageEnabled(): boolean {
 
 export function videoKey(generationId: string): ObjectKey {
   return `${VIDEO_PREFIX}${generationId}.mp4` as ObjectKey;
+}
+
+/** Where a member's reference uploads go. deleteRefs deletes a row's references only under its owner's prefix. */
+export function refPrefix(userId: number): string {
+  return `refs/${userId}/`;
+}
+
+/**
+ * The one pathname rule for references: a REF_NAME file name directly under the user's refPrefix. The upload route
+ * checks it before issuing a token and deleteRefs before deleting, so neither ever touches videos/ or another member.
+ */
+export function isRefPathname(pathname: string, userId: number): boolean {
+  const prefix = refPrefix(userId);
+  return pathname.startsWith(prefix) && REF_NAME.test(pathname.slice(prefix.length));
 }
 
 /**
@@ -233,16 +248,15 @@ export function videoUrls(key: ObjectKey): { url: string; downloadUrl: string } 
 }
 
 /**
- * Delete temporary reference uploads, and return the URLs it deleted. imageRefs and videoRefs hold whatever URLs the
- * browser sent, so only URLs in this store are deleted, and never one whose pathname could name a stored video.
+ * Delete the row owner's reference uploads, and return the URLs it deleted. imageRefs and videoRefs hold whatever URLs
+ * the browser sent, so only the pathname a URL parses to in this store counts, it must pass isRefPathname for the
+ * owner, and del() gets the public URL rebuilt from that pathname, never the URL as sent.
  */
-export async function deleteRefs(urls: string[]): Promise<string[]> {
+export async function deleteRefs(urls: string[], ownerId: number): Promise<string[]> {
   const c = config();
   if (!c) return [];
-  const doomed = urls.filter((u) => {
-    const key = keyIn(c, u);
-    return key !== null && !mayNameVideo(key);
-  });
+  const keys = urls.map((u) => keyIn(c, u)).filter((k): k is string => k !== null && isRefPathname(k, ownerId));
+  const doomed = [...new Set(keys)].map((k) => publicUrl(c, k));
   if (doomed.length > 0) await del(doomed, { token: c.token });
   return doomed;
 }
@@ -258,25 +272,4 @@ function keyIn(c: Config, url: string): string | null {
   const base = new URL(`${c.publicBase}/`);
   if (u.origin !== base.origin || !u.pathname.startsWith(base.pathname)) return null;
   return u.pathname.slice(base.pathname.length);
-}
-
-/**
- * True when the key, or any percent-decoding of it, contains videos/ (in any case, with either slash) or a .. segment,
- * or does not decode. A reference this refuses is left in the store, which costs a few MB, never a video.
- */
-function mayNameVideo(key: string): boolean {
-  let k = key;
-  for (let i = 0; i < 4; i++) {
-    const plain = k.toLowerCase().replace(/\\/g, "/");
-    if (plain.includes(VIDEO_PREFIX) || /(^|\/)\.\.(\/|$)/.test(plain)) return true;
-    let next: string;
-    try {
-      next = decodeURIComponent(k);
-    } catch {
-      return true;
-    }
-    if (next === k) return false;
-    k = next;
-  }
-  return true;
 }
