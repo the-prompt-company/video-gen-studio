@@ -165,7 +165,6 @@ function ApiKeyForm({ onSave, onClear, hasKey }: { onSave: (k: string) => void; 
   );
 }
 
-/** `temporary`: the password is someone else's, so it is a temporary one they replace at their next sign-in. */
 function PasswordForm({ onSave, temporary }: { onSave: (p: string) => void; temporary: boolean }) {
   const [v, setV] = useState("");
   return (

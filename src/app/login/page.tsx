@@ -10,8 +10,6 @@ type Props = { searchParams: Promise<{ next?: string | string[] }> };
 export default async function LoginPage({ searchParams }: Props) {
   const asked = (await searchParams).next;
   const next = typeof asked === "string" && asked.startsWith("/") && !asked.startsWith("//") ? asked : "/playground";
-  // Checked against the database, not only the cookie: a revoked session must reach the form, or the app
-  // layout and this page would bounce it back and forth.
   if (await getCurrentUser()) redirect(next);
 
   return (

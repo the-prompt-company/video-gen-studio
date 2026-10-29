@@ -1,9 +1,3 @@
-/**
- * Feature: password — a temporary password forces a change, the login screen changes a password, a change ends
- * other sessions, the change form shares the login lockout, email IDs ignore case, an admin reset forces a change.
- * Creates one disposable member (vgs-pw-*@example.test) through the admin UI and deletes it at the end.
- * Needs an admin account. See features/password.md.
- */
 import { createRequire } from "node:module";
 import { join } from "node:path";
 
@@ -35,13 +29,11 @@ export default async function password({ page, ev, base, creds, webDir, local })
   const fillChange = async (p, { id, current, next, confirm = next }) => {
     if (id !== undefined) await p.getByLabel("ID").fill(id);
     if (current !== undefined) await p.getByLabel("현재 비밀번호").fill(current);
-    // The field's hint ("8자 이상") is part of its label.
     await p.getByLabel(/^새 비밀번호(?! 확인)/).fill(next);
     await p.getByLabel("새 비밀번호 확인").fill(confirm);
     await p.getByRole("button", { name: "비밀번호 변경", exact: true }).click();
   };
-  /** fillChange for a submit that reaches the server; resolves with the HTTP status of POST /api/auth/password. */
-  const submitChange = async (p, fields) => {
+  const submitChangeForStatus = async (p, fields) => {
     const [res] = await Promise.all([
       p.waitForResponse((r) => r.url().endsWith("/api/auth/password") && r.request().method() === "POST", { timeout: 30_000 }),
       fillChange(p, fields),
@@ -66,7 +58,6 @@ export default async function password({ page, ev, base, creds, webDir, local })
   };
 
   try {
-    // Setup: the admin adds the member with the initial password, typing the email ID in mixed case.
     await ev.login("/admin", admin);
     if (!(await admin.locator("header").getByText("ADMIN", { exact: true }).isVisible())) ev.fail(`${creds.username} is not an admin: run with an admin's VGS_USER/VGS_PASS`);
     const addForm = admin.locator("form").filter({ has: admin.getByRole("button", { name: "추가", exact: true }) });
@@ -78,7 +69,6 @@ export default async function password({ page, ev, base, creds, webDir, local })
     if (fresh.mustChangePassword !== true) ev.fail("a member the admin creates must have mustChangePassword");
     ev.note(`admin created ${typedId}; stored as ${storedId} with mustChangePassword=true`);
 
-    // password-forced: the initial password opens only the change form, with no session.
     await page.goto(`${base}/login`, { waitUntil: "networkidle" });
     await ev.shot("login-form");
     await signIn(page, typedId, INITIAL);
@@ -92,7 +82,7 @@ export default async function password({ page, ev, base, creds, webDir, local })
     await fillChange(page, { next: first, confirm: first + "x" });
     await expectAlert(page, /확인이 다릅니다/, "mismatched confirmation");
     await ev.shot("temporary-mismatch");
-    if ((await submitChange(page, { next: INITIAL })) !== 400) ev.fail("the initial password as the new one should be a 400");
+    if ((await submitChangeForStatus(page, { next: INITIAL })) !== 400) ev.fail("the initial password as the new one should be a 400");
     await expectAlert(page, /임시 비밀번호/, "initial password as the new one");
     await ev.shot("temporary-initial-refused");
     await fillChange(page, { next: first });
@@ -100,25 +90,22 @@ export default async function password({ page, ev, base, creds, webDir, local })
     if ((await member()).mustChangePassword !== false) ev.fail("mustChangePassword should be false after the change");
     await ev.shot("forced-change-signed-in");
 
-    // The old password no longer opens the account.
     await page.getByRole("button", { name: "로그아웃" }).click();
     await page.waitForURL("**/login", { timeout: 20_000 });
     await signIn(page, typedId, INITIAL);
     await expectAlert(page, /맞지 않습니다/, "old password after the change");
     await ev.shot("old-password-refused");
 
-    // password-email-case: the mixed-case email ID signs in to the lowercase account.
     await signIn(page, typedId, first);
     await expectSignedIn(page, "mixed-case email ID");
     ev.note(`signed in with "${typedId}" as ${storedId}`);
     await ev.shot("mixed-case-id-signed-in");
 
-    // password-change: a second browser changes the password from the login screen.
     await other.goto(`${base}/login`, { waitUntil: "networkidle" });
     await other.getByRole("button", { name: "비밀번호 변경", exact: true }).click();
     await other.getByRole("heading", { level: 1, name: "비밀번호 변경" }).waitFor({ timeout: 10_000 });
     await ev.shot("change-form", { page: other });
-    if ((await submitChange(other, { id: typedId, current: first, next: first })) !== 400) ev.fail("the current password as the new one should be a 400");
+    if ((await submitChangeForStatus(other, { id: typedId, current: first, next: first })) !== 400) ev.fail("the current password as the new one should be a 400");
     await expectAlert(other, /현재 비밀번호와 같/, "new password equal to the current one");
     await ev.shot("change-same-refused", { page: other });
     await fillChange(other, { id: typedId, current: first, next: second });
@@ -128,11 +115,9 @@ export default async function password({ page, ev, base, creds, webDir, local })
     ev.note("the browser that changed the password stays signed in across pages");
     await ev.shot("change-signed-in", { page: other });
 
-    // password-revoke: the first browser signed in before the change; its next page load is the login form.
     await expectSignedOut(page, "/gallery", "session from before the change");
     await ev.shot("revoked-session");
 
-    // password-admin-reset: the admin sets a temporary password; the member's sessions end and sign-in forces a change.
     const row = admin.getByRole("row").filter({ hasText: storedId });
     await row.click();
     await admin.getByRole("heading", { level: 2, name: `${storedId} 편집` }).waitFor({ timeout: 10_000 });
@@ -148,15 +133,14 @@ export default async function password({ page, ev, base, creds, webDir, local })
     ev.note("after the admin reset the member's session ended and the reset password asks for a change");
     await ev.shot("reset-forces-change", { page: other });
 
-    // password-lockout: wrong current passwords through the change form count toward the same 10-attempt lock.
     await page.goto(`${base}/login`, { waitUntil: "networkidle" });
     await page.getByRole("button", { name: "비밀번호 변경", exact: true }).click();
     for (let attempt = 1; attempt <= 10; attempt++) {
-      const status = await submitChange(page, { id: typedId, current: `wrong-${attempt}-pw`, next: second });
+      const status = await submitChangeForStatus(page, { id: typedId, current: `wrong-${attempt}-pw`, next: second });
       if (status !== 401) ev.fail(`wrong current password #${attempt} should be a 401, got ${status}`);
     }
     await expectAlert(page, /맞지 않습니다/, "wrong current password");
-    const lockedStatus = await submitChange(page, { id: typedId, current: INITIAL, next: second });
+    const lockedStatus = await submitChangeForStatus(page, { id: typedId, current: INITIAL, next: second });
     if (lockedStatus !== 423) ev.fail(`the right current password after 10 failures should be a 423, got ${lockedStatus}`);
     await expectAlert(page, /잠겼습니다/, "right current password after 10 failures");
     const locked = await member();

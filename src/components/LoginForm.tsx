@@ -4,7 +4,6 @@ import { useState, type FormEvent } from "react";
 import { Button, ErrorText, Field, Input } from "@/components/ui";
 import { PasswordChangeForm } from "@/components/PasswordChangeForm";
 
-/** `temporary` holds the ID and password of a sign-in that the server answered with mustChangePassword. */
 type Mode = { kind: "login" } | { kind: "change" } | { kind: "temporary"; username: string; password: string };
 
 const HEADING: Record<Mode["kind"], { title: string; lead: string }> = {
@@ -13,13 +12,10 @@ const HEADING: Record<Mode["kind"], { title: string; lead: string }> = {
   temporary: { title: "새 비밀번호 정하기", lead: "관리자가 정한 임시 비밀번호로 로그인했습니다. 계속하려면 나만 아는 새 비밀번호를 정하세요." },
 };
 
-/** The login screen: sign in, change a password, or replace a temporary one. `next` is a safe same-site path. */
 export function LoginForm({ next }: { next: string }) {
   const [mode, setMode] = useState<Mode>({ kind: "login" });
   const heading = HEADING[mode.kind];
 
-  // Full navigation (not router.push): the client router may have cached the
-  // logged-out redirect for the target page, and the new cookie must reach proxy.ts.
   const enter = () => window.location.assign(next);
 
   return (

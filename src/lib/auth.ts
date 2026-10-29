@@ -9,32 +9,25 @@ import { SESSION_COOKIE, SESSION_TTL_S, revokedByPasswordChange, signSession, ve
 
 export { SESSION_COOKIE, verifySessionToken, type SessionUser };
 
-/** The session from the cookie, without a database read. */
-export async function getSession(): Promise<Session | null> {
+export async function getUnverifiedSession(): Promise<Session | null> {
   const jar = await cookies();
   const token = jar.get(SESSION_COOKIE)?.value;
   return token ? verifySessionToken(token) : null;
 }
 
-/** The session, re-checked against the users table (role, active, signed after the last password change). */
 export async function getCurrentUser() {
-  const s = await getSession();
+  const s = await getUnverifiedSession();
   if (!s) return null;
   const db = getDb();
   const [u] = await db.select().from(schema.users).where(eq(schema.users.id, s.id)).limit(1);
-  if (!u || !u.active || revokedByPasswordChange(s.issuedAt, u.passwordChangedAt)) return null;
+  if (!u || !u.active || revokedByPasswordChange(s.issuedAtS, u.passwordChangedAt)) return null;
   return u;
 }
 
 const MAX_FAILURES = 10;
 const LOCK_MINUTES = 15;
 
-/**
- * The account that `username` and `password` open, for sign-in and for a password change alike. Every wrong
- * password counts; the MAX_FAILURES-th locks the account for LOCK_MINUTES. A right one clears the count.
- * The error is the same for an unknown ID and a wrong password.
- */
-export async function verifyCredentials(username: string, password: string): Promise<User> {
+export async function attemptSignIn(username: string, password: string): Promise<User> {
   const db = getDb();
   const [u] = await db.select().from(schema.users).where(eq(schema.users.username, loginId(username))).limit(1);
   const wrong = new HttpError(401, "ID 또는 비밀번호가 맞지 않습니다");

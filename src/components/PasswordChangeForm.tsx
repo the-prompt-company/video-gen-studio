@@ -5,19 +5,13 @@ import { Button, ErrorText, Field, Input } from "@/components/ui";
 
 type Status = { kind: "idle" } | { kind: "sending" } | { kind: "failed"; error: string } | { kind: "changed" };
 
-/**
- * Without `username` the form asks for the ID (login screen). With it the ID is fixed (settings page), and a
- * caller that already holds the current password (a temporary-password sign-in) passes it too.
- */
 type Known = { username?: undefined; currentPassword?: undefined } | { username: string; currentPassword?: string };
 
 export type PasswordChangeFormProps = Known & {
-  /** Called once the server has stored the new password and signed this browser in again. */
   onChanged: () => void;
   autoFocus?: boolean;
 };
 
-/** Change a password with the current one through POST /api/auth/password. Every other session ends. */
 export function PasswordChangeForm({ username, currentPassword, onChanged, autoFocus }: PasswordChangeFormProps) {
   const [id, setId] = useState("");
   const [current, setCurrent] = useState("");

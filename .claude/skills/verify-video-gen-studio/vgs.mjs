@@ -248,7 +248,6 @@ async function run(name) {
   let n = 0;
   const ev = {
     dir,
-    /** Screenshot + ARIA snapshot of the current state of `opts.page` (default: the journey's page). */
     async shot(label, opts = {}) {
       const p = opts.page ?? page;
       const stem = `${String(++n).padStart(2, "0")}-${label}`;
@@ -261,7 +260,6 @@ async function run(name) {
       result.steps.push({ step: stem, url: p.url() });
       appendFileSync(join(dir, "log.md"), `- **${stem}** ${p.url()}\n`);
     },
-    /** A page in a fresh browser context (its own cookies) with the same viewport, e.g. a second device. */
     async newPage() {
       const ctx = await browser.newContext(contextOptions);
       extraContexts.push(ctx);
@@ -277,7 +275,6 @@ async function run(name) {
     fail(reason) {
       throw new Error(reason);
     },
-    /** Sign in through the real form as the run's user; resolves on `to`. `p` defaults to the journey's page. */
     async login(to = "/playground", p = page) {
       await p.goto(`${base}/login?next=${encodeURIComponent(to)}`, { waitUntil: "networkidle" });
       await p.getByLabel("ID").fill(c.username);
@@ -286,7 +283,6 @@ async function run(name) {
       await p.waitForURL(`**${to}**`, { timeout: 30_000 });
       await p.waitForLoadState("networkidle");
     },
-    /** Same-origin JSON call with the session cookie of `p` (default: the journey's page), for side-effect checks. */
     async api(path, init, p = page) {
       return p.evaluate(
         async ([p, i]) => {

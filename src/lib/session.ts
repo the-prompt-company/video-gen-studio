@@ -4,8 +4,7 @@ export const SESSION_COOKIE = "vgs_session";
 export const SESSION_TTL_S = 7 * 24 * 60 * 60;
 
 export type SessionUser = { id: number; username: string; role: "user" | "admin" };
-/** A verified session. `issuedAt` is the token's iat, in whole seconds. */
-export type Session = SessionUser & { issuedAt: number };
+export type Session = SessionUser & { issuedAtS: number };
 
 function key() {
   const secret = process.env.AUTH_SECRET;
@@ -27,17 +26,14 @@ export async function verifySessionToken(token: string): Promise<Session | null>
     const { payload } = await jwtVerify(token, key());
     const id = Number(payload.sub);
     if (!id || typeof payload.u !== "string" || typeof payload.iat !== "number") return null;
-    return { id, username: payload.u, role: payload.r === "admin" ? "admin" : "user", issuedAt: payload.iat };
+    return { id, username: payload.u, role: payload.r === "admin" ? "admin" : "user", issuedAtS: payload.iat };
   } catch {
     return null;
   }
 }
 
-/**
- * A session signed before the password last changed belongs to the old password. iat drops the milliseconds,
- * so the comparison is in whole seconds: the session the change itself signs, later in that second, stays valid.
- * The cost is that a session signed earlier in the same second survives too.
- */
-export function revokedByPasswordChange(issuedAt: number, passwordChangedAt: Date | null): boolean {
-  return passwordChangedAt !== null && issuedAt < Math.floor(passwordChangedAt.getTime() / 1000);
+// A JWT iat is whole seconds, so this compares seconds: the session a change signs right after it stays valid,
+// and so does one signed earlier in that same second.
+export function revokedByPasswordChange(issuedAtS: number, passwordChangedAt: Date | null): boolean {
+  return passwordChangedAt !== null && issuedAtS < Math.floor(passwordChangedAt.getTime() / 1000);
 }

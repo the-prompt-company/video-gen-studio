@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { errorResponse, HttpError, setSessionCookie, verifyCredentials } from "@/lib/auth";
+import { attemptSignIn, errorResponse, HttpError, setSessionCookie } from "@/lib/auth";
 
 export async function POST(req: Request) {
   try {
@@ -9,8 +9,7 @@ export async function POST(req: Request) {
     const password = String(body.password ?? "");
     if (!username.trim() || !password) throw new HttpError(400, "ID와 비밀번호를 입력하세요");
 
-    const u = await verifyCredentials(username, password);
-    // A temporary password opens only the change form (POST /api/auth/password), never a session.
+    const u = await attemptSignIn(username, password);
     if (u.mustChangePassword) return Response.json({ mustChangePassword: true });
 
     await getDb().update(schema.users).set({ lastLoginAt: new Date() }).where(eq(schema.users.id, u.id));

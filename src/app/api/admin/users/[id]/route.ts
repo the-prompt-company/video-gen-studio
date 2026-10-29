@@ -64,7 +64,6 @@ export async function PATCH(req: Request, { params }: Ctx) {
       if (String(b.password).length < MIN_PASSWORD_LENGTH) throw new HttpError(400, `비밀번호는 ${MIN_PASSWORD_LENGTH}자 이상`);
       patch.passwordHash = hashPassword(String(b.password));
       patch.passwordChangedAt = new Date();
-      // A password an admin sets for someone else is temporary: that member picks their own at the next sign-in.
       if (id !== admin.id) patch.mustChangePassword = true;
     }
     if (b.note !== undefined) patch.note = b.note ? String(b.note) : null;
@@ -77,8 +76,8 @@ export async function PATCH(req: Request, { params }: Ctx) {
     const db = getDb();
     const [row] = await db.update(schema.users).set(patch).where(eq(schema.users.id, id)).returning({ id: schema.users.id });
     if (!row) throw new HttpError(404, "없는 사용자");
-    // The new password_changed_at revoked every session of this account, the admin's own included.
-    if (id === admin.id && patch.passwordChangedAt) await setSessionCookie(admin);
+    const revokedOwnSession = id === admin.id && patch.passwordChangedAt !== undefined;
+    if (revokedOwnSession) await setSessionCookie(admin);
     return Response.json({ ok: true });
   } catch (e) {
     return errorResponse(e);

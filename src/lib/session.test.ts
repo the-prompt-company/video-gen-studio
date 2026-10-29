@@ -28,24 +28,24 @@ test("the session a password change signs right after it, in the same second, st
   const changedAt = new Date();
   mock.timers.setTime(NOON + 950);
   const session = await signedNow();
-  assert.equal(revokedByPasswordChange(session.issuedAt, changedAt), false);
+  assert.equal(revokedByPasswordChange(session.issuedAtS, changedAt), false);
 });
 
 test("a session signed in an earlier second than the change is revoked", async () => {
   mock.timers.setTime(NOON - 1);
   const session = await signedNow();
   mock.timers.setTime(NOON + 1);
-  assert.equal(revokedByPasswordChange(session.issuedAt, new Date()), true);
+  assert.equal(revokedByPasswordChange(session.issuedAtS, new Date()), true);
 });
 
 test("a session signed a day after the change stays valid", async () => {
   const changedAt = new Date();
   mock.timers.setTime(NOON + 86_400_000);
   const session = await signedNow();
-  assert.equal(revokedByPasswordChange(session.issuedAt, changedAt), false);
+  assert.equal(revokedByPasswordChange(session.issuedAtS, changedAt), false);
 });
 
 test("an account whose password never changed revokes no session", async () => {
   const session = await signedNow();
-  assert.equal(revokedByPasswordChange(session.issuedAt, null), false);
+  assert.equal(revokedByPasswordChange(session.issuedAtS, null), false);
 });

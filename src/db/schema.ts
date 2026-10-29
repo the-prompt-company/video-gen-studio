@@ -17,13 +17,10 @@ import type { ObjectKey } from "../lib/storage";
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
-  /** Display name, not unique. Null shows the username. */
   nickname: text("nickname"),
   avatarKey: text("avatar_key").$type<ObjectKey>(),
   passwordHash: text("password_hash").notNull(),
-  /** The password was set by an admin: sign-in asks for a new one before it issues a session. */
   mustChangePassword: boolean("must_change_password").notNull().default(false),
-  /** Sessions signed before this instant are revoked. */
   passwordChangedAt: timestamp("password_changed_at", { withTimezone: true }),
   role: text("role", { enum: ["user", "admin"] }).notNull().default("user"),
   // Higgsfield "key-id:key-secret", encrypted at rest with AUTH_SECRET.
