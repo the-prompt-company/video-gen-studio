@@ -5,6 +5,7 @@ import { getDb, schema } from "@/db";
 import type { User } from "@/db/schema";
 import { loginId } from "@/lib/credentials";
 import { verifyPassword } from "@/lib/crypto";
+import { errorDetail } from "@/lib/error-detail";
 import { SESSION_COOKIE, SESSION_TTL_S, revokedByPasswordChange, signSession, verifySessionToken, type Session, type SessionUser } from "@/lib/session";
 
 export { SESSION_COOKIE, verifySessionToken, type SessionUser };
@@ -95,6 +96,6 @@ export function errorResponse(e: unknown): Response {
   if (e instanceof HttpError) return Response.json({ error: e.message }, { status: e.status });
   // An unexpected error can carry SQL text or server paths. The browser gets a reference; the log keeps the detail.
   const ref = randomUUID().slice(0, 8);
-  console.error(JSON.stringify({ evt: "unhandled_error", ref, error: e instanceof Error ? (e.stack ?? e.message) : String(e) }));
+  console.error(JSON.stringify({ evt: "unhandled_error", ref, error: errorDetail(e) }));
   return Response.json({ error: `서버 오류가 발생했습니다 (참조 ${ref})` }, { status: 500 });
 }
