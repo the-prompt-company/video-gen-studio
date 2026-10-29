@@ -32,7 +32,7 @@ Preconditions:
 
 ## Gotchas
 
-- There is no user delete endpoint. Do not create verification users; they would stay in the team database. `adm-user-create` is verified only by hand or with a user the team wants.
+- There is no user delete endpoint. This journey creates no users; the password and import journeys create members under their own prefixes and delete them from the database in `finally`. Bulk creation from `.xlsx`, nicknames and 초기 비밀번호로 되돌리기 are in [import.md](./import.md).
 - The admin cannot change their own role or deactivate themselves (controls disabled on their own row).
 - `저장` is disabled while the input equals the stored price, so the probe value must differ. The restore uses the API, not the UI, so a UI regression in the save button cannot leave the price changed.
 - Toggling a model off hides it from everyone's playground immediately. The journey never toggles.

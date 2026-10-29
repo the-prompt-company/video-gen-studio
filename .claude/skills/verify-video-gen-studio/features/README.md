@@ -5,7 +5,7 @@ This directory is the maintained source for verifying the user-facing behavior o
 ## Baseline preconditions
 
 - Launch with `vgs launch` from `web/`; the instance is `http://localhost:3100` (or `VGS_PORT`).
-- `.env.local` points at the team Supabase project; there is no disposable database. Mutate only what a recipe restores, what is tagged `[목업]`, or a `vgs-pw-*@example.test` / `vgs-set-*@example.test` member the password and settings recipes create and delete.
+- `.env.local` points at the team Supabase project; there is no disposable database. Mutate only what a recipe restores, what is tagged `[목업]`, or a `vgs-pw-*@example.test`, `vgs-imp-<stamp>-*@example.test` or `vgs-set-*@example.test` member the password, import and settings recipes create and delete.
 - Credentials are `VGS_USER`/`VGS_PASS`, defaulting to the seeded admin. Admin-only recipes say so.
 - `vgs doctor` reports `ok: true` with the expected port, pid, and role before any drive.
 - Never drive an instance that `vgs launch` did not start (the developer's `npm run dev` on 3000 is off limits).
@@ -44,6 +44,7 @@ Keep implementation details out of the map. Name only user paths, stable handles
 
 - [Login](./login.md) covers the form, wrong-password error, success, the signed-in redirect guard, and logout.
 - [Password](./password.md) covers the forced change of a temporary password, the change from the login screen, other sessions ending, the shared lockout, email IDs in any case, and the admin reset. Creates and deletes one disposable member.
+- [Import](./import.md) covers creating members from an `.xlsx` (header detection, the per-row preview, the 200-row cap), the nickname column and 임시 비밀번호 badge, the admin nickname edit, and 초기 비밀번호로 되돌리기. Creates and deletes 207 disposable members.
 - [Settings](./settings.md) covers the header identity link, profile photo pick/preview/save/replace/remove with the stored 256×256 square, the photo delete guard, the nickname rule and header update, the read-only ID, and the password change that signs other browsers out. Creates and deletes two disposable members and their photos.
 - [Playground](./playground.md) covers the drawer, model select, aspect pills, parameters, the reference dialog, and the generate gate.
 - [Gallery](./gallery.md) covers the tile grid, the detail dialog with download, and the admin scope toggle.

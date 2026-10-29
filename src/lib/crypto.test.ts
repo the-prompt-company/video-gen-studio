@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { signToken, verifyToken } from "./crypto";
+import { hashPasswords, signToken, verifyPassword, verifyToken } from "./crypto";
 
 const ID = "3f1c2a9e-8b7d-4c6e-9f0a-1b2c3d4e5f60";
 const OTHER_ID = "3f1c2a9e-8b7d-4c6e-9f0a-1b2c3d4e5f61";
@@ -57,4 +57,19 @@ test("a token signed under one AUTH_SECRET does not verify under another", () =>
 
 test("signing without AUTH_SECRET throws instead of signing with an empty key", () => {
   withSecret("", () => assert.throws(() => signToken("hf-hook", ID), /AUTH_SECRET/));
+});
+
+test("hashPasswords gives one hash per account, each with its own salt, and each signs in with that password only", async () => {
+  const hashes = await hashPasswords("oooooooo", 3);
+  assert.equal(hashes.length, 3);
+  assert.equal(new Set(hashes.map((h) => h.split("$")[1])).size, 3);
+  for (const hash of hashes) {
+    assert.match(hash, /^scrypt\$[0-9a-f]{32}\$[0-9a-f]{128}$/);
+    assert.equal(verifyPassword("oooooooo", hash), true);
+    assert.equal(verifyPassword("ooooooo0", hash), false);
+  }
+});
+
+test("hashPasswords for no accounts hashes nothing", async () => {
+  assert.deepEqual(await hashPasswords("oooooooo", 0), []);
 });
