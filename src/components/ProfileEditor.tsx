@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Avatar } from "@/components/Avatar";
 import { Button, ErrorText, Field, Input } from "@/components/ui";
 import { AVATAR_MAX_BYTES, AVATAR_SIDE } from "@/lib/avatar";
-import { NICKNAME_MAX, parseNickname } from "@/lib/nickname";
+import { MAX_NICKNAME_LENGTH, parseNickname, type ParsedNickname } from "@/lib/nickname";
 
 type Photo =
   | { kind: "shown" }
@@ -125,14 +125,14 @@ export function ProfileEditor({
     }
   }
 
-  const parsed = parseNickname(typed);
+  const parsed: ParsedNickname | { ok: true; nickname: null } = typed.trim() ? parseNickname(typed) : { ok: true, nickname: null };
   const unchanged = parsed.ok && parsed.nickname === nickname;
 
   async function saveNickname(e: FormEvent) {
     e.preventDefault();
     setPhotoNote(null);
     if (!parsed.ok) {
-      setNicknameNote({ tone: "failed", text: parsed.error });
+      setNicknameNote({ tone: "failed", text: parsed.reason });
       return;
     }
     setSavingNickname(true);
@@ -221,7 +221,7 @@ export function ProfileEditor({
       <form onSubmit={saveNickname} className="space-y-3">
         <div className="flex items-end gap-2">
           <div className="min-w-0 flex-1">
-            <Field label="닉네임" hint={`${[...typed.trim()].length}/${NICKNAME_MAX}`}>
+            <Field label="닉네임" hint={`${Array.from(typed.trim()).length}/${MAX_NICKNAME_LENGTH}`}>
               <Input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={username} autoComplete="nickname" aria-describedby="nickname-help" />
             </Field>
           </div>

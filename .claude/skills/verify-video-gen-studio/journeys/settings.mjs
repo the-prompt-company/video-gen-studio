@@ -242,10 +242,10 @@ export default async function settings({ page, ev, base, webDir, local }) {
     await nickname.fill("가".repeat(31));
     await saveNickname.click();
     await page.locator("main").getByRole("alert").filter({ hasText: /30자/ }).waitFor({ timeout: 10_000 });
-    const control = await ev.api("/api/me", { method: "PATCH", body: JSON.stringify({ nickname: "admin\u202e" }) });
+    const control = await ev.api("/api/me", { method: "PATCH", body: JSON.stringify({ nickname: "설정\n테스터" }) });
     const long = await ev.api("/api/me", { method: "PATCH", body: JSON.stringify({ nickname: "a".repeat(31) }) });
-    if (control.status !== 400 || long.status !== 400) ev.fail(`the server should refuse a bidi override and 31 characters, got ${control.status} and ${long.status}`);
-    ev.note(`31 characters: the form says ${await page.locator("main").getByRole("alert").first().innerText()}; the server answers 400 to a bidi override and to 31 characters`);
+    if (control.status !== 400 || long.status !== 400) ev.fail(`the server should refuse a line break and 31 characters, got ${control.status} and ${long.status}`);
+    ev.note(`31 characters: the form says ${await page.locator("main").getByRole("alert").first().innerText()}; the server answers 400 to a line break and to 31 characters`);
     await ev.shot("nickname-too-long");
 
     await nickname.fill("  설정 테스터 ");
