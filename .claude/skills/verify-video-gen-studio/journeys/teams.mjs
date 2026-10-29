@@ -67,7 +67,7 @@ export default async function teams({ page, ev, base, creds, webDir, local }) {
   };
   const shownTeam = async (p) => {
     const account = p.getByRole("region", { name: "계정" });
-    return (await account.locator("div").filter({ has: p.locator("dt", { hasText: /^팀$/ }) }).locator("dd").innerText()).trim();
+    return (await account.locator("dl > div").filter({ has: p.locator("dt", { hasText: /^팀$/ }) }).locator("dd").innerText()).trim();
   };
 
   try {
@@ -133,6 +133,7 @@ export default async function teams({ page, ev, base, creds, webDir, local }) {
     const submit = dialog.getByRole("button", { name: "2명 지정", exact: true });
     if (await submit.isEnabled()) ev.fail("2명 지정 should wait until a team is chosen");
     await dialog.getByLabel(/^팀/).selectOption({ label: red });
+    await until(async () => (await submit.isEnabled()) && (await submit.evaluate((el) => getComputedStyle(el).opacity)) === "1", "2명 지정 should turn on once a team is chosen");
     await ev.shot("bulk-dialog");
     await submit.click();
     await dialog.waitFor({ state: "hidden", timeout: 10_000 });
@@ -148,9 +149,9 @@ export default async function teams({ page, ev, base, creds, webDir, local }) {
     await page.getByRole("button", { name: `${memberB} 편집`, exact: true }).click();
     dialog = page.getByRole("dialog", { name: `${memberB} 편집` });
     await dialog.waitFor({ timeout: 10_000 });
-    await dialog.getByLabel("팀", { exact: true }).selectOption({ label: beta });
+    await dialog.getByRole("combobox", { name: /^팀/ }).selectOption({ label: beta });
     await until(async () => (await userRow(memberB))?.teamId === betaTeam.id, `${memberB} did not move to ${beta}`);
-    await until(async () => (await dialog.getByLabel("팀", { exact: true }).inputValue()) === String(betaTeam.id), "the editor's 팀 select did not show the new team");
+    await until(async () => (await dialog.getByRole("combobox", { name: /^팀/ }).inputValue()) === String(betaTeam.id), "the editor's 팀 select did not show the new team");
     await ev.shot("editor-team");
     await page.keyboard.press("Escape");
     await dialog.waitFor({ state: "hidden", timeout: 5_000 });

@@ -174,9 +174,9 @@ export default async function settings({ page, ev, base, webDir, local }) {
     await page.getByRole("heading", { level: 1, name: "설정" }).waitFor({ timeout: 30_000 });
     if ((await identity(page).getAttribute("aria-current")) !== "page") ev.fail("the identity link should be the current page on /settings");
     const account = page.getByRole("region", { name: "계정" });
-    const shownId = (await account.locator("div").filter({ has: page.locator("dt", { hasText: /^ID$/ }) }).locator("dd").innerText()).trim();
+    const shownId = (await account.locator("dl > div").filter({ has: page.locator("dt", { hasText: /^ID$/ }) }).locator("dd").innerText()).trim();
     if (shownId !== memberA) ev.fail(`계정 should show the ID, got "${shownId}"`);
-    const shownTeam = (await account.locator("div").filter({ has: page.locator("dt", { hasText: /^팀$/ }) }).locator("dd").innerText()).trim();
+    const shownTeam = (await account.locator("dl > div").filter({ has: page.locator("dt", { hasText: /^팀$/ }) }).locator("dd").innerText()).trim();
     if (shownTeam !== "미소속") ev.fail(`계정 should show 미소속 for a member without a team, got "${shownTeam}"`);
     if (await account.getByRole("textbox").count()) ev.fail("계정 should show the ID as text, not as a field");
     if (await page.getByRole("region", { name: "비밀번호" }).getByRole("textbox", { name: "ID" }).count()) ev.fail("the password form should not repeat the ID visibly");
