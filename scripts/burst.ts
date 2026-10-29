@@ -5,7 +5,8 @@
  *
  *   HIGGSFIELD_BASE_URL=http://localhost:4010 BURST_BASE=http://localhost:3100 npx dotenv -e .env.local -- tsx scripts/burst.ts
  *
- * The app at BURST_BASE must use the same fake for HIGGSFIELD_BASE_URL and SUPABASE_URL, and PUBLIC_BASE_URL pointing
+ * The app at BURST_BASE must use the same fake for HIGGSFIELD_BASE_URL and for Blob (VERCEL_BLOB_API_URL=<fake>/api/blob,
+ * BLOB_PUBLIC_BASE_URL=<fake>/blob, BLOB_READ_WRITE_TOKEN any vercel_blob_rw_<id>_<secret>), and PUBLIC_BASE_URL pointing
  * at itself so the fake's webhooks reach it. Start the fake with the conditions under test, for example
  * FAKE_HF_429_FIRST_N=5 FAKE_HF_DROP_WEBHOOKS=0.1 FAKE_HF_DUP_WEBHOOKS=1.
  *
@@ -21,13 +22,24 @@ import { randomBytes } from "node:crypto";
 import { getDb, schema } from "../src/db";
 import { encrypt, hashPassword } from "../src/lib/crypto";
 import { isLive, LIVE_STATUSES, type GenerationStatus } from "../src/lib/generation-status";
+import { videoKey } from "../src/lib/storage";
 
 type Item = {
   id: string;
   status: GenerationStatus;
-  video: { kind: "stored" } | { kind: "provider"; storing: boolean } | null;
+  video: { kind: "stored"; url: string } | { kind: "provider"; storing: boolean } | null;
 };
-type Track = { id: string; clickAt: number; postMs: number; status: GenerationStatus; sawPending: boolean; completedAt?: number; storedAt?: number; settled: boolean };
+type Track = {
+  id: string;
+  clickAt: number;
+  postMs: number;
+  status: GenerationStatus;
+  sawPending: boolean;
+  completedAt?: number;
+  storedAt?: number;
+  storedUrl?: string;
+  settled: boolean;
+};
 type BurstUser = { id: number; username: string; cookie: string };
 type FakeStats = {
   accepted: { byIdempotencyKey: Record<string, number> };
@@ -137,6 +149,14 @@ async function foreignDueRows(userIds: number[]): Promise<number> {
   return Number(n);
 }
 
+/** One byte through the URL the browser plays, so the object exists in the store the app wrote to, at the recorded size. */
+async function servesStoredCopy(row: { id: string; storagePath: string | null; sizeBytes: number | null }, url: string | undefined): Promise<boolean> {
+  if (!url || row.storagePath !== videoKey(row.id) || !row.sizeBytes) return false;
+  const res = await fetch(url, { headers: { Range: "bytes=0-0" } });
+  await res.body?.cancel();
+  return res.status === 206 && res.headers.get("content-range") === `bytes 0-0/${row.sizeBytes}`;
+}
+
 function settled(item: Item): boolean {
   if (isLive(item.status)) return false;
   return item.status !== "completed" || item.video?.kind === "stored" || (item.video?.kind === "provider" && !item.video.storing);
@@ -146,7 +166,10 @@ function observe(t: Track, item: Item, at: number) {
   t.status = item.status;
   if (item.status === "pending") t.sawPending = true;
   if (item.status === "completed") t.completedAt ??= at;
-  if (item.video?.kind === "stored") t.storedAt ??= at;
+  if (item.video?.kind === "stored") {
+    t.storedAt ??= at;
+    t.storedUrl = item.video.url;
+  }
   t.settled = settled(item);
 }
 
@@ -271,7 +294,12 @@ async function main() {
 
     check(rows.length === USERS * PER_USER, `all ${USERS * PER_USER} submits made a row`, `${rows.length}`);
     check(rows.every((r) => !isLive(r.status)), "every row ended terminal", JSON.stringify(byStatus));
-    check(completed.length > 0 && completed.every((r) => r.storagePath === `${r.id}.mp4`), "every completed row is stored", `${completed.filter((r) => r.storagePath).length}/${completed.length}`);
+    const served = await Promise.all(completed.map((r) => servesStoredCopy(r, tracks.find((t) => t.id === r.id)?.storedUrl)));
+    check(
+      completed.length > 0 && served.every(Boolean),
+      "every completed row is stored: its key is videos/<id>.mp4 and the public URL the app gave the browser serves an object of size_bytes",
+      `${served.filter(Boolean).length}/${completed.length}`,
+    );
     check(accepted.every((n) => n === 1), "the fake accepted exactly one submit per Idempotency-Key", `${accepted.filter((n) => n !== 1).length} keys off`);
     check(overCalls.length === 0, "status calls per row stay within 1 per 15 s plus 1 per webhook delivery", overCalls.slice(0, 3).join("; "));
     check((codes[502] ?? 0) === 0, "no submit answered 502", JSON.stringify(codes));

@@ -58,7 +58,6 @@ export const generations = pgTable(
      */
     maybeAccepted: boolean("maybe_accepted").notNull().default(false),
     resultUrl: text("result_url"),
-    blobUrl: text("blob_url"),
     /** Object key in the videos bucket, set only after the upload finished. Non-null means playable from storage. */
     storagePath: text("storage_path").$type<ObjectKey>(),
     sizeBytes: integer("size_bytes"),

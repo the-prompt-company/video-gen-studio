@@ -1,5 +1,4 @@
 import { and, eq, getTableColumns, gt, inArray, isNotNull, isNull, lte, notInArray, or, sql, type SQL } from "drizzle-orm";
-import { del } from "@vercel/blob";
 import { getDb, schema } from "@/db";
 import type { Generation, User } from "@/db/schema";
 import { HttpError } from "@/lib/auth";
@@ -42,6 +41,7 @@ const NO_KEY_RETRY_S = 60;
 /** A copy claim holds at least this long, longer than the 300 s maxDuration of every route that copies. */
 const MIRROR_LEASE_S = 360;
 const MIRROR_BACKOFF_CAP_S = 6 * 3600;
+/** The whole copy, fetch and upload streamed together, stops after this. */
 const COPY_TIMEOUT_MS = 240_000;
 const MAX_COPY_BYTES = 1024 ** 3;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -204,7 +204,7 @@ export async function sweep({ deadline }: { deadline: number }): Promise<SweepRe
 }
 
 /**
- * Copy the completed result into our bucket. Any number of actors may call this: one conditional UPDATE on
+ * Stream the completed result into the Blob store. Any number of actors may call this: one conditional UPDATE on
  * mirror_next_at picks the single copier per lease, and an expired lease means that copier died, so the next
  * claimant uploads the same bytes to the same key again. Writes only the media columns, never status.
  */
@@ -216,16 +216,12 @@ export async function storeVideo(gen: Generation): Promise<Generation> {
   const attempt = claimed.mirrorAttempts;
   try {
     const t0 = Date.now();
-    const { bytes, contentType } = await fetchResult(claimed.resultUrl);
-    const fetchMs = Date.now() - t0;
     const key = storage.videoKey(claimed.id);
-    const t1 = Date.now();
-    await storage.putVideo(key, bytes, contentType);
-    const uploadMs = Date.now() - t1;
-    console.info(JSON.stringify({ evt: "video_stored", id: claimed.id, bytes: bytes.byteLength, fetchMs, uploadMs, attempt }));
+    const bytes = await storage.copyVideo(claimed.resultUrl, key, { maxBytes: MAX_COPY_BYTES, timeoutMs: COPY_TIMEOUT_MS });
+    console.info(JSON.stringify({ evt: "video_stored", id: claimed.id, bytes, ms: Date.now() - t0, attempt }));
     const [row] = await getDb()
       .update(g)
-      .set({ storagePath: key, sizeBytes: bytes.byteLength, mirrorError: null })
+      .set({ storagePath: key, sizeBytes: bytes, mirrorError: null })
       .where(eq(g.id, claimed.id))
       .returning();
     return row ?? claimed;
@@ -265,7 +261,7 @@ export type PublicGeneration = ReturnType<typeof publicGeneration>;
  */
 function publicVideo(g: Generation): PublicVideo | null {
   if (g.status !== "completed") return null;
-  const stored = g.storagePath && storage.videoUrls(g.storagePath, `${g.id}.mp4`);
+  const stored = g.storagePath && storage.videoUrls(g.storagePath);
   if (stored) return { kind: "stored", ...stored };
   if (!g.resultUrl) return null;
   const unexpired = g.expiresAt === null || g.expiresAt.getTime() > Date.now();
@@ -647,45 +643,20 @@ async function claimCopy(id: string): Promise<Generation | null> {
   return row ?? null;
 }
 
-/** Buffer the result, refusing anything over MAX_COPY_BYTES before or while it streams in. */
-async function fetchResult(url: string): Promise<{ bytes: Uint8Array; contentType: string }> {
-  const res = await fetch(url, { signal: AbortSignal.timeout(COPY_TIMEOUT_MS) });
-  if (!res.ok || !res.body) throw new Error(`result fetch failed: HTTP ${res.status}`);
-  const declared = Number(res.headers.get("content-length") ?? 0);
-  if (declared > MAX_COPY_BYTES) throw new Error(`result too large: ${declared} bytes`);
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  const reader = res.body.getReader();
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    total += value.byteLength;
-    if (total > MAX_COPY_BYTES) {
-      await reader.cancel();
-      throw new Error(`result too large: over ${MAX_COPY_BYTES} bytes`);
-    }
-    chunks.push(value);
-  }
-  return { bytes: Buffer.concat(chunks), contentType: res.headers.get("content-type") ?? "video/mp4" };
-}
-
 /** Runs once per terminal move, by the caller that made it: ref cleanup, then the copy for a completed row. */
 async function onTerminal(row: Generation): Promise<void> {
   await cleanupRefs(row);
   if (row.status === "completed") await storeVideo(row);
 }
 
-function isBlobUrl(u: string): boolean {
-  return /\.blob\.vercel-storage\.com\//.test(u);
-}
-
-/** Delete temporary reference uploads from Vercel Blob once the request is finished. */
+/**
+ * Delete the owner's temporary reference uploads from Vercel Blob once the request is finished. A ref can be any URL
+ * the browser sent, including a stored video or another member's upload, so storage.deleteRefs deletes only what sits
+ * under the row owner's refs/<user id>/.
+ */
 async function cleanupRefs(gen: Generation) {
-  if (!process.env.BLOB_READ_WRITE_TOKEN) return;
-  const urls = [...gen.imageRefs, ...gen.videoRefs].filter(isBlobUrl);
-  if (urls.length === 0) return;
   try {
-    await del(urls);
+    await storage.deleteRefs([...gen.imageRefs, ...gen.videoRefs], gen.userId);
   } catch (e) {
     console.warn("blob cleanup failed", e);
   }

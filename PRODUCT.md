@@ -32,7 +32,8 @@ Higgsfield 웹사이트를 직접 쓰는 것과 다른 점은 셋이며, 사용�
 
 - 생성 흐름: 제출 → Higgsfield `request_id` 저장 → 세 트리거가 같은 함수(`src/lib/generations.ts`)로 행을 움직인다. 열린 탭의 폴링(2초에서 1.5배씩 최대 10초), Higgsfield 완료 웹훅(본문은 믿지 않고 상태를 다시 조회), Vercel Cron sweep(놓친 웹훅, 피드 밖의 live 행, 실패한 복사 정리). 탭을 닫아도 웹훅이 완료와 비용 기록, 영상 복사까지 끝낸다. Vercel Pro라 크론은 매분 돌고, 웹훅까지 놓친 행도 1분 안에 정리된다. 함수는 DB 옆 서울(`icn1`)에서 돈다.
 - 레퍼런스 업로드: 4 MB 이하는 서버를 거쳐 Higgsfield 업로드 스토리지로. 그보다 큰 mp4는 Vercel Blob이 연결돼 있을 때만 브라우저에서 직접 올리고, 생성이 끝나면 지운다.
-- 결과 보관: 완료 영상은 완료 직후 Supabase Storage 공개 버킷에 `<생성 id>.mp4`로 복사돼 계속 남는다(갤러리 보관 "영구"). Higgsfield는 원본을 7일 뒤 지우므로 복사가 끝나기 전 몇 초 동안만 Higgsfield URL로 재생한다. Storage env가 없는 환경에서는 복사하지 않고 갤러리가 남은 일수를 보여 준다.
+- 결과 보관: 완료 영상은 완료 직후 Vercel Blob 공개 스토어에 `videos/<생성 id>.mp4`로 복사돼 계속 남는다(갤러리 보관 "영구"). Higgsfield는 원본을 7일 뒤 지우므로 복사가 끝나기 전 몇 초 동안만 Higgsfield URL로 재생한다. Blob 토큰이 없는 환경에서는 복사하지 않고 갤러리가 남은 일수를 보여 준다.
+- 비용: 운영자는 지출을 최소로 둔다. Supabase는 Free 플랜으로 DB만 쓴다(Free Storage는 1 GB, 파일당 50 MB라 영상을 담을 수 없다). 영상은 Vercel Blob에 두고, 저장($0.023/GB-월)은 Vercel Pro 월 $20 크레딧에서 나가며 Blob 전송은 Pro의 Flat Rate CDN에 포함된다. 예상은 월 $0~2다(README 비용).
 - 로그인: scrypt 해시 검증, 7일 HttpOnly 세션 쿠키, 10회 실패 시 15분 잠금. ID는 이메일 형식을 허용한다.
 - 운영 주체: 소유자 1인이 Vercel 개인 계정과 Supabase 프로젝트를 관리한다. 팀원은 Vercel·DB에 접근하지 않는다.
 - 이 저장소 밖에 같은 목적의 Colab 노트북 + Google Sheets + Apps Script 게이트웨이 버전이 먼저 있었다. 이 웹 사이트가 그것을 대체한다.
@@ -46,7 +47,7 @@ Higgsfield 웹사이트를 직접 쓰는 것과 다른 점은 셋이며, 사용�
 - 어드민: 사용자 추가, API 키 할당, 비밀번호·역할·활성 변경, 모델 단가·활성, 전체 로그 필터와 CSV.
 
 **기술 제약**
-- Next.js 16 App Router + Supabase Postgres(Drizzle, postgres-js, Transaction pooler) + 선택적 Vercel Blob.
+- Next.js 16 App Router + Supabase Postgres(Free 플랜, Drizzle, postgres-js, Transaction pooler) + Vercel Blob(완료 영상과 4 MB 초과 레퍼런스).
 - **Vercel Pro로 운영한다.** 팀 "jj-tpc's projects"가 Pro 플랜이다(운영자 확인 2026-10-28). 함수 최대 300초(`maxDuration = 300`), 본문 4.5 MB 안에서 설계하고, `vercel.json`의 매분 크론이 그대로 배포된다. Hobby로 돌아가면 스케줄을 `0 18 * * *`로 바꿔야 배포된다(README).
 - `AUTH_SECRET`을 바꾸면 저장된 API 키를 복호화할 수 없다.
 - Supabase Free는 7일 미사용 시 일시정지된다.
@@ -75,7 +76,7 @@ Higgsfield 웹사이트를 직접 쓰는 것과 다른 점은 셋이며, 사용�
 
 1. **키는 사용자 손에 가지 않는다.** 어떤 화면도 API 키를 입력받거나 표시하지 않는다. 어드민에서도 마스킹한다.
 2. **비용은 항상 보인다.** 생성 전에는 예상 비용을, 생성 후에는 실제 과금을, 대시보드에서는 누적을. 단가가 없으면 0 대신 "미정"이라고 말한다.
-3. **결과는 남는다.** 완료 영상은 Supabase Storage 사본으로 7일 뒤에도 재생·다운로드된다. 사본이 없는 동안(복사 중이거나 Storage env가 없는 환경)에는 Higgsfield가 7일 뒤 지운다는 사실을 숨기지 않고 남은 일수와 다운로드를 눈에 띄게 둔다.
+3. **결과는 남는다.** 완료 영상은 Vercel Blob 사본으로 7일 뒤에도 재생·다운로드된다. 사본이 없는 동안(복사 중이거나 Blob 토큰이 없는 환경)에는 Higgsfield가 7일 뒤 지운다는 사실을 숨기지 않고 남은 일수와 다운로드를 눈에 띄게 둔다.
 4. **정한 플랜 안에서 조용히 돌아간다.** Vercel Pro의 함수 300초와 본문 4.5 MB 안에서 설계한다. 서버 상주 작업과 큰 파일의 서버 경유는 켜지 않는다. 결과 복사는 기본으로 켜고, 응답 뒤(`after`)나 크론 안에서 한다.
 5. **전문가의 도구다.** 파라미터를 숨기거나 단순화하지 않는다. 기본값은 주되 전부 조정 가능해야 한다.
 
