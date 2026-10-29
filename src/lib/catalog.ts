@@ -262,11 +262,11 @@ export function planGeneration(draft: Draft, baseRateUsd: number): Plan {
     durationS: Number(params.duration ?? 0),
     costUsd: blocker ? 0 : estimateCostUsd({ family: family.id, mode, params, inputVideoS }, baseRateUsd),
   };
-  if (images > family.maxImages) blocker = `${family.name}은(는) 이미지를 최대 ${family.maxImages}장 받습니다`;
-  else if (videos > family.maxVideos) blocker = `${family.name}은(는) 영상을 최대 ${family.maxVideos}개 받습니다`;
+  if (images > family.maxImages) blocker = `${family.name}에는 이미지를 최대 ${family.maxImages}장까지 넣을 수 있습니다`;
+  else if (videos > family.maxVideos) blocker = `${family.name}에는 영상을 최대 ${family.maxVideos}개까지 넣을 수 있습니다`;
   else if (draft.videos.some((v) => !(Number.isFinite(v.seconds) && v.seconds > 0 && v.seconds <= 600))) blocker = "영상 길이를 읽지 못한 레퍼런스가 있습니다. 그 영상을 빼고 다시 올려 주세요";
   else if (draft.mode !== mode) blocker = `화면의 생성 방식(${MODE_LABEL[draft.mode]})이 첨부와 맞지 않습니다. 페이지를 새로고침하세요`;
-  else if (!blocker && family.promptRequiredIn.includes(mode) && !prompt) blocker = `${family.name} ${MODE_LABEL[mode]}은(는) 프롬프트가 필요합니다`;
+  else if (!blocker && family.promptRequiredIn.includes(mode) && !prompt) blocker = `${family.name} ${MODE_LABEL[mode]}에는 프롬프트가 필요합니다`;
   if (blocker) return { ...base, ready: false, blocker };
 
   const body: Record<string, unknown> = { ...params };
