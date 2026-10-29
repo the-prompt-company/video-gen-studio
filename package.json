@@ -22,7 +22,8 @@
     "next": "16.4.3",
     "postgres": "^3.4.9",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "read-excel-file": "9.3.12"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",
@@ -35,6 +36,7 @@
     "eslint-config-next": "16.4.3",
     "tailwindcss": "^4",
     "tsx": "^4.23.15",
-    "typescript": "^5"
+    "typescript": "^5",
+    "write-excel-file": "4.1.1"
   }
 }
