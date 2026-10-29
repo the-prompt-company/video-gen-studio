@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { getDb, pgErrorCode, schema, UNIQUE_VIOLATION } from "@/db";
 import { requireAdmin, errorResponse, HttpError } from "@/lib/auth";
 import { DUPLICATE_TEAM_NAME, NO_SUCH_TEAM, parseTeamName, teamIdFromPath } from "@/lib/teams";
@@ -35,20 +35,18 @@ export async function PATCH(req: Request, ctx: Ctx) {
   }
 }
 
-/** DELETE /api/admin/teams/:id — `users.team_id` is ON DELETE SET NULL, so its members become 미소속 and keep their videos. */
+/** DELETE /api/admin/teams/:id — its members become 미소속 and keep their videos. Answers how many were released. */
 export async function DELETE(_req: Request, ctx: Ctx) {
   try {
     await requireAdmin();
     const id = await teamIdOf(ctx);
-    const t = schema.teams;
-    const u = schema.users;
-    // RETURNING reads the statement's snapshot, from before the foreign key released the members.
-    const [row] = await getDb()
-      .delete(t)
-      .where(eq(t.id, id))
-      .returning({ id: t.id, released: sql<number>`(select count(*) from ${u} where ${u.teamId} = ${t.id})::int` });
-    if (!row) throw new HttpError(404, NO_SUCH_TEAM);
-    return Response.json(row);
+    const released = await getDb().transaction(async (tx) => {
+      const members = await tx.update(schema.users).set({ teamId: null }).where(eq(schema.users.teamId, id)).returning({ id: schema.users.id });
+      const [row] = await tx.delete(schema.teams).where(eq(schema.teams.id, id)).returning({ id: schema.teams.id });
+      if (!row) throw new HttpError(404, NO_SUCH_TEAM);
+      return members.length;
+    });
+    return Response.json({ id, released });
   } catch (e) {
     return errorResponse(e);
   }
