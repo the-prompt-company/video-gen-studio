@@ -231,30 +231,41 @@ async function run(name) {
   const { chromium } = await import("playwright");
   const browser = await chromium.launch({ headless: true, executablePath: process.env.VGS_CHROME || undefined });
   const viewport = mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 };
+  const contextOptions = { viewport, ...(mobile ? { hasTouch: true, isMobile: true } : {}) };
   const context = await browser.newContext({
-    viewport,
-    ...(mobile ? { hasTouch: true, isMobile: true } : {}),
+    ...contextOptions,
     ...(process.env.VGS_VIDEO === "1" ? { recordVideo: { dir, size: viewport } } : {}),
   });
-  const page = await context.newPage();
   const consoleLog = join(dir, "console.txt");
-  page.on("console", (m) => appendFileSync(consoleLog, `[${m.type()}] ${m.text()}\n`));
-  page.on("pageerror", (e) => appendFileSync(consoleLog, `[pageerror] ${e}\n`));
+  const watchConsole = (p, tag) => {
+    p.on("console", (m) => appendFileSync(consoleLog, `${tag}[${m.type()}] ${m.text()}\n`));
+    p.on("pageerror", (e) => appendFileSync(consoleLog, `${tag}[pageerror] ${e}\n`));
+  };
+  const page = await context.newPage();
+  watchConsole(page, "");
+  const extraContexts = [];
   const result = { journey: name, runId, base, mobile, user: c.username, commit: commit(), next: nextVersion(), startedAt: new Date().toISOString(), steps: [], ok: false };
   let n = 0;
   const ev = {
     dir,
-    /** Screenshot + ARIA snapshot of the current state. */
     async shot(label, opts = {}) {
+      const p = opts.page ?? page;
       const stem = `${String(++n).padStart(2, "0")}-${label}`;
-      await page.screenshot({ path: join(dir, stem + ".png"), fullPage: Boolean(opts.fullPage) });
+      await p.screenshot({ path: join(dir, stem + ".png"), fullPage: Boolean(opts.fullPage) });
       try {
-        writeFileSync(join(dir, stem + ".aria.txt"), await page.locator("body").ariaSnapshot());
+        writeFileSync(join(dir, stem + ".aria.txt"), await p.locator("body").ariaSnapshot());
       } catch (e) {
         writeFileSync(join(dir, stem + ".aria.txt"), `ariaSnapshot failed: ${e.message}`);
       }
-      result.steps.push({ step: stem, url: page.url() });
-      appendFileSync(join(dir, "log.md"), `- **${stem}** ${page.url()}\n`);
+      result.steps.push({ step: stem, url: p.url() });
+      appendFileSync(join(dir, "log.md"), `- **${stem}** ${p.url()}\n`);
+    },
+    async newPage() {
+      const ctx = await browser.newContext(contextOptions);
+      extraContexts.push(ctx);
+      const p = await ctx.newPage();
+      watchConsole(p, `[context ${extraContexts.length + 1}]`);
+      return p;
     },
     note(text) {
       result.steps.push({ note: text });
@@ -264,18 +275,16 @@ async function run(name) {
     fail(reason) {
       throw new Error(reason);
     },
-    /** Sign in through the real form; resolves on /playground. */
-    async login(to = "/playground") {
-      await page.goto(`${base}/login?next=${encodeURIComponent(to)}`, { waitUntil: "networkidle" });
-      await page.getByLabel("ID").fill(c.username);
-      await page.getByLabel("비밀번호").fill(c.password);
-      await page.getByRole("button", { name: "로그인" }).click();
-      await page.waitForURL(`**${to}**`, { timeout: 30_000 });
-      await page.waitForLoadState("networkidle");
+    async login(to = "/playground", p = page) {
+      await p.goto(`${base}/login?next=${encodeURIComponent(to)}`, { waitUntil: "networkidle" });
+      await p.getByLabel("ID").fill(c.username);
+      await p.getByLabel("비밀번호").fill(c.password);
+      await p.getByRole("button", { name: "로그인", exact: true }).click();
+      await p.waitForURL(`**${to}**`, { timeout: 30_000 });
+      await p.waitForLoadState("networkidle");
     },
-    /** Same-origin JSON call with the page's session cookie, for side-effect checks. */
-    async api(path, init) {
-      return page.evaluate(
+    async api(path, init, p = page) {
+      return p.evaluate(
         async ([p, i]) => {
           const r = await fetch(p, { ...i, headers: { "Content-Type": "application/json", ...(i?.headers ?? {}) }, cache: "no-store" });
           return { status: r.status, body: await r.json().catch(() => null) };
@@ -287,7 +296,7 @@ async function run(name) {
   writeFileSync(join(dir, "log.md"), `# ${name} · ${runId}\n\n- base ${base} · user ${c.username} · commit ${result.commit} · ${mobile ? "mobile 390×844" : "desktop 1440×900"}\n`);
   try {
     const mod = await import(pathToFileURL(file).href);
-    await mod.default({ page, context, ev, base, creds: c, env: process.env });
+    await mod.default({ page, context, ev, base, creds: c, env: process.env, webDir, local: envLocal() });
     result.ok = true;
   } catch (e) {
     result.error = String(e?.message ?? e);
@@ -299,6 +308,7 @@ async function run(name) {
     result.finishedAt = new Date().toISOString();
     writeFileSync(join(dir, "result.json"), JSON.stringify(result, null, 2));
     const video = page.video();
+    for (const ctx of extraContexts) await ctx.close();
     await context.close();
     if (video) renameSync(await video.path(), join(dir, "video.webm"));
     await browser.close();

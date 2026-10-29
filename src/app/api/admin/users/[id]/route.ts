@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { requireAdmin, errorResponse, HttpError } from "@/lib/auth";
+import { requireAdmin, errorResponse, HttpError, setSessionCookie } from "@/lib/auth";
+import { MIN_PASSWORD_LENGTH } from "@/lib/credentials";
 import { hashPassword, encrypt, decrypt, maskApiKey } from "@/lib/crypto";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -30,6 +31,7 @@ export async function GET(_req: Request, { params }: Ctx) {
       apiKeyMasked: u.apiKeyEnc ? maskApiKey(decrypt(u.apiKeyEnc)) : null,
       lockedUntil: u.lockedUntil,
       failedAttempts: u.failedAttempts,
+      mustChangePassword: u.mustChangePassword,
     });
   } catch (e) {
     return errorResponse(e);
@@ -59,8 +61,10 @@ export async function PATCH(req: Request, { params }: Ctx) {
       patch.apiKeyEnc = k ? encrypt(k) : null;
     }
     if (b.password !== undefined) {
-      if (String(b.password).length < 8) throw new HttpError(400, "비밀번호는 8자 이상");
+      if (String(b.password).length < MIN_PASSWORD_LENGTH) throw new HttpError(400, `비밀번호는 ${MIN_PASSWORD_LENGTH}자 이상`);
       patch.passwordHash = hashPassword(String(b.password));
+      patch.passwordChangedAt = new Date();
+      if (id !== admin.id) patch.mustChangePassword = true;
     }
     if (b.note !== undefined) patch.note = b.note ? String(b.note) : null;
     if (b.unlock) {
@@ -72,6 +76,8 @@ export async function PATCH(req: Request, { params }: Ctx) {
     const db = getDb();
     const [row] = await db.update(schema.users).set(patch).where(eq(schema.users.id, id)).returning({ id: schema.users.id });
     if (!row) throw new HttpError(404, "없는 사용자");
+    const revokedOwnSession = id === admin.id && patch.passwordChangedAt !== undefined;
+    if (revokedOwnSession) await setSessionCookie(admin);
     return Response.json({ ok: true });
   } catch (e) {
     return errorResponse(e);

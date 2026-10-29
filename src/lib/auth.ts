@@ -2,24 +2,55 @@ import { randomUUID } from "node:crypto";
 import { cookies } from "next/headers";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { SESSION_COOKIE, SESSION_TTL_S, signSession, verifySessionToken, type SessionUser } from "@/lib/session";
+import type { User } from "@/db/schema";
+import { loginId } from "@/lib/credentials";
+import { verifyPassword } from "@/lib/crypto";
+import { SESSION_COOKIE, SESSION_TTL_S, revokedByPasswordChange, signSession, verifySessionToken, type Session, type SessionUser } from "@/lib/session";
 
 export { SESSION_COOKIE, verifySessionToken, type SessionUser };
 
-/** The session from the cookie, without a database read. */
-export async function getSession(): Promise<SessionUser | null> {
+export async function getUnverifiedSession(): Promise<Session | null> {
   const jar = await cookies();
   const token = jar.get(SESSION_COOKIE)?.value;
   return token ? verifySessionToken(token) : null;
 }
 
-/** The session, re-checked against the users table (role, active). */
 export async function getCurrentUser() {
-  const s = await getSession();
+  const s = await getUnverifiedSession();
   if (!s) return null;
   const db = getDb();
   const [u] = await db.select().from(schema.users).where(eq(schema.users.id, s.id)).limit(1);
-  if (!u || !u.active) return null;
+  if (!u || !u.active || revokedByPasswordChange(s.issuedAtS, u.passwordChangedAt)) return null;
+  return u;
+}
+
+const MAX_FAILURES = 10;
+const LOCK_MINUTES = 15;
+
+export async function attemptSignIn(username: string, password: string): Promise<User> {
+  const db = getDb();
+  const [u] = await db.select().from(schema.users).where(eq(schema.users.username, loginId(username))).limit(1);
+  const wrong = new HttpError(401, "ID 또는 비밀번호가 맞지 않습니다");
+  if (!u) throw wrong;
+  if (u.lockedUntil && u.lockedUntil.getTime() > Date.now()) {
+    throw new HttpError(423, `실패가 누적되어 잠겼습니다. ${LOCK_MINUTES}분 후 다시 시도하세요`);
+  }
+  if (!u.active) throw new HttpError(403, "비활성화된 계정입니다");
+
+  if (!verifyPassword(password, u.passwordHash)) {
+    const failures = u.failedAttempts + 1;
+    await db
+      .update(schema.users)
+      .set({
+        failedAttempts: failures,
+        lockedUntil: failures >= MAX_FAILURES ? new Date(Date.now() + LOCK_MINUTES * 60_000) : null,
+      })
+      .where(eq(schema.users.id, u.id));
+    throw wrong;
+  }
+  if (u.failedAttempts > 0 || u.lockedUntil) {
+    await db.update(schema.users).set({ failedAttempts: 0, lockedUntil: null }).where(eq(schema.users.id, u.id));
+  }
   return u;
 }
 

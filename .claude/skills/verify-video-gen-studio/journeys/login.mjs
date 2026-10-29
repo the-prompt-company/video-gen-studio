@@ -25,7 +25,6 @@ export default async function login({ page, ev, base, creds }) {
   if (!(await header.getByText(creds.username, { exact: true }).isVisible())) ev.fail("header does not show the signed-in username");
   await ev.shot("signed-in");
 
-  // login-guard: a signed-in visit to /login bounces to /playground (proxy.ts).
   await page.goto(`${base}/login`, { waitUntil: "networkidle" });
   if (!page.url().includes("/playground")) ev.fail(`/login while signed in should redirect to /playground, got ${page.url()}`);
   ev.note("signed-in visit to /login redirected to /playground");

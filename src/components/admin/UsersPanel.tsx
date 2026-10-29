@@ -6,7 +6,7 @@ import { usd, fmtDate } from "@/lib/format";
 import { Button, Card, Field, Input, Select, Empty } from "@/components/ui";
 import { api } from "./AdminPanels";
 
-type Detail = { id: number; username: string; role: string; active: boolean; note: string | null; apiKeyMasked: string | null; lockedUntil: string | null; failedAttempts: number };
+type Detail = { id: number; username: string; role: string; active: boolean; note: string | null; apiKeyMasked: string | null; lockedUntil: string | null; failedAttempts: number; mustChangePassword: boolean };
 
 export function UsersPanel({ adminId }: { adminId: number }) {
   const [rows, setRows] = useState<UserUsageRow[]>([]);
@@ -64,7 +64,7 @@ export function UsersPanel({ adminId }: { adminId: number }) {
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
       <Card title={`사용자 ${rows.length}명`}>
         {error && <p className="mb-3 rounded-lg bg-rose-500/10 px-3 py-2 text-sm text-rose-300">{error}</p>}
         {rows.length === 0 ? (
@@ -110,7 +110,10 @@ export function UsersPanel({ adminId }: { adminId: number }) {
                 <span className="font-mono text-foreground-2">{selected.apiKeyMasked ?? "없음"}</span>
               </div>
               <ApiKeyForm onSave={(k) => patch(selected.id, { apiKey: k })} onClear={() => patch(selected.id, { apiKey: null })} hasKey={Boolean(selected.apiKeyMasked)} />
-              <PasswordForm onSave={(p) => patch(selected.id, { password: p })} />
+              <PasswordForm temporary={selected.id !== adminId} onSave={(p) => patch(selected.id, { password: p })} />
+              {selected.mustChangePassword && (
+                <p className="text-xs text-muted">임시 비밀번호 상태입니다. 다음 로그인 때 새 비밀번호를 정해야 들어올 수 있습니다.</p>
+              )}
               <div className="grid grid-cols-2 gap-2 pt-2">
                 <Select value={selected.role} onChange={(e) => patch(selected.id, { role: e.target.value })} disabled={selected.id === adminId}>
                   <option value="user">user</option>
@@ -132,7 +135,7 @@ export function UsersPanel({ adminId }: { adminId: number }) {
         <Card title="사용자 추가">
           <form onSubmit={create} className="space-y-3">
             <Field label="ID"><Input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} required /></Field>
-            <Field label="비밀번호" hint="8자 이상"><Input type="text" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required /></Field>
+            <Field label="임시 비밀번호" hint="8자 이상 · 첫 로그인 때 바꾸게 함"><Input type="text" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required /></Field>
             <Field label="Higgsfield API 키" hint="key-id:key-secret · 나중에 넣어도 됨"><Input value={form.apiKey} onChange={(e) => setForm({ ...form, apiKey: e.target.value })} placeholder="선택" /></Field>
             <div className="grid grid-cols-2 gap-2">
               <Field label="역할">
@@ -162,11 +165,11 @@ function ApiKeyForm({ onSave, onClear, hasKey }: { onSave: (k: string) => void; 
   );
 }
 
-function PasswordForm({ onSave }: { onSave: (p: string) => void }) {
+function PasswordForm({ onSave, temporary }: { onSave: (p: string) => void; temporary: boolean }) {
   const [v, setV] = useState("");
   return (
     <div className="flex gap-2">
-      <Input value={v} onChange={(e) => setV(e.target.value)} placeholder="새 비밀번호 (8자 이상)" />
+      <Input value={v} onChange={(e) => setV(e.target.value)} placeholder={temporary ? "임시 비밀번호 (8자 이상)" : "새 비밀번호 (8자 이상)"} />
       <Button size="md" variant="outline" onClick={() => { if (v.length >= 8) { onSave(v); setV(""); } }} disabled={v.length < 8}>변경</Button>
     </div>
   );

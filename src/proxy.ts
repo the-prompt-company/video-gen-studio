@@ -6,14 +6,10 @@ const PROTECTED = ["/playground", "/gallery", "/dashboard", "/admin"];
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const needsAuth = PROTECTED.some((p) => pathname === p || pathname.startsWith(p + "/"));
-  if (!needsAuth && pathname !== "/login") return NextResponse.next();
+  if (!needsAuth) return NextResponse.next();
 
   const token = request.cookies.get(SESSION_COOKIE)?.value;
   const session = token ? await verifySessionToken(token) : null;
-
-  if (pathname === "/login") {
-    return session ? NextResponse.redirect(new URL("/playground", request.url)) : NextResponse.next();
-  }
   if (!session) {
     const url = new URL("/login", request.url);
     url.searchParams.set("next", pathname);
@@ -26,5 +22,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/login", "/playground/:path*", "/gallery/:path*", "/dashboard/:path*", "/admin/:path*"],
+  matcher: ["/playground/:path*", "/gallery/:path*", "/dashboard/:path*", "/admin/:path*"],
 };

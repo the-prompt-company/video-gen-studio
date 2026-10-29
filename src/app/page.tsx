@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getSession } from "@/lib/auth";
+import { getUnverifiedSession } from "@/lib/auth";
 import { CATALOG } from "@/lib/catalog";
 import { Button } from "@/components/ui";
 
@@ -10,7 +10,7 @@ const STEPS = [
 ];
 
 export default async function Landing() {
-  const session = await getSession();
+  const session = await getUnverifiedSession();
   const cta = session ? { href: "/playground", label: "플레이그라운드 열기" } : { href: "/login", label: "로그인" };
 
   return (

@@ -4,6 +4,7 @@
  */
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "../src/db";
+import { loginId } from "../src/lib/credentials";
 import { hashPassword } from "../src/lib/crypto";
 import { CATALOG } from "../src/lib/catalog";
 
@@ -15,7 +16,7 @@ async function main() {
   }
   console.log(`models: ${CATALOG.length} rows ensured`);
 
-  const username = process.env.ADMIN_USERNAME;
+  const username = loginId(process.env.ADMIN_USERNAME ?? "");
   const password = process.env.ADMIN_PASSWORD;
   if (!username || !password) {
     console.log("ADMIN_USERNAME / ADMIN_PASSWORD not set: no admin created");

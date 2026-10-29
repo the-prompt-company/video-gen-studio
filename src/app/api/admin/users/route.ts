@@ -1,5 +1,6 @@
 import { getDb, schema } from "@/db";
 import { requireAdmin, errorResponse, HttpError } from "@/lib/auth";
+import { loginId, MIN_PASSWORD_LENGTH } from "@/lib/credentials";
 import { hashPassword, encrypt } from "@/lib/crypto";
 import { usageByUser } from "@/lib/stats";
 
@@ -20,11 +21,11 @@ export async function POST(req: Request) {
   try {
     await requireAdmin();
     const b = (await req.json().catch(() => ({}))) as Body;
-    const username = String(b.username ?? "").trim();
+    const username = loginId(String(b.username ?? ""));
     const password = String(b.password ?? "");
     if (!/^[a-zA-Z0-9._@+-]{2,80}$/.test(username))
       throw new HttpError(400, "ID는 영문/숫자/._@+- 2~80자 (이메일 가능)");
-    if (password.length < 8) throw new HttpError(400, "비밀번호는 8자 이상");
+    if (password.length < MIN_PASSWORD_LENGTH) throw new HttpError(400, `비밀번호는 ${MIN_PASSWORD_LENGTH}자 이상`);
     const apiKey = String(b.apiKey ?? "").trim();
     if (apiKey && !apiKey.includes(":")) throw new HttpError(400, "API 키는 key-id:key-secret 형식");
 
@@ -34,6 +35,7 @@ export async function POST(req: Request) {
       .values({
         username,
         passwordHash: hashPassword(password),
+        mustChangePassword: true,
         role: b.role === "admin" ? "admin" : "user",
         apiKeyEnc: apiKey ? encrypt(apiKey) : null,
         note: b.note ? String(b.note) : null,
