@@ -1,0 +1,11 @@
+i18n/no-hangul 560 hits in 44 files · by node {"Literal":300,"JSXText":153,"TemplateElement":107} · other rule messages 0
+  125  src/components/Playground.tsx
+   54  src/components/admin/UsersPanel.tsx
+   39  src/components/Gallery.tsx
+   32  src/components/admin/MemberImport.tsx
+   31  src/lib/catalog.ts
+   29  src/components/ProfileEditor.tsx
+   28  src/app/(app)/dashboard/page.tsx
+   23  src/components/admin/LogsPanel.tsx
+   15  src/app/page.tsx
+   14  src/app/api/generations/route.ts
