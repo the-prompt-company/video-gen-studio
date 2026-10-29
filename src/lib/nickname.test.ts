@@ -41,3 +41,13 @@ test("emoji, joined emoji and accents are kept as typed", () => {
   assert.equal(accepted("개발자 👩\u200d💻"), "개발자 👩\u200d💻");
   assert.equal(accepted("\u2764\ufe0f"), "\u2764\ufe0f");
 });
+
+test("direction overrides and invisible characters are refused, because they disguise or hide the name others see", () => {
+  for (const raw of ["관리자\u202e", "a\u202db", "a\u2066b\u2069", "a\u200eb", "a\u200fb", "a\u061cb", "a\u200bb", "김\ufeff민수", "a\u2060b"]) {
+    assert.match(refused(raw), /보이지 않는/, JSON.stringify(raw));
+  }
+});
+
+test("a nickname with no visible character is refused", () => {
+  for (const raw of ["\u3164", "\u3164 \u3164", "\u115f\u1160", "\uffa0", "\u200d"]) assert.match(refused(raw), /보이는 글자/, JSON.stringify(raw));
+});
