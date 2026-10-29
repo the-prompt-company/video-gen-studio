@@ -1,5 +1,6 @@
 import {
   randomBytes,
+  scrypt,
   scryptSync,
   timingSafeEqual,
   createCipheriv,
@@ -8,11 +9,34 @@ import {
   createHmac,
 } from "node:crypto";
 
+function packHash(salt: Buffer, hash: Buffer): string {
+  return `scrypt$${salt.toString("hex")}$${hash.toString("hex")}`;
+}
+
 /** scrypt password hash: "scrypt$<salt hex>$<hash hex>" */
 export function hashPassword(password: string): string {
   const salt = randomBytes(16);
-  const hash = scryptSync(password, salt, 64);
-  return `scrypt$${salt.toString("hex")}$${hash.toString("hex")}`;
+  return packHash(salt, scryptSync(password, salt, 64));
+}
+
+function hashPasswordAsync(password: string): Promise<string> {
+  const salt = randomBytes(16);
+  return new Promise((resolve, reject) =>
+    scrypt(password, salt, 64, (err, hash) => (err ? reject(err) : resolve(packHash(salt, hash)))),
+  );
+}
+
+// A 1-vCPU function gains nothing from more at once, and every extra one holds a libuv thread that DNS and file I/O also wait on.
+const HASH_CONCURRENCY = 2;
+
+/** `count` hashes of one password, each with its own salt, on the thread pool so the event loop keeps serving. */
+export async function hashPasswords(password: string, count: number): Promise<string[]> {
+  const hashes: string[] = [];
+  while (hashes.length < count) {
+    const batch = Math.min(HASH_CONCURRENCY, count - hashes.length);
+    hashes.push(...(await Promise.all(Array.from({ length: batch }, () => hashPasswordAsync(password)))));
+  }
+  return hashes;
 }
 
 export function verifyPassword(password: string, stored: string): boolean {

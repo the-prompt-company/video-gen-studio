@@ -71,6 +71,8 @@ export async function usageFor(userId: number | null): Promise<UsageSummary> {
 export type UserUsageRow = {
   id: number;
   username: string;
+  nickname: string | null;
+  mustChangePassword: boolean;
   role: string;
   active: boolean;
   hasApiKey: boolean;
@@ -91,6 +93,8 @@ export async function usageByUser(): Promise<UserUsageRow[]> {
     .select({
       id: u.id,
       username: u.username,
+      nickname: u.nickname,
+      mustChangePassword: u.mustChangePassword,
       role: u.role,
       active: u.active,
       hasApiKey: sql<boolean>`${u.apiKeyEnc} is not null`,

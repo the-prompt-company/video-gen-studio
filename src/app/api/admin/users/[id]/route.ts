@@ -3,9 +3,11 @@ import { getDb, schema } from "@/db";
 import { requireAdmin, errorResponse, HttpError, setSessionCookie } from "@/lib/auth";
 import { MIN_PASSWORD_LENGTH } from "@/lib/credentials";
 import { hashPassword, encrypt, decrypt, maskApiKey } from "@/lib/crypto";
+import { parseNickname } from "@/lib/nickname";
 
 type Ctx = { params: Promise<{ id: string }> };
 type Body = {
+  nickname?: string | null;
   password?: string;
   role?: "user" | "admin";
   active?: boolean;
@@ -25,6 +27,7 @@ export async function GET(_req: Request, { params }: Ctx) {
     return Response.json({
       id: u.id,
       username: u.username,
+      nickname: u.nickname,
       role: u.role,
       active: u.active,
       note: u.note,
@@ -38,13 +41,23 @@ export async function GET(_req: Request, { params }: Ctx) {
   }
 }
 
-/** PATCH /api/admin/users/:id — role / active / api key / password / note / unlock. */
+/** PATCH /api/admin/users/:id — nickname / role / active / api key / password / note / unlock. */
 export async function PATCH(req: Request, { params }: Ctx) {
   try {
     const admin = await requireAdmin();
     const id = Number((await params).id);
     const b = (await req.json().catch(() => ({}))) as Body;
     const patch: Partial<typeof schema.users.$inferInsert> = {};
+
+    if (b.nickname !== undefined) {
+      const raw = b.nickname === null ? "" : String(b.nickname);
+      if (raw.trim() === "") patch.nickname = null;
+      else {
+        const parsed = parseNickname(raw);
+        if (!parsed.ok) throw new HttpError(400, parsed.reason);
+        patch.nickname = parsed.nickname;
+      }
+    }
 
     if (b.role !== undefined) {
       if (b.role !== "user" && b.role !== "admin") throw new HttpError(400, "role은 user|admin");

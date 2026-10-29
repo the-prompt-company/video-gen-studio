@@ -44,7 +44,7 @@ Higgsfield 웹사이트를 직접 쓰는 것과 다른 점은 셋이며, 사용�
 - 경로: `/`(랜딩), `/login`, `/playground`, `/gallery`, `/dashboard`, `/admin`.
 - 모델 3종과 각 모델의 레퍼런스 규칙·파라미터는 `src/lib/catalog.ts`가 단일 출처다. 클라이언트 폼과 서버 생성 라우트가 같은 정의를 쓴다.
 - 상태 어휘: 제출 대기(pending, Higgsfield가 아직 받지 않아 스스로 다시 제출함), 대기(queued), 생성 중(in_progress), 완료(completed), 실패(failed), NSFW 차단(nsfw), 취소(canceled). 제출 대기·실패·NSFW·취소는 과금하지 않는다.
-- 어드민: 사용자 추가, API 키 할당, 비밀번호·역할·활성 변경, 모델 단가·활성, 전체 로그 필터와 CSV.
+- 어드민: 사용자 추가, 엑셀(`nickname`·`email` 열) 한 장으로 회원 최대 200명 일괄 생성(브라우저가 읽고 서버가 행마다 판정, 초기 비밀번호 `oooooooo`), API 키 할당, 닉네임·비밀번호·역할·활성 변경과 초기 비밀번호로 되돌리기, 모델 단가·활성, 전체 로그 필터와 CSV.
 
 **기술 제약**
 - Next.js 16 App Router + Supabase Postgres(Free 플랜, Drizzle, postgres-js, Transaction pooler) + Vercel Blob(완료 영상과 4 MB 초과 레퍼런스).
