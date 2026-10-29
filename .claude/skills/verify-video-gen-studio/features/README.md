@@ -46,7 +46,7 @@ Keep implementation details out of the map. Name only user paths, stable handles
 - [Password](./password.md) covers the forced change of a temporary password, the change from the login screen, other sessions ending, the shared lockout, email IDs in any case, and the admin reset. Creates and deletes one disposable member.
 - [Import](./import.md) covers creating members from an `.xlsx` (header detection, the per-row preview, the 200-row cap), the nickname column and 임시 비밀번호 badge, the admin nickname edit, and 초기 비밀번호로 되돌리기. Creates and deletes 207 disposable members.
 - [Settings](./settings.md) covers the header identity link, profile photo pick/preview/save/replace/remove with the stored 256×256 square, the photo delete guard, the nickname rule and header update, the read-only ID, and the password change that signs other browsers out. Creates and deletes two disposable members and their photos.
-- [Playground](./playground.md) covers the drawer, model select, aspect pills, parameters, the reference dialog, and the generate gate.
+- [Playground](./playground.md) covers the drawer, the two-model select, the generation mode and 이 이미지로 시작, aspect pills, parameters, the reference dialog, the generate gate, and every model and mode against the fake.
 - [Gallery](./gallery.md) covers the tile grid, the detail dialog with download, and the admin scope toggle.
 - [Dashboard](./dashboard.md) covers the personal usage stats, chart/empty states, and agreement with the generations API.
-- [Admin](./admin.md) covers the users table and its edit, add and import modals (name, focus, Esc, scroll lock), the model price round-trip, and the logs tab.
+- [Admin](./admin.md) covers the users table and its edit, add and import modals (name, focus, Esc, scroll lock), the two model rates with their units and published-rate fill, and the logs tab.

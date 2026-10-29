@@ -1800,5 +1800,6 @@ main()
   .then(() => process.exit(0))
   .catch((e) => {
     console.error(e instanceof Error ? e.message : e);
+    if (e instanceof Error && e.cause) console.error(`cause: ${e.cause instanceof Error ? e.cause.message : String(e.cause)}`);
     process.exit(1);
   });
