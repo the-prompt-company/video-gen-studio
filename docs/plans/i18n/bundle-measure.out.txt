@@ -1,0 +1,5 @@
+next-intl 4.14.9 · use-intl 4.14.9 · intl-messageformat 11.2.15
+install footprint of next-intl and its dependencies: 13.1 MB in 27 packages; largest @swc/core-win32-x64-msvc 9.1 MB, next-intl-swc-plugin-extractor 1.2 MB, @parcel/watcher-win32-x64 0.5 MB, next-intl 0.4 MB
+next-intl, runtime ICU parser         40.0 KB minified  12.3 KB gzip
+next-intl, precompile: true            9.3 KB minified   3.6 KB gzip
+in-house t() with Intl.PluralRules     0.4 KB minified   0.3 KB gzip

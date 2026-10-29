@@ -1,0 +1,227 @@
+diff --git a/next.config.ts b/next.config.ts
+--- a/next.config.ts
++++ b/next.config.ts
+@@ -1,4 +1,5 @@
+ import type { NextConfig } from "next";
++import createNextIntlPlugin from "next-intl/plugin";
+ 
+ const nextConfig: NextConfig = {
+   // Verification scaffolding: the verify-video-gen-studio skill starts a second
+@@ -15,4 +16,12 @@
+   },
+ };
+ 
+-export default nextConfig;
++const withNextIntl = createNextIntlPlugin({
++  requestConfig: "./src/i18n/request.ts",
++  experimental: {
++    createMessagesDeclaration: "./src/messages/ko.json",
++    messages: { path: "./src/messages", format: "json", locales: "infer", precompile: process.env.SPIKE_PRECOMPILE !== "0" },
++  },
++});
++
++export default withNextIntl(nextConfig);
+diff --git a/src/app/layout.tsx b/src/app/layout.tsx
+--- a/src/app/layout.tsx
++++ b/src/app/layout.tsx
+@@ -1,5 +1,7 @@
+ import type { Metadata } from "next";
+ import { Inter, Bebas_Neue } from "next/font/google";
++import { NextIntlClientProvider } from "next-intl";
++import { getLocale } from "next-intl/server";
+ import "./globals.css";
+ 
+ const inter = Inter({ variable: "--font-inter", subsets: ["latin"] });
+@@ -7,13 +9,15 @@
+ 
+ export const metadata: Metadata = {
+   title: { default: "Video Gen Studio", template: "%s · Video Gen Studio" },
+-  description: "Higgsfield 기반 팀용 영상 생성 플레이그라운드",
+ };
+ 
+-export default function RootLayout({ children }: { children: React.ReactNode }) {
++export default async function RootLayout({ children }: { children: React.ReactNode }) {
++  const locale = await getLocale();
+   return (
+-    <html lang="ko" className={`${inter.variable} ${bebas.variable} h-full antialiased`}>
+-      <body className="min-h-full flex flex-col">{children}</body>
++    <html lang={locale} className={`${inter.variable} ${bebas.variable} h-full antialiased`}>
++      <body className="min-h-full flex flex-col">
++        <NextIntlClientProvider>{children}</NextIntlClientProvider>
++      </body>
+     </html>
+   );
+ }
+diff --git a/src/app/login/page.tsx b/src/app/login/page.tsx
+--- a/src/app/login/page.tsx
++++ b/src/app/login/page.tsx
+@@ -3,7 +3,12 @@
+ import { LoginForm } from "@/components/LoginForm";
+ import { getCurrentUser } from "@/lib/auth";
+ 
+-export const metadata = { title: "로그인" };
++import { getTranslations } from "next-intl/server";
++
++export async function generateMetadata() {
++  const t = await getTranslations("meta");
++  return { title: t("login") };
++}
+ 
+ type Props = { searchParams: Promise<{ next?: string | string[] }> };
+ 
+diff --git a/src/components/LoginForm.tsx b/src/components/LoginForm.tsx
+--- a/src/components/LoginForm.tsx
++++ b/src/components/LoginForm.tsx
+@@ -1,6 +1,7 @@
+ "use client";
+ 
+ import { useState, type FormEvent } from "react";
++import { useTranslations } from "next-intl";
+ import { Button, ErrorText, Field, Input } from "@/components/ui";
+ import { PasswordChangeForm } from "@/components/PasswordChangeForm";
+ 
+@@ -13,8 +14,9 @@
+ };
+ 
+ export function LoginForm({ next }: { next: string }) {
++  const t = useTranslations("login");
+   const [mode, setMode] = useState<Mode>({ kind: "login" });
+-  const heading = HEADING[mode.kind];
++  const heading = mode.kind === "login" ? { title: t("title"), lead: t("lead") } : HEADING[mode.kind];
+ 
+   const enter = () => window.location.assign(next);
+ 
+@@ -44,6 +46,7 @@
+ }
+ 
+ function SignInForm({ onSignedIn, onTemporary }: { onSignedIn: () => void; onTemporary: (username: string, password: string) => void }) {
++  const t = useTranslations("login");
+   const [username, setUsername] = useState("");
+   const [password, setPassword] = useState("");
+   const [error, setError] = useState<string | null>(null);
+@@ -81,12 +84,14 @@
+       <Field label="ID">
+         <Input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" autoFocus required />
+       </Field>
+-      <Field label="비밀번호">
++      <Field label={t("password")}>
+         <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required />
+       </Field>
+       {error && <ErrorText>{error}</ErrorText>}
++      <p data-spike="select">{t("orientation", { orientation: "square" })}</p>
++      <p data-spike="plural">{t("images", { count: 1 })} / {t("images", { count: 3 })}</p>
+       <Button type="submit" size="lg" className="w-full" disabled={busy} aria-busy={busy}>
+-        {busy ? "확인 중…" : "로그인"}
++        {busy ? t("checking") : t("submit")}
+       </Button>
+     </form>
+   );
+diff --git a/src/i18n/global.d.ts b/src/i18n/global.d.ts
+--- a/src/i18n/global.d.ts
++++ b/src/i18n/global.d.ts
+@@ -0,0 +1,9 @@
++import type messages from "../messages/ko.json";
++import type { Locale } from "./locale";
++
++declare module "next-intl" {
++  interface AppConfig {
++    Locale: Locale;
++    Messages: typeof messages;
++  }
++}
+diff --git a/src/i18n/locale.ts b/src/i18n/locale.ts
+--- a/src/i18n/locale.ts
++++ b/src/i18n/locale.ts
+@@ -0,0 +1,27 @@
++export const LOCALES = ["ko", "en", "zh-CN"] as const;
++export type Locale = (typeof LOCALES)[number];
++export const DEFAULT_LOCALE: Locale = "ko";
++export const LOCALE_COOKIE = "vgs_locale";
++
++export function parseLocale(raw: string | null | undefined): Locale | null {
++  return LOCALES.find((l) => l === raw) ?? null;
++}
++
++const BY_LANGUAGE: Record<string, Locale> = { ko: "ko", en: "en", zh: "zh-CN" };
++
++export function fromAcceptLanguage(header: string | null): Locale | null {
++  const ranked = (header ?? "")
++    .split(",")
++    .map((part) => {
++      const [tag, ...params] = part.trim().split(";");
++      const q = Number(params.find((p) => p.trim().startsWith("q="))?.split("=")[1] ?? 1);
++      return { language: tag.toLowerCase().split("-")[0], q: Number.isFinite(q) ? q : 0 };
++    })
++    .filter((x) => x.language && x.q > 0)
++    .sort((a, b) => b.q - a.q);
++  return ranked.map((x) => BY_LANGUAGE[x.language]).find(Boolean) ?? null;
++}
++
++export function resolveLocale(input: { member: string | null; cookie: string | undefined; acceptLanguage: string | null }): Locale {
++  return parseLocale(input.member) ?? parseLocale(input.cookie) ?? fromAcceptLanguage(input.acceptLanguage) ?? DEFAULT_LOCALE;
++}
+diff --git a/src/i18n/request.ts b/src/i18n/request.ts
+--- a/src/i18n/request.ts
++++ b/src/i18n/request.ts
+@@ -0,0 +1,13 @@
++import { cookies, headers } from "next/headers";
++import { getRequestConfig } from "next-intl/server";
++import { LOCALE_COOKIE, resolveLocale } from "./locale";
++
++export default getRequestConfig(async () => {
++  const [jar, h] = await Promise.all([cookies(), headers()]);
++  const locale = resolveLocale({ member: null, cookie: jar.get(LOCALE_COOKIE)?.value, acceptLanguage: h.get("accept-language") });
++  return {
++    locale,
++    timeZone: "Asia/Seoul",
++    messages: (await import(`../messages/${locale}.json`)).default,
++  };
++});
+diff --git a/src/messages/en.json b/src/messages/en.json
+--- a/src/messages/en.json
++++ b/src/messages/en.json
+@@ -0,0 +1,12 @@
++{
++  "meta": { "login": "Sign in" },
++  "login": {
++    "title": "Sign in",
++    "lead": "Enter the ID and password you were given.",
++    "password": "Password",
++    "submit": "Sign in",
++    "checking": "Checking…",
++    "orientation": "The video will also be {orientation, select, landscape {landscape} portrait {portrait} other {square}}.",
++    "images": "{count, plural, one {# image} other {# images}}"
++  }
++}
+diff --git a/src/messages/ko.json b/src/messages/ko.json
+--- a/src/messages/ko.json
++++ b/src/messages/ko.json
+@@ -0,0 +1,12 @@
++{
++  "meta": { "login": "로그인" },
++  "login": {
++    "title": "로그인",
++    "lead": "배부받은 ID와 비밀번호를 입력하세요.",
++    "password": "비밀번호",
++    "submit": "로그인",
++    "checking": "확인 중…",
++    "orientation": "영상도 {orientation, select, landscape {가로로} portrait {세로로} other {정사각으로}} 나옵니다.",
++    "images": "{count, plural, other {이미지 #장}}"
++  }
++}
+diff --git a/src/messages/zh-CN.json b/src/messages/zh-CN.json
+--- a/src/messages/zh-CN.json
++++ b/src/messages/zh-CN.json
+@@ -0,0 +1,12 @@
++{
++  "meta": { "login": "登录" },
++  "login": {
++    "title": "登录",
++    "lead": "请输入分配给您的 ID 和密码。",
++    "password": "密码",
++    "submit": "登录",
++    "checking": "正在验证…",
++    "orientation": "视频也将是{orientation, select, landscape {横向} portrait {竖向} other {方形}}的。",
++    "images": "{count, plural, other {# 张图片}}"
++  }
++}

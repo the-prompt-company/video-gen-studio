@@ -1,0 +1,101 @@
+99 files scanned · 963 Korean strings
+
+User-visible strings (src/, not tests, not console): 526 occurrences, 417 unique texts, 4351 Hangul syllables in the unique texts, across 44 files.
+
+By kind (user-visible):
+    153  jsx-text
+    135  code-string
+     53  attr:other-prop
+     52  jsx-expression
+     39  http-error
+     32  attr:aria-label
+     23  ui-message
+     13  attr:title
+      7  metadata
+      6  attr:placeholder
+      6  thrown-error
+      4  api-response
+      3  attr:alt
+
+By area (user-visible):
+    338  client-component
+     78  lib
+     66  server-component
+     44  api-route
+
+By surface (user-visible occurrences, unique texts, files):
+    146  playground   130 unique  3 files
+    145  admin        125 unique  9 files
+     61  server        54 unique  15 files
+     43  auth          36 unique  6 files
+     42  settings      39 unique  3 files
+     40  gallery       34 unique  2 files
+     28  dashboard     25 unique  2 files
+     21  shell         19 unique  4 files
+
+Tags (user-visible, a string can carry several):
+    104  interpolated
+     45  count
+     14  rich
+      8  particle
+      8  relative-time
+
+Top 20 files (user-visible occurrences):
+    117  src/components/Playground.tsx
+     53  src/components/admin/UsersPanel.tsx
+     39  src/components/Gallery.tsx
+     32  src/components/admin/MemberImport.tsx
+     28  src/components/ProfileEditor.tsx
+     28  src/lib/catalog.ts
+     27  src/app/(app)/dashboard/page.tsx
+     22  src/components/admin/LogsPanel.tsx
+     15  src/app/page.tsx
+     13  src/components/LoginForm.tsx
+     11  src/app/api/generations/route.ts
+     11  src/components/admin/ModelsPanel.tsx
+     10  src/app/(app)/admin/page.tsx
+     10  src/components/PasswordChangeForm.tsx
+      9  src/app/(app)/settings/page.tsx
+      9  src/components/Nav.tsx
+      8  src/app/api/admin/users/[id]/route.ts
+      7  src/lib/generation-status.ts
+      7  src/lib/member-sheet.ts
+      6  src/lib/auth.ts
+
+Format calls in src/ outside tests (dates, numbers, currency):
+     19  usd
+      8  fmtDate
+      5  toFixed
+      1  fmtRelative
+      1  toLocaleString
+
+Not user-visible:
+    134  harness / harness-selector
+    129  script / script
+     97  harness / harness-other
+     77  test / test
+
+Harness journeys (all Korean strings):
+     60  .claude/skills/verify-video-gen-studio/journeys/playground.mjs
+     53  .claude/skills/verify-video-gen-studio/journeys/import.mjs
+     34  .claude/skills/verify-video-gen-studio/journeys/admin.mjs
+     30  .claude/skills/verify-video-gen-studio/journeys/settings.mjs
+     23  .claude/skills/verify-video-gen-studio/journeys/password.mjs
+     13  .claude/skills/verify-video-gen-studio/journeys/dashboard.mjs
+      7  .claude/skills/verify-video-gen-studio/journeys/gallery.mjs
+      7  .claude/skills/verify-video-gen-studio/journeys/login.mjs
+      4  .claude/skills/verify-video-gen-studio/vgs.mjs
+
+Harness selectors that name Korean UI text: 134. Harness and script strings that match src/ copy: 187.
+
+Harness docs (lines with Hangul):
+     37  .claude/skills/verify-video-gen-studio/features/playground.md
+     22  .claude/skills/verify-video-gen-studio/features/admin.md
+     21  .claude/skills/verify-video-gen-studio/features/import.md
+     13  .claude/skills/verify-video-gen-studio/features/gallery.md
+     13  .claude/skills/verify-video-gen-studio/features/password.md
+     13  .claude/skills/verify-video-gen-studio/features/settings.md
+     12  .claude/skills/verify-video-gen-studio/SKILL.md
+     11  .claude/skills/verify-video-gen-studio/features/dashboard.md
+     10  .claude/skills/verify-video-gen-studio/features/login.md
+      4  .claude/skills/verify-video-gen-studio/features/README.md
