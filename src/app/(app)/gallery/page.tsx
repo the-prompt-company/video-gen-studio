@@ -4,8 +4,9 @@ import { getCurrentUser } from "@/lib/auth";
 import { publicGeneration } from "@/lib/generations";
 import { Gallery } from "@/components/Gallery";
 import { PageContainer } from "@/components/ui";
+import { pageTitle } from "@/i18n/metadata";
 
-export const metadata = { title: "갤러리" };
+export const generateMetadata = pageTitle("gallery");
 
 export default async function GalleryPage({ searchParams }: { searchParams: Promise<{ all?: string }> }) {
   const user = await getCurrentUser();

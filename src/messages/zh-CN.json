@@ -1,0 +1,88 @@
+{
+  "meta": {
+    "description": "基于 Higgsfield 的团队视频生成工作台"
+  },
+  "pages": {
+    "login": "登录",
+    "playground": "创作台",
+    "gallery": "作品库",
+    "dashboard": "数据看板",
+    "admin": "管理后台",
+    "settings": "设置"
+  },
+  "common": {
+    "close": "关闭"
+  },
+  "nav": {
+    "label": "主菜单",
+    "logout": "退出登录"
+  },
+  "status": {
+    "pending": "等待提交",
+    "queued": "排队中",
+    "in_progress": "生成中",
+    "completed": "已完成",
+    "failed": "失败",
+    "nsfw": "已拦截（NSFW）",
+    "canceled": "已取消"
+  },
+  "language": {
+    "label": "语言",
+    "lead": "所有界面使用的语言。所选语言会保存到您的账号，在其他设备上登录时也保持不变。",
+    "failed": "未能切换语言，请重试。"
+  },
+  "landing": {
+    "badge": "Higgsfield API · 团队专属工作区",
+    "headline": "几张参考素材",
+    "headlineAccent": "即可生成视频，费用同步追踪",
+    "lead": "使用分配给您的个人 ID 登录即可开始。API 密钥由管理员在服务器端分配，每个生成任务的模型、参数和费用都会按成员记录。",
+    "openPlayground": "打开创作台",
+    "viewGallery": "查看作品库",
+    "steps": {
+      "prompt": {
+        "title": "提示词与参考素材",
+        "body": "可以只用提示词生成，也可以把一张图片作为首帧，或添加最多 6 张图片和 3 个视频作为参考素材。"
+      },
+      "model": {
+        "title": "模型与参数",
+        "body": "在 Seedance 2.0 和 MiniMax H3 之间选择，再调整时长、分辨率和画面比例。预计费用会立即显示。"
+      },
+      "record": {
+        "title": "生成与记录",
+        "body": "实时查看进度，完成后自动记录到作品库和用量中。"
+      }
+    },
+    "retention": "生成的视频在 Higgsfield 上保留 7 天。如需长期保存，请在作品库中下载。"
+  },
+  "auth": {
+    "heading": {
+      "login": {
+        "title": "登录",
+        "lead": "请输入分配给您的 ID 和密码。"
+      },
+      "change": {
+        "title": "修改密码",
+        "lead": "验证当前密码后设置新密码。您在其他设备上的登录将全部退出。"
+      },
+      "temporary": {
+        "title": "设置新密码",
+        "lead": "您使用管理员设置的临时密码登录。如需继续，请设置一个只有您知道的新密码。"
+      }
+    },
+    "signIn": "登录",
+    "password": "密码",
+    "checking": "正在验证…",
+    "signInFailed": "登录失败",
+    "offline": "无法连接服务器",
+    "changePassword": "修改密码",
+    "backToSignIn": "返回登录",
+    "currentPassword": "当前密码",
+    "newPassword": "新密码",
+    "minLength": "{min, plural, other {至少 # 个字符}}",
+    "confirmPassword": "确认新密码",
+    "mismatch": "两次输入的新密码不一致，请输入相同的密码。",
+    "changeFailed": "未能修改密码，请重试。",
+    "changing": "正在修改…",
+    "changed": "密码已修改。您在其他设备和浏览器上的登录已全部退出。"
+  }
+}

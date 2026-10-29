@@ -64,6 +64,13 @@
       "when": 1793259343223,
       "tag": "0008_teams",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793268700814,
+      "tag": "0009_user_locale",
+      "breakpoints": true
     }
   ]
 }

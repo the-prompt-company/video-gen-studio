@@ -6,8 +6,9 @@ import { unavailableFor } from "@/lib/generations";
 import { loadModelSettings } from "@/lib/model-settings";
 import { refPrefix } from "@/lib/storage";
 import { Playground } from "@/components/Playground";
+import { pageTitle } from "@/i18n/metadata";
 
-export const metadata = { title: "플레이그라운드" };
+export const generateMetadata = pageTitle("playground");
 
 export default async function PlaygroundPage() {
   const user = await getCurrentUser();

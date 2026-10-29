@@ -3,8 +3,9 @@ import { usageFor } from "@/lib/stats";
 import { usd } from "@/lib/format";
 import { Stat, PageContainer } from "@/components/ui";
 import { AdminPanels } from "@/components/admin/AdminPanels";
+import { pageTitle } from "@/i18n/metadata";
 
-export const metadata = { title: "어드민" };
+export const generateMetadata = pageTitle("admin");
 
 export default async function AdminPage() {
   const user = await getCurrentUser();

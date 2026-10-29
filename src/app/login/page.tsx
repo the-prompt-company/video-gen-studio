@@ -2,8 +2,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { LoginForm } from "@/components/LoginForm";
 import { getCurrentUser } from "@/lib/auth";
+import { pageTitle } from "@/i18n/metadata";
 
-export const metadata = { title: "로그인" };
+export const generateMetadata = pageTitle("login");
 
 type Props = { searchParams: Promise<{ next?: string | string[] }> };
 

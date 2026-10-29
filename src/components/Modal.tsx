@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, type ReactNode } from "react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui";
 
 const WIDTH = { md: "sm:max-w-md", lg: "sm:max-w-2xl" };
@@ -12,6 +13,7 @@ const WIDTH = { md: "sm:max-w-md", lg: "sm:max-w-2xl" };
  * The first element marked `data-autofocus` takes focus; otherwise the browser focuses 닫기.
  */
 export function Modal({ title, onClose, footer, size = "md", children }: { title: string; onClose: () => void; footer?: ReactNode; size?: keyof typeof WIDTH; children: ReactNode }) {
+  const t = useTranslations("common");
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   const unmounting = useRef(false);
@@ -49,7 +51,7 @@ export function Modal({ title, onClose, footer, size = "md", children }: { title
     >
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border py-2 pl-5 pr-3">
         <h2 id={titleId} className="min-w-0 break-words text-base font-semibold">{title}</h2>
-        <Button variant="ghost" size="sm" className="h-11 sm:h-9" onClick={onClose}>닫기</Button>
+        <Button variant="ghost" size="sm" className="h-11 sm:h-9" onClick={onClose}>{t("close")}</Button>
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5">{children}</div>
       {footer && <footer className="shrink-0 border-t border-border px-5 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3">{footer}</footer>}

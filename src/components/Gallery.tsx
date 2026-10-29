@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import type { PublicGeneration, PublicVideo } from "@/lib/generations";
 import { describeModel, modelLine } from "@/lib/catalog";
 import { usd, fmtDate, fmtRelative } from "@/lib/format";
-import { STATUS_LABEL } from "@/lib/generation-status";
 import { Button, Empty } from "@/components/ui";
 
 function expiresIn(d: Date | string | null | undefined): string | null {
@@ -123,6 +123,7 @@ function Tile({ g, onOpen }: { g: PublicGeneration; onOpen: () => void }) {
 }
 
 function Detail({ g, onClose }: { g: PublicGeneration; onClose: () => void }) {
+  const tStatus = useTranslations("status");
   const { ref, size: videoSize, read } = useVideoSize();
   const [imageSize, setImageSize] = useState<{ w: number; h: number } | null>(null);
   const size = videoSize ?? imageSize;
@@ -172,7 +173,7 @@ function Detail({ g, onClose }: { g: PublicGeneration; onClose: () => void }) {
                 )}
                 {size && <span className="tabular-nums">{size.w}×{size.h}</span>}
                 <span className="font-display text-[15px] text-sand">{g.image ? usd(g.costUsd) : `${g.durationS}S · ${usd(g.costUsd)}`}</span>
-                <span>{STATUS_LABEL[g.status]}</span>
+                <span>{tStatus(g.status)}</span>
               </div>
               <p className="mt-2 break-words text-sm leading-relaxed text-foreground">{g.prompt || "(프롬프트 없음)"}</p>
             </div>

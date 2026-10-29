@@ -1,34 +1,33 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { useTranslations } from "next-intl";
 import { Button, ErrorText, Field, Input } from "@/components/ui";
+import { LanguagePicker } from "@/components/LanguagePicker";
 import { PasswordChangeForm } from "@/components/PasswordChangeForm";
+import type { Locale } from "@/i18n/locale";
 
 type Mode = { kind: "login" } | { kind: "change" } | { kind: "temporary"; username: string; password: string };
 
-const HEADING: Record<Mode["kind"], { title: string; lead: string }> = {
-  login: { title: "로그인", lead: "배부받은 ID와 비밀번호를 입력하세요." },
-  change: { title: "비밀번호 변경", lead: "현재 비밀번호를 확인한 뒤 새 비밀번호로 바꿉니다. 다른 기기의 로그인은 모두 끝납니다." },
-  temporary: { title: "새 비밀번호 정하기", lead: "관리자가 정한 임시 비밀번호로 로그인했습니다. 계속하려면 나만 아는 새 비밀번호를 정하세요." },
-};
-
 export function LoginForm({ next }: { next: string }) {
+  const t = useTranslations("auth");
   const [mode, setMode] = useState<Mode>({ kind: "login" });
-  const heading = HEADING[mode.kind];
+  // Only a pick made during this visit is stored on the account at sign-in; a cookie left by someone else is not.
+  const [picked, setPicked] = useState<Locale | null>(null);
 
   const enter = () => window.location.assign(next);
 
   return (
     <>
-      <h1 className="text-2xl font-semibold">{heading.title}</h1>
-      <p className="mt-1 break-keep text-sm text-muted">{heading.lead}</p>
+      <h1 className="text-2xl font-semibold">{t(`heading.${mode.kind}.title`)}</h1>
+      <p className="mt-1 break-keep text-sm text-muted">{t(`heading.${mode.kind}.lead`)}</p>
       <div className="mt-6">
         {mode.kind === "login" && (
-          <SignInForm onSignedIn={enter} onTemporary={(username, password) => setMode({ kind: "temporary", username, password })} />
+          <SignInForm picked={picked} onSignedIn={enter} onTemporary={(username, password) => setMode({ kind: "temporary", username, password })} />
         )}
-        {mode.kind === "change" && <PasswordChangeForm autoFocus onChanged={enter} />}
+        {mode.kind === "change" && <PasswordChangeForm autoFocus locale={picked} onChanged={enter} />}
         {mode.kind === "temporary" && (
-          <PasswordChangeForm autoFocus username={mode.username} currentPassword={mode.password} onChanged={enter} />
+          <PasswordChangeForm autoFocus username={mode.username} currentPassword={mode.password} locale={picked} onChanged={enter} />
         )}
         <Button
           type="button"
@@ -36,14 +35,24 @@ export function LoginForm({ next }: { next: string }) {
           className="mt-3 min-h-11 w-full"
           onClick={() => setMode(mode.kind === "login" ? { kind: "change" } : { kind: "login" })}
         >
-          {mode.kind === "login" ? "비밀번호 변경" : "로그인으로 돌아가기"}
+          {mode.kind === "login" ? t("changePassword") : t("backToSignIn")}
         </Button>
       </div>
+      <LanguagePicker className="mt-8 flex flex-col items-center" onPicked={setPicked} />
     </>
   );
 }
 
-function SignInForm({ onSignedIn, onTemporary }: { onSignedIn: () => void; onTemporary: (username: string, password: string) => void }) {
+function SignInForm({
+  picked,
+  onSignedIn,
+  onTemporary,
+}: {
+  picked: Locale | null;
+  onSignedIn: () => void;
+  onTemporary: (username: string, password: string) => void;
+}) {
+  const t = useTranslations("auth");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -58,17 +67,17 @@ function SignInForm({ onSignedIn, onTemporary }: { onSignedIn: () => void; onTem
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username, password, ...(picked && { locale: picked }) }),
         cache: "no-store",
       });
       body = (await res.json().catch(() => ({}))) as typeof body;
       if (!res.ok) {
-        setError(body.error ?? "로그인 실패");
+        setError(body.error ?? t("signInFailed"));
         setBusy(false);
         return;
       }
     } catch {
-      setError("서버에 연결할 수 없습니다");
+      setError(t("offline"));
       setBusy(false);
       return;
     }
@@ -81,12 +90,12 @@ function SignInForm({ onSignedIn, onTemporary }: { onSignedIn: () => void; onTem
       <Field label="ID">
         <Input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" autoFocus required />
       </Field>
-      <Field label="비밀번호">
+      <Field label={t("password")}>
         <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required />
       </Field>
       {error && <ErrorText>{error}</ErrorText>}
       <Button type="submit" size="lg" className="w-full" disabled={busy} aria-busy={busy}>
-        {busy ? "확인 중…" : "로그인"}
+        {busy ? t("checking") : t("signIn")}
       </Button>
     </form>
   );

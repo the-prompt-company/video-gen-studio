@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
@@ -16,14 +17,15 @@ export async function getUnverifiedSession(): Promise<Session | null> {
   return token ? verifySessionToken(token) : null;
 }
 
-export async function getCurrentUser() {
+/** One `users` read per render: the root layout's language and the page's own checks share it. */
+export const getCurrentUser = cache(async () => {
   const s = await getUnverifiedSession();
   if (!s) return null;
   const db = getDb();
   const [u] = await db.select().from(schema.users).where(eq(schema.users.id, s.id)).limit(1);
   if (!u || !u.active || revokedByPasswordChange(s.issuedAtS, u.passwordChangedAt)) return null;
   return u;
-}
+});
 
 const MAX_FAILURES = 10;
 const LOCK_MINUTES = 15;

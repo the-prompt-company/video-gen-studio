@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import type { PublicGeneration } from "@/lib/generations";
 import { FAMILIES, FAMILY_IDS, modelLine } from "@/lib/catalog";
 import { usd, fmtDate } from "@/lib/format";
-import { STATUS_LABEL } from "@/lib/generation-status";
+import { GENERATION_STATUSES } from "@/lib/generation-status";
 import { Button, Card, Select, Empty } from "@/components/ui";
 import { StatusBadge } from "@/components/StatusBadge";
 import { api } from "./AdminPanels";
@@ -12,6 +13,7 @@ import { api } from "./AdminPanels";
 type UserOpt = { id: number; username: string };
 
 export function LogsPanel() {
+  const tStatus = useTranslations("status");
   const [users, setUsers] = useState<UserOpt[]>([]);
   const [f, setF] = useState({ userId: "", modelId: "", status: "" });
   const [items, setItems] = useState<PublicGeneration[]>([]);
@@ -74,8 +76,8 @@ export function LogsPanel() {
         </Select>
         <Select value={f.status} onChange={(e) => setF({ ...f, status: e.target.value })}>
           <option value="">모든 상태</option>
-          {Object.entries(STATUS_LABEL).map(([k, v]) => (
-            <option key={k} value={k}>{v}</option>
+          {GENERATION_STATUSES.map((s) => (
+            <option key={s} value={s}>{tStatus(s)}</option>
           ))}
         </Select>
       </div>
