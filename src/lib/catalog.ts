@@ -80,17 +80,20 @@ const SEEDANCE_FRAME: Record<string, Record<string, Size>> = {
   "4k": { "16:9": [3840, 2160], "4:3": [3326, 2494], "1:1": [2880, 2880], "3:4": [2496, 3328], "9:16": [2160, 3840], "21:9": [4398, 1886] },
 };
 const tokensPerSecond = ([w, h]: Size) => (w * h * 24) / 1024;
-/** The rate's unit: one second at 480p 16:9, 10,044 tokens. */
 const SEEDANCE_UNIT_TOKENS = tokensPerSecond(SEEDANCE_FRAME["480p"]["16:9"]);
+
+const largestFrame = (frames: Record<string, Size>): Size => Object.values(frames).reduce((a, s) => (s[0] * s[1] > a[0] * a[1] ? s : a));
 
 function seedanceUnits(b: CostBasis): number {
   const frames = SEEDANCE_FRAME[String(b.params.resolution)] ?? SEEDANCE_FRAME["480p"];
-  // Image-to-video takes no aspect: the frame follows the image, so the largest frame at the resolution is billed.
-  const size = b.mode === "i2v" ? Object.values(frames).reduce((a, s) => (s[0] * s[1] > a[0] * a[1] ? s : a)) : (frames[String(b.params.aspect_ratio)] ?? frames["16:9"]);
+  const size = b.mode === "i2v" ? largestFrame(frames) : (frames[String(b.params.aspect_ratio)] ?? frames["16:9"]);
   const tokens = Math.ceil((Number(b.params.duration) + b.inputVideoS) * tokensPerSecond(size));
   const weight = (b.params.resolution === "4k" ? 0.008 / 0.014 : 1) * (b.inputVideoS > 0 ? 0.6 : 1);
   return (tokens * weight) / SEEDANCE_UNIT_TOKENS;
 }
+
+/** H3 reference-to-video bills $0.08 for each image past this many, so the app takes no more. */
+const H3_IMAGES_WITHOUT_SURCHARGE = 5;
 
 const DURATION_SEEDANCE: ParamSpec = { key: "duration", label: "길이(초)", type: "int", min: 4, max: 15, default: 5 };
 
@@ -135,8 +138,7 @@ export const FAMILIES: Record<FamilyId, Family> = {
       { key: "aigc_watermark", label: "AI 생성 워터마크", type: "bool", default: false },
     ],
     promptRequiredIn: ["t2v", "i2v", "r2v"],
-    // Five, because reference-to-video bills $0.08 for every image past five.
-    maxImages: 5,
+    maxImages: H3_IMAGES_WITHOUT_SURCHARGE,
     maxVideos: 3,
     rate: {
       basis: "2K",
@@ -150,7 +152,6 @@ export const FAMILIES: Record<FamilyId, Family> = {
   },
 };
 
-/** Endpoints no model offers any more. Their rows keep a name and labels; their pending rows resend via legacyBody. */
 const RETIRED: Record<string, { name: string; mode: Mode; labels: Record<string, string> }> = {
   "minimax/hailuo-2.3/standard/image-to-video": { name: "Hailuo 2.3 Standard", mode: "i2v", labels: { duration: "길이(초)", prompt_optimizer: "프롬프트 자동 보정" } },
 };

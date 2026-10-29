@@ -223,10 +223,6 @@ function recorder() {
   return { tasks, schedule: (task: () => Promise<void>) => void tasks.push(task()) };
 }
 
-/**
- * A quote proves nothing at rate 0, and a model's rate is 0 until an admin sets one. When FAMILY's rate is 0, run with
- * TEST_PRICE and put the stored row back afterwards, or delete it when there was none.
- */
 async function withKnownPrice<T>(run: () => Promise<T>): Promise<T> {
   const m = schema.models;
   const [row] = await getDb().select().from(m).where(eq(m.modelId, FAMILY)).limit(1);
@@ -240,7 +236,6 @@ async function withKnownPrice<T>(run: () => Promise<T>): Promise<T> {
   }
 }
 
-/** The quote a stored row should hold at `rate`, from the same function the route used. */
 function quoteOf(row: Generation, rate: number): string {
   const mode = describeModel(row.modelId).mode;
   if (!mode) throw new Error(`FAIL ${row.modelId} is not a catalog endpoint`);
@@ -308,7 +303,6 @@ async function adminUser(): Promise<User> {
   return u;
 }
 
-/** What the route plans for an H3 request with these images, at FAMILY's stored rate. */
 function plan(label: string, imageUrls: string[], rate: number): ReadyPlan {
   const p = planGeneration(
     { family: FAMILY, mode: imageUrls.length > 0 ? "r2v" : "t2v", prompt: `${TAG}${label}`, params: {}, images: imageUrls, videos: [], startFromImage: false },
@@ -1337,11 +1331,6 @@ async function cancelAfterDeadSubmitter(owner: Owner, admin: User, upstream: str
   await Promise.all(rec.tasks);
 }
 
-/**
- * A row the code before request_body inserted, for an endpoint the catalog no longer offers, after a submitter died
- * holding its lease. The fake accepted the old code's body, written out here so the check cannot agree with itself.
- * The resend must post the same bytes to the same endpoint and get the same request id back.
- */
 async function rowFromBeforeRequestBody(owner: Owner, admin: User, upstream: string) {
   const rec = recorder();
   const hailuo = "minimax/hailuo-2.3/standard/image-to-video";

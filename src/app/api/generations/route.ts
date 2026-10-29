@@ -82,7 +82,6 @@ function list(v: unknown, label: string): unknown[] {
   return v;
 }
 
-/** The request's shape only. What the model accepts (counts, prompt, params, mode) is planGeneration's to judge. */
 function parseDraft(raw: unknown): Draft {
   const b = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const family = String(b.family ?? "");

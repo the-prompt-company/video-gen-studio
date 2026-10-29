@@ -114,7 +114,7 @@ test("bodies carry the media fields of their mode and only keys the endpoint's p
   };
   for (const family of FAMILY_IDS) {
     for (const mode of MODES) {
-      for (const params of [defaultParams(family), lastOptions(family)]) {
+      for (const params of [defaultParams(family), edgeParams(family)]) {
         const plan = ready(planGeneration(draft({ family, params, ...media[mode] }), 0));
         const schema = ENDPOINTS[plan.endpoint];
         assert.ok(schema, `the fake serves ${plan.endpoint}`);
@@ -124,8 +124,7 @@ test("bodies carry the media fields of their mode and only keys the endpoint's p
   }
 });
 
-/** Every param at the top of its range or its last option, to probe the schemas' edges. */
-function lastOptions(family: FamilyId): Record<string, unknown> {
+function edgeParams(family: FamilyId): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const p of FAMILIES[family].params) {
     if (p.type === "int") out[p.key] = p.max;
@@ -194,10 +193,6 @@ test("the plan carries the cost the same function gives", () => {
   assert.equal(plan.costUsd, 0.591);
 });
 
-/**
- * Rows inserted before request_body existed are resent with the body the code of that time built. Each entry is such a
- * row, as read back from Postgres, and the exact string that code sent for it.
- */
 const BEFORE_0007 = [
   {
     row: { modelId: "bytedance/seedance-2.0/reference-to-video", prompt: " 세로 숏폼 ", params: { duration: 8, resolution: "720p", aspect_ratio: "9:16", generate_audio: true }, imageRefs: [IMG, IMG2], videoRefs: [VID] },

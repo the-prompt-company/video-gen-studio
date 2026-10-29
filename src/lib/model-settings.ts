@@ -2,10 +2,6 @@ import { eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { FAMILIES, FAMILY_IDS, type FamilyId } from "@/lib/catalog";
 
-/**
- * The admin's settings per model, the only code that reads or writes `models`. Rows are keyed by FamilyId; a missing
- * row reads as rate 0 (미정) and enabled. Rows left by earlier catalogs, keyed by endpoint ids, are never read.
- */
 export type ModelSetting = { family: FamilyId; rateUsd: number; enabled: boolean; note: string | null };
 
 export async function loadModelSettings(): Promise<Record<FamilyId, ModelSetting>> {

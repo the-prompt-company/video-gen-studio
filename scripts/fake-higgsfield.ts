@@ -122,10 +122,18 @@ const SEEDANCE_ASPECT: Field = { oneOf: ["16:9", "4:3", "1:1", "3:4", "9:16", "2
 const H3_ASPECT: Field = { oneOf: ["auto", "adaptive", "21:9", "16:9", "4:3", "1:1", "3:4", "9:16"] };
 const H3_RESOLUTION: Field = { oneOf: ["2K"] };
 
+/** Endpoints the app no longer offers, served for rows that may still be resent to them. */
+const RETIRED_ENDPOINTS: Record<string, Endpoint> = {
+  "minimax/hailuo-2.3/standard/image-to-video": {
+    fields: { prompt: "text", image_url: "url", duration: { oneOf: ["6", "10"] }, prompt_optimizer: "bool" },
+    required: ["prompt", "image_url"],
+  },
+};
+
 /**
  * The endpoints this fake serves, with the input schemas open.higgsfield.ai publishes for them (2026-10-29). Like the
  * real API, an unknown endpoint is 404, and a body with a field the schema does not list, a missing required field or
- * a value out of range is 422. Hailuo 2.3 stays for rows written before it left the catalog.
+ * a value out of range is 422.
  */
 export const ENDPOINTS: Record<string, Endpoint> = {
   "bytedance/seedance-2.0/text-to-video": {
@@ -180,10 +188,7 @@ export const ENDPOINTS: Record<string, Endpoint> = {
     required: ["prompt"],
     imagesOrVideos: true,
   },
-  "minimax/hailuo-2.3/standard/image-to-video": {
-    fields: { prompt: "text", image_url: "url", duration: { oneOf: ["6", "10"] }, prompt_optimizer: "bool" },
-    required: ["prompt", "image_url"],
-  },
+  ...RETIRED_ENDPOINTS,
 };
 
 function fieldError(name: string, field: Field, v: unknown): string | null {

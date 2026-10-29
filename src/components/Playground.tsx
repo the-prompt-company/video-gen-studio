@@ -25,9 +25,7 @@ import { refUploadName } from "@/lib/ref-name";
 import { Button, ErrorText, Field, Input, Select, Textarea } from "@/components/ui";
 import { StatusBadge } from "@/components/StatusBadge";
 
-/** A model the admin left on, with its base rate (0 until an admin sets one). */
 type Offer = { family: FamilyId; rateUsd: number };
-/** `seconds` is a video's length read from the file before upload; Seedance bills it with video references. */
 type Ref = { id: string; url: string; name: string; kind: "image" | "video"; local?: string; w?: number; h?: number; seconds?: number };
 type FeedAnswer = { items?: PublicGeneration[]; now?: number };
 
@@ -64,22 +62,21 @@ function readImageSize(file: File): Promise<{ w: number; h: number } | null> {
   });
 }
 
-/** The clip's length from its metadata, or NaN when the browser cannot read one (then the file is refused). */
-function readVideoSeconds(file: File): Promise<number> {
+function readVideoSeconds(file: File): Promise<number | null> {
   return new Promise((resolve) => {
     const v = document.createElement("video");
     const url = URL.createObjectURL(file);
     let settled = false;
-    const done = (s: number) => {
+    const done = (s: number | null) => {
       if (settled) return;
       settled = true;
       URL.revokeObjectURL(url);
       resolve(s);
     };
     v.preload = "metadata";
-    v.onloadedmetadata = () => done(v.duration);
-    v.onerror = () => done(Number.NaN);
-    window.setTimeout(() => done(Number.NaN), 10_000);
+    v.onloadedmetadata = () => done(Number.isFinite(v.duration) && v.duration > 0 ? v.duration : null);
+    v.onerror = () => done(null);
+    window.setTimeout(() => done(null), 10_000);
     v.src = url;
   });
 }
@@ -511,7 +508,7 @@ export function Playground({ offers, hasApiKey, largeUploadPrefix, galleryCount 
         prompt,
         params,
         images: images.map((r) => r.url),
-        videos: videos.map((r) => ({ url: r.url, seconds: r.seconds ?? Number.NaN })),
+        videos: videos.map((r) => ({ url: r.url, seconds: r.seconds ?? 0 })),
         startFromImage,
       }
     : null;
@@ -530,7 +527,7 @@ export function Playground({ offers, hasApiKey, largeUploadPrefix, galleryCount 
     try {
       for (const f of picked) {
         const seconds = kind === "video" ? await readVideoSeconds(f) : undefined;
-        if (seconds !== undefined && !(Number.isFinite(seconds) && seconds > 0)) throw new Error(`${f.name}: 영상 길이를 읽지 못했습니다. 다른 mp4로 올려 주세요`);
+        if (seconds === null) throw new Error(`${f.name}: 영상 길이를 읽지 못했습니다. 다른 mp4로 올려 주세요`);
         const url = await uploadFile(f, largeUploadPrefix);
         const size = kind === "image" ? await readImageSize(f) : null;
         setRefs((r) => [...r, { id: crypto.randomUUID(), url, name: f.name, kind, local: URL.createObjectURL(f), w: size?.w, h: size?.h, seconds }]);
@@ -590,7 +587,6 @@ export function Playground({ offers, hasApiKey, largeUploadPrefix, galleryCount 
     setError(null);
   }
 
-  /** Brings back a row's model, settings and start-from-image choice. References are not kept, so they are cleared. */
   function reuse(g: PublicGeneration) {
     const m = describeModel(g.modelId);
     const next = m.family && offers.some((o) => o.family === m.family) ? m.family : offer?.family;

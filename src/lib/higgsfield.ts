@@ -105,7 +105,6 @@ function message(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-/** POSTs the stored body text as it is, so every attempt for one Idempotency-Key carries the same bytes. */
 export async function submit(
   apiKey: ApiKey,
   endpoint: string,
