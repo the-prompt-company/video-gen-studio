@@ -43,6 +43,13 @@
       "when": 1793202364304,
       "tag": "0005_drop_blob_url",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793239083745,
+      "tag": "0006_account_columns",
+      "breakpoints": true
     }
   ]
 }
