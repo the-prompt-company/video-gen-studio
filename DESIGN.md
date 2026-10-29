@@ -254,7 +254,7 @@ components:
 
 플레이그라운드는 1024px 이상에서 내비 아래 전체 높이(`100dvh − 56px`)를 두 열로 나눈다. 왼쪽 480px 서랍(내부 스크롤, 안쪽 20px, 하단 고정 바), 오른쪽 나머지가 무대. 무대는 세로 스냅 피드와 그 오른쪽 96px 글리프 레일(왼쪽 1px Mist)로 나뉜다. 1024px 미만에서는 무대가 먼저(72dvh, 최소 480px), 레일이 그 아래 가로 바(위 1px Mist)로, 서랍이 그 아래로 온다. 서랍의 썸네일 판·업로드 존·파라미터는 640px 이상에서 2열.
 
-문서형 페이지(갤러리·대시보드·어드민)는 `PageContainer`: 최대 폭 1280px, 좌우 16px, 상하 32px. 로그인은 최대 폭 384px 가운데 정렬.
+문서형 페이지(갤러리·대시보드·설정·어드민)는 `PageContainer`: 최대 폭 1280px, 좌우 16px, 상하 32px. 로그인은 최대 폭 384px 가운데 정렬. 설정은 카드 없이 구역을 Mist 1px 선으로 나누고, 768px 이상에서 구역마다 왼쪽 240px 제목(16px 600)과 muted 설명, 오른쪽 384px 폼의 두 열이며 선은 그 두 열 너비(672px)에서 끝난다. 그 아래로는 한 열.
 
 간격 리듬은 4의 배수에 6px 하나. 라벨과 입력 사이 6px, 필드 사이 16px, 서랍 섹션 사이 16px, 섹션 안 12px, 카드 안쪽 20px, 카드 사이 24px, 문서형 페이지 섹션 사이 32px. 레일 글리프 사이 16px(모바일 12px), 글리프와 카운터 사이 6px.
 
@@ -304,7 +304,10 @@ components:
 - **Field:** 라벨 12px 500 muted, 오른쪽 힌트 subtle 400 tabular(글자 수, 범위, "선택"). 라벨이 입력을 감싸므로 클릭하면 포커스된다.
 
 ### Navigation
-- Sticky 56px, void 85% + blur, 아래 1px Mist. 워드마크 Bebas 22px 흰색. 링크는 알약 14px, 비활성 muted → hover 흰색, 활성 흰색 12% 틴트 + 흰 글자 + `aria-current="page"`. 사용자명 white-dim(먼저 잘림), ADMIN은 Bebas 12px Sand의 4px 테두리 태그, 로그아웃은 36px 알약 outline(Mist 테두리, 12px white-dim, hover 흰색). 모바일은 링크 줄이 가로 스크롤, 44px.
+- Sticky 56px, void 85% + blur, 아래 1px Mist. 워드마크 Bebas 22px 흰색. 링크는 알약 14px, 비활성 muted → hover 흰색, 활성 흰색 12% 틴트 + 흰 글자 + `aria-current="page"`. 로그인한 사람은 28px Avatar와 이름(닉네임, 없으면 ID; white-dim, 먼저 잘림)을 묶은 알약 링크로 `/settings`에 이어지고, hover 흰색 10%, 설정에 있으면 흰색 12% 틴트 + `aria-current="page"`. ADMIN은 Bebas 12px Sand의 4px 테두리 태그, 로그아웃은 36px 알약 outline(Mist 테두리, 12px white-dim, hover 흰색)이며 640px 미만에서는 같은 테두리의 44px 원형 아이콘 버튼(문 밖으로 나가는 화살표, 접근 이름 "로그아웃"). 모바일은 링크 줄이 가로 스크롤, 44px.
+
+### Avatar
+원형, 1px Mist 테두리, slate 바탕. 사진은 object-cover로 원을 채우고, 사진이 없으면 같은 원에 이름 첫 글자(Inter 500, white-dim, 대문자). 내비 28px, 설정 96px. 사진은 업로드 전에 브라우저가 가운데 정사각형 256×256으로 줄인다.
 
 ### Model Select
 표준 `<select>`(Slate 바탕, Mist 1px, 6px, 40px). 라벨 "모델", 오른쪽 힌트에 단가(`$0.0985/s`, tabular). 옵션 텍스트는 "이름 · 공급사 · 단가". 아래에 모델 설명 한 줄(muted)과 고정 제약 한 줄(subtle, 예: "출력은 768p로 고정"). 모델을 바꾸면 파라미터와 레퍼런스가 초기화된다. 카드형 선택은 2026-10-27에 select로 교체했다.

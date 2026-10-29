@@ -37,7 +37,7 @@ Starts `next dev -p 3100` detached with `NEXT_DIST_DIR=.next-verify` (Next 16 lo
 
 Credentials: `VGS_USER` / `VGS_PASS`, defaulting to `ADMIN_USERNAME` / `ADMIN_PASSWORD` from `.env.local`. Use an **admin** for the admin and gallery-scope journeys. Never paste credentials into chat or into evidence.
 
-Data isolation: there is none. Every instance, including the developer's, shares the one Supabase database named in `.env.local`. Journeys therefore mutate only what they restore (admin price round-trip) or what is tagged disposable (`[목업]` mock rows). Two journeys create users, each under its own prefix, and delete those rows straight from the database in `finally` (there is no delete endpoint): the password journey makes one `vgs-pw-*@example.test` member through the admin UI, and the import journey makes 207 `vgs-imp-<stamp>-*@example.test` members from `.xlsx` fixtures. No other journey creates users. Do not run two verification runs concurrently against the same account: the login journey's deliberate wrong password counts toward the 10-attempt / 15-minute lockout.
+Data isolation: there is none. Every instance, including the developer's, shares the one Supabase database named in `.env.local`. Journeys therefore mutate only what they restore (admin price round-trip) or what is tagged disposable (`[목업]` mock rows). Three journeys create users, each under its own prefix. The password journey creates a `vgs-pw-*@example.test` member through the admin UI, the import journey creates 207 `vgs-imp-<stamp>-*@example.test` members from `.xlsx` fixtures, and the settings journey creates two `vgs-set-*@example.test` members through the admin API; each deletes its own rows straight from the database in `finally` (there is no delete endpoint), and the settings journey first deletes its members' photos through the app. No other journey creates users. Do not run two verification runs concurrently against the same account: the login journey's deliberate wrong password counts toward the 10-attempt / 15-minute lockout.
 
 ## Doctor
 
@@ -54,7 +54,7 @@ vgs run <journey>            # desktop 1440×900
 VGS_MOBILE=1 vgs run <journey>   # 390×844 touch viewport, evidence folder gets a -mobile suffix
 ```
 
-Journeys (`journeys/*.mjs`): `login`, `password`, `import`, `playground`, `gallery`, `dashboard`, `admin`. Each gets `{ page, context, ev, base, creds, env, webDir, local }` (`local` is `.env.local` parsed); `ev.login(to, p)` signs in through the real form, `ev.shot(label, { page })` captures PNG + ARIA snapshot, `ev.note()` logs, `ev.fail(reason)` aborts with the reason, `ev.api(path, init, p)` is a same-origin fetch with that page's session cookie for read-backs, and `ev.newPage()` opens a page in a fresh browser context (its own cookies, same viewport) for a second device. `p` defaults to the journey's page.
+Journeys (`journeys/*.mjs`): `login`, `password`, `import`, `settings`, `playground`, `gallery`, `dashboard`, `admin`. Each gets `{ page, context, ev, base, creds, env, webDir, local }` (`local` is `.env.local` parsed); `ev.login(to, p)` signs in through the real form, `ev.shot(label, { page })` captures PNG + ARIA snapshot, `ev.note()` logs, `ev.fail(reason)` aborts with the reason, `ev.api(path, init, p)` is a same-origin fetch with that page's session cookie for read-backs, and `ev.newPage()` opens a page in a fresh browser context (its own cookies, same viewport) for a second device. `p` defaults to the journey's page.
 
 Stable handles this app exposes (prefer these over CSS or coordinates):
 
@@ -62,7 +62,8 @@ Stable handles this app exposes (prefer these over CSS or coordinates):
 |---|---|
 | Login | `getByLabel("ID")`, `getByLabel("비밀번호")`, button `로그인` (exact), button `비밀번호 변경`, `role=alert` for errors |
 | Password change | h1 `비밀번호 변경` or `새 비밀번호 정하기` (temporary password), `getByLabel("현재 비밀번호")`, `getByLabel(/^새 비밀번호(?! 확인)/)`, `getByLabel("새 비밀번호 확인")`, button `비밀번호 변경` (exact), button `로그인으로 돌아가기` |
-| Header | header text = username, `ADMIN` badge, button `로그아웃`, nav `주 메뉴` links 플레이그라운드/갤러리/대시보드/어드민 |
+| Header | link `<nickname or username> 설정` to `/settings` holding the photo `<img>` (or a letter) and the name text, `ADMIN` badge, button `로그아웃` (an icon under 640px, same name), nav `주 메뉴` links 플레이그라운드/갤러리/대시보드/어드민 |
+| Settings | h1 `설정`, regions `프로필` / `계정` / `비밀번호`, buttons `사진 고르기` or `사진 바꾸기` (file chooser), img `새 프로필 사진 미리보기`, buttons `사진 저장` / `취소` / `사진 삭제`, `getByLabel(/^닉네임/)` + button `닉네임 저장`, `role=status` for results and for the no-Blob notice, region `계정` → the ID as text in its `dd` |
 | Playground | `aside[aria-label="생성 설정"]` (role complementary), `section[aria-label="결과 무대"]` (region), `getByLabel("프롬프트")`, `getByLabel("모델")` (native select), group `출력 화면비` with `aria-pressed` pills, `getByLabel("길이(초)")`, button `레퍼런스 추가` → dialog `레퍼런스 추가` with `input[type=file]` per kind, list `첨부한 레퍼런스`, `role=status` no-API-key banner, button `생성하기`, rail glyphs 생성/취소/다운로드/갤러리/다시 |
 | Gallery | h1 `갤러리`, tile buttons named `<prompt> 자세히 보기`, dialog `생성 상세` with video `생성된 영상`, link `다운로드`, button `닫기`; admin links `내 것` / `전체` |
 | Dashboard | h1 `대시보드`, stat labels 누적 비용 / 생성 횟수 / 생성한 영상 길이 / API 키, cards `최근 30일 · 일별 비용`, `모델별` |

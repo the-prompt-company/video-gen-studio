@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/session";
 
-const PROTECTED = ["/playground", "/gallery", "/dashboard", "/admin"];
+const PROTECTED = ["/playground", "/gallery", "/dashboard", "/settings", "/admin"];
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -22,5 +22,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/playground/:path*", "/gallery/:path*", "/dashboard/:path*", "/admin/:path*"],
+  matcher: ["/playground/:path*", "/gallery/:path*", "/dashboard/:path*", "/settings/:path*", "/admin/:path*"],
 };
