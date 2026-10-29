@@ -112,6 +112,110 @@ type Job = {
   webhookTimer: NodeJS.Timeout | null;
 };
 
+type Field = "text" | "url" | "urls" | "bool" | { int: [number, number] } | { oneOf: string[] };
+type Endpoint = { fields: Record<string, Field>; required: string[]; imagesOrVideos?: true };
+
+const DURATION_4_15: Field = { int: [4, 15] };
+const DURATION_5_15: Field = { int: [5, 15] };
+const SEEDANCE_RESOLUTION: Field = { oneOf: ["480p", "720p", "1080p", "4k"] };
+const SEEDANCE_ASPECT: Field = { oneOf: ["16:9", "4:3", "1:1", "3:4", "9:16", "21:9"] };
+const H3_ASPECT: Field = { oneOf: ["auto", "adaptive", "21:9", "16:9", "4:3", "1:1", "3:4", "9:16"] };
+const H3_RESOLUTION: Field = { oneOf: ["2K"] };
+
+/** Endpoints the app no longer offers, served for rows that may still be resent to them. */
+const RETIRED_ENDPOINTS: Record<string, Endpoint> = {
+  "minimax/hailuo-2.3/standard/image-to-video": {
+    fields: { prompt: "text", image_url: "url", duration: { oneOf: ["6", "10"] }, prompt_optimizer: "bool" },
+    required: ["prompt", "image_url"],
+  },
+};
+
+/**
+ * The endpoints this fake serves, with the input schemas open.higgsfield.ai publishes for them (2026-10-29). Like the
+ * real API, an unknown endpoint is 404, and a body with a field the schema does not list, a missing required field or
+ * a value out of range is 422.
+ */
+export const ENDPOINTS: Record<string, Endpoint> = {
+  "bytedance/seedance-2.0/text-to-video": {
+    fields: { prompt: "text", duration: DURATION_4_15, resolution: SEEDANCE_RESOLUTION, aspect_ratio: SEEDANCE_ASPECT, generate_audio: "bool" },
+    required: ["prompt"],
+  },
+  "bytedance/seedance-2.0/image-to-video": {
+    fields: { prompt: "text", duration: DURATION_4_15, image_url: "url", end_image_url: "url", resolution: SEEDANCE_RESOLUTION, generate_audio: "bool" },
+    required: ["image_url"],
+  },
+  "bytedance/seedance-2.0/reference-to-video": {
+    fields: {
+      prompt: "text",
+      duration: DURATION_4_15,
+      image_urls: "urls",
+      video_urls: "urls",
+      audio_urls: "urls",
+      resolution: SEEDANCE_RESOLUTION,
+      aspect_ratio: SEEDANCE_ASPECT,
+      generate_audio: "bool",
+    },
+    required: [],
+    imagesOrVideos: true,
+  },
+  "minimax/h3/text-to-video": {
+    fields: { prompt: "text", duration: DURATION_5_15, resolution: H3_RESOLUTION, aspect_ratio: H3_ASPECT, aigc_watermark: "bool" },
+    required: ["prompt"],
+  },
+  "minimax/h3/image-to-video": {
+    fields: {
+      prompt: "text",
+      duration: DURATION_5_15,
+      image_url: "url",
+      end_image_url: "url",
+      resolution: H3_RESOLUTION,
+      aspect_ratio: H3_ASPECT,
+      aigc_watermark: "bool",
+    },
+    required: ["prompt", "image_url"],
+  },
+  "minimax/h3/reference-to-video": {
+    fields: {
+      prompt: "text",
+      duration: DURATION_5_15,
+      image_urls: "urls",
+      video_urls: "urls",
+      audio_urls: "urls",
+      resolution: H3_RESOLUTION,
+      aspect_ratio: H3_ASPECT,
+      aigc_watermark: "bool",
+    },
+    required: ["prompt"],
+    imagesOrVideos: true,
+  },
+  ...RETIRED_ENDPOINTS,
+};
+
+function fieldError(name: string, field: Field, v: unknown): string | null {
+  const isUrl = (u: unknown) => typeof u === "string" && /^https?:\/\//.test(u);
+  if (field === "text") return typeof v === "string" && v.length > 0 ? null : `${name} must be a non-empty string`;
+  if (field === "url") return isUrl(v) ? null : `${name} must be a URL`;
+  if (field === "urls") return Array.isArray(v) && v.length > 0 && v.every(isUrl) ? null : `${name} must be a non-empty list of URLs`;
+  if (field === "bool") return typeof v === "boolean" ? null : `${name} must be a boolean`;
+  if ("int" in field) {
+    const [lo, hi] = field.int;
+    return Number.isInteger(v) && (v as number) >= lo && (v as number) <= hi ? null : `${name} must be an integer ${lo}-${hi}`;
+  }
+  return field.oneOf.includes(String(v)) ? null : `${name} must be one of ${field.oneOf.join(", ")}`;
+}
+
+/** Why the endpoint would refuse this body, or null when it fits the schema. */
+export function invalidBody(endpoint: Endpoint, body: Record<string, unknown>): string | null {
+  for (const key of Object.keys(body)) if (!(key in endpoint.fields)) return `unexpected field ${key}`;
+  for (const key of endpoint.required) if (!(key in body)) return `${key} is required`;
+  if (endpoint.imagesOrVideos && !("image_urls" in body) && !("video_urls" in body)) return "image_urls or video_urls is required";
+  for (const [key, v] of Object.entries(body)) {
+    const error = fieldError(key, endpoint.fields[key], v);
+    if (error) return error;
+  }
+  return null;
+}
+
 const EXPIRES_AFTER_S = 7 * 24 * 3600;
 const WEBHOOK_TIMEOUT_MS = 10_000;
 const WEBHOOK_RETRY_WINDOW_MS = 2 * 3600_000;
@@ -140,7 +244,10 @@ function deterministicBytes(n: number): Buffer {
 function newStats() {
   return {
     accepted: { total: 0, byIdempotencyKey: {} as Record<string, number> },
-    rejected: { 429: 0, 422: 0, 503: 0 },
+    /** 422 counts reused Idempotency-Keys with another body; invalid counts bodies the endpoint's schema refused. */
+    rejected: { 429: 0, 422: 0, 503: 0, invalid: 0, unknownEndpoint: 0 },
+    /** Every submit to a known endpoint, in arrival order, with the parsed body and the answer's HTTP status. */
+    submits: [] as { endpoint: string; idempotencyKey: string | null; body: Record<string, unknown>; status: number }[],
     statusPolls: {
       failed: 0,
       byRequest: {} as Record<string, { total: number; perSecondMax: number }>,
@@ -295,34 +402,50 @@ export function createFakeHiggsfield(config: Config): Server {
 
   async function submit(req: IncomingMessage, res: ServerResponse, url: URL, apiKey: string) {
     const modelId = url.pathname.slice(1);
-    let body: string;
+    const endpoint = ENDPOINTS[modelId];
+    if (!endpoint) {
+      req.resume();
+      stats.rejected.unknownEndpoint++;
+      return json(res, 404, { detail: `Model ${modelId} not found` });
+    }
+    let parsed: Record<string, unknown>;
     try {
-      body = JSON.stringify(JSON.parse(await readBody(req)));
+      parsed = JSON.parse(await readBody(req)) as Record<string, unknown>;
     } catch {
       return json(res, 400, { detail: "body must be JSON" });
     }
+    const body = JSON.stringify(parsed);
+    const idempotencyKey = req.headers["idempotency-key"]?.toString() ?? null;
+    const answer = (status: number, payload: unknown, headers: Record<string, string> = {}) => {
+      stats.submits.push({ endpoint: modelId, idempotencyKey, body: parsed, status });
+      return json(res, status, payload, headers);
+    };
     if (config.submitDelayMs > 0) await new Promise((r) => setTimeout(r, config.submitDelayMs));
     const retryAfter = { "Retry-After": String(config.retryAfterS) };
     if (submitFails > 0) {
       submitFails--;
       stats.rejected[503]++;
-      return json(res, 503, { detail: "fake submit refused this call" }, retryAfter);
+      return answer(503, { detail: "fake submit refused this call" }, retryAfter);
     }
-    const idempotencyKey = req.headers["idempotency-key"]?.toString() ?? null;
+    const invalid = invalidBody(endpoint, parsed);
+    if (invalid) {
+      stats.rejected.invalid++;
+      return answer(422, { detail: `${modelId}: ${invalid}` });
+    }
     const existingId = idempotencyKey ? byIdempotencyKey.get(idempotencyKey) : undefined;
     const existing = existingId ? jobs.get(existingId) : undefined;
     if (existing) {
-      if (existing.body !== body) {
+      if (existing.body !== body || existing.modelId !== modelId) {
         stats.rejected[422]++;
-        return json(res, 422, { detail: "Idempotency-Key reused with a different body" });
+        return answer(422, { detail: "Idempotency-Key reused with a different request" });
       }
-      return json(res, 200, submitBody(existing));
+      return answer(200, submitBody(existing));
     }
     const attempts = (submitsByApiKey.get(apiKey) ?? 0) + 1;
     submitsByApiKey.set(apiKey, attempts);
     if (attempts <= config.firstN429) {
       stats.rejected[429]++;
-      return json(res, 429, { detail: "Too many requests" }, retryAfter);
+      return answer(429, { detail: "Too many requests" }, retryAfter);
     }
     const now = Date.now();
     const [lo, hi] = config.durationMs;
@@ -345,7 +468,7 @@ export function createFakeHiggsfield(config: Config): Server {
     if (idempotencyKey) byIdempotencyKey.set(idempotencyKey, job.id);
     stats.accepted.total++;
     if (idempotencyKey) stats.accepted.byIdempotencyKey[idempotencyKey] = (stats.accepted.byIdempotencyKey[idempotencyKey] ?? 0) + 1;
-    return json(res, 200, submitBody(job));
+    return answer(200, submitBody(job));
   }
 
   function submitBody(job: Job) {

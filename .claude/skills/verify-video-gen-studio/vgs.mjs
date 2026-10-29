@@ -11,6 +11,7 @@
  * Env: VGS_PORT (3100), VGS_USER / VGS_PASS (default: ADMIN_USERNAME / ADMIN_PASSWORD from .env.local),
  *      VGS_RUN_ID (default: timestamp), VGS_MOBILE=1 (390×844 touch viewport), VGS_CHROME (chromium exe path),
  *      VGS_ALLOW_SPEND=1 (lets the playground journey actually submit a paid generation),
+ *      VGS_FAKE_HF=<fake base URL> (the playground journey generates every model and mode against that fake),
  *      VGS_VIDEO=1 (records the journey to <evidence>/video.webm).
  */
 import { spawn, execFileSync } from "node:child_process";

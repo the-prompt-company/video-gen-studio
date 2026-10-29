@@ -1,10 +1,12 @@
-import { and, desc, eq, lt, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireAdmin, errorResponse } from "@/lib/auth";
+import { endpointsOf, isFamilyId } from "@/lib/catalog";
 import { publicGeneration } from "@/lib/generations";
 
 /**
  * GET /api/admin/generations?userId=&modelId=&status=&before=&limit=&format=csv
+ * modelId is a model (all its endpoints) or one stored endpoint id.
  * Every user's history, newest first, keyset-paginated by createdAt.
  */
 export async function GET(req: Request) {
@@ -18,7 +20,8 @@ export async function GET(req: Request) {
 
     const where = [];
     if (q.get("userId")) where.push(eq(g.userId, Number(q.get("userId"))));
-    if (q.get("modelId")) where.push(eq(g.modelId, String(q.get("modelId"))));
+    const model = q.get("modelId");
+    if (model) where.push(isFamilyId(model) ? inArray(g.modelId, endpointsOf(model)) : eq(g.modelId, model));
     if (q.get("status")) where.push(eq(g.status, q.get("status") as schema.Generation["status"]));
     if (q.get("before")) where.push(lt(g.createdAt, new Date(String(q.get("before")))));
 
