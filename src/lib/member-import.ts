@@ -40,7 +40,6 @@ export function parseImportRequest(body: unknown): ImportRequest {
   return { ok: true, rows, dryRun: b.dryRun !== false };
 }
 
-/** The ID an import row would get. The route looks these up before planning. */
 export function importUsername(row: ImportRow): string {
   return loginId(row.email);
 }
