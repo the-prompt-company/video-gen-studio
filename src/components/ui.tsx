@@ -88,7 +88,7 @@ export function Empty({ children }: { children: ReactNode }) {
 /** Inline error. role="alert" so screen readers announce it when it appears. */
 export function ErrorText({ children }: { children: ReactNode }) {
   return (
-    <p role="alert" className="rounded-md bg-rose-500/10 px-3 py-2 text-sm text-rose-300">
+    <p role="alert" className="break-keep rounded-md bg-rose-500/10 px-3 py-2 text-sm text-rose-300">
       {children}
     </p>
   );

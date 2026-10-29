@@ -5,7 +5,7 @@ Higgsfield API 위에 올린 팀용 영상 생성 사이트. Next.js 16 (App Rou
 | 경로 | 내용 |
 |---|---|
 | `/` | 랜딩 |
-| `/login` | ID/비밀번호 로그인 (개별 배부) |
+| `/login` | ID/비밀번호 로그인 (개별 배부), 비밀번호 변경, 임시 비밀번호면 새 비밀번호 정하기 |
 | `/playground` | 프롬프트 + 이미지 ≤6 + 영상 레퍼런스, 모델·하이퍼파라미터, 실시간 진행, 다운로드 |
 | `/gallery` | 완료 영상 (본인; 관리자는 전체 토글) |
 | `/dashboard` | 본인 사용량: 누적/30일 비용, 횟수, 모델별, 일별 차트, 최근 20건 |
@@ -13,7 +13,7 @@ Higgsfield API 위에 올린 팀용 영상 생성 사이트. Next.js 16 (App Rou
 
 ## 동작 원리
 
-- **인증**: 서버가 scrypt 해시로 비밀번호를 검증하고 7일짜리 HttpOnly JWT 쿠키를 발급합니다. 10회 실패 시 15분 잠금. `proxy.ts`가 보호 경로를 막습니다.
+- **인증**: 서버가 scrypt 해시로 비밀번호를 검증하고 7일짜리 HttpOnly JWT 쿠키를 발급합니다. 10회 실패 시 15분 잠금이고, 로그인 화면의 비밀번호 변경(`POST /api/auth/password`)도 같은 실패 횟수를 셉니다. `@`가 든 ID는 대소문자를 가리지 않습니다. `proxy.ts`가 쿠키만으로 보호 경로를 먼저 막고, 페이지와 API는 DB로 다시 확인합니다. 비밀번호가 바뀐 시각(`password_changed_at`)보다 먼저 발급된 쿠키는 그때 끊깁니다. 관리자가 만든 계정이나 남의 비밀번호를 바꾼 계정은 임시 비밀번호(`must_change_password`)라 첫 로그인 때 세션 없이 새 비밀번호부터 정합니다. 초기 비밀번호는 `src/lib/credentials.ts`의 `INITIAL_PASSWORD`입니다.
 - **API 키**: 사용자가 입력하지 않습니다. 관리자가 어드민에서 사용자별로 할당하고, DB에는 `AUTH_SECRET`로 AES-GCM 암호화돼 저장됩니다. 서버만 복호화해 Higgsfield를 호출합니다.
 - **생성 흐름**: `POST /api/generations` → 행을 먼저 "제출 대기"(`pending`)로 저장 → Higgsfield `POST /{model_id}` (Idempotency-Key는 행 id, `hf_webhook` 포함) → 받으면 "대기"(`queued`)와 `request_id` 저장. 행을 움직이는 코드는 `src/lib/generations.ts` 하나이고, 아래 세 트리거가 모두 그 함수를 부릅니다. 같은 일을 두 번 해도 결과가 같습니다.
   - **브라우저 폴링**: 열린 탭이 live 행을 `GET /api/generations?ids=`로 2s→×1.5→최대 10s 간격으로 폴링하고, 서버가 그때 Higgsfield 상태를 한 번 조회합니다.
