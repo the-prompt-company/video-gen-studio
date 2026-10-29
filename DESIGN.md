@@ -297,6 +297,13 @@ components:
 - **Shadow Strategy:** 없음(Scrim Not Shadow Rule).
 - **Internal Padding:** 20px. 제목 줄은 h2 14px 600 white-dim + 0.025em, 오른쪽에 액션 슬롯, 아래 16px. 플레이그라운드에는 카드가 없다. 서랍은 면 없이 Mist 구분선과 섹션 헤딩으로만 나뉜다.
 
+### Modal
+- **Element:** `Modal`(`src/components/Modal.tsx`)은 네이티브 `<dialog>`를 `showModal()`로 연다. 뒤 페이지는 inert가 되고 스크롤이 잠긴다(`html:has(dialog:modal)`). 접근 이름은 제목 h2다.
+- **Surface:** ink, 1px Mist, 12px, 그림자 없음. 백드롭은 void 85% + blur. 폭 448px(`md`) 또는 672px(`lg`), 높이는 뷰포트의 85%까지이고 넘치면 본문만 스크롤한다.
+- **Structure:** 머리(제목 16px 600, 오른쪽에 고스트 `닫기`, 아래 1px Mist), 본문(안쪽 20px), 있으면 발(위 1px Mist, 그 화면의 주 행동).
+- **Close:** Esc, `닫기`, 백드롭 클릭. 닫히면 연 버튼으로 포커스가 돌아간다. 640px 미만에서는 화면 전체 높이의 시트가 되고 모서리와 테두리가 없다.
+- **Use:** 어드민 사용자 탭의 편집, 사용자 추가, 엑셀로 회원 만들기. 갤러리 상세와 레퍼런스 추가는 아직 같은 백드롭의 `div` 대화상자다.
+
 ### Inputs / Fields
 - **Style:** slate 바탕, 1px Mist, 6px 라운드, 40px 높이(textarea는 8px 12px, 1.625 행간), 흰 글자, subtle 플레이스홀더. 체크박스 16px, range 44px 높이(accent-color 흰색).
 - **Focus:** 테두리 흰색 60%, focus-visible에 흰색 40% 2px 링. 캐럿 흰색, 선택 영역 흰색 28%.

@@ -4,7 +4,8 @@ import { useState, type ChangeEvent } from "react";
 import { INITIAL_PASSWORD } from "@/lib/credentials";
 import { MAX_IMPORT_ROWS, type ImportResponse, type ImportResult } from "@/lib/member-import";
 import { membersFromSheet, type SheetMember } from "@/lib/member-sheet";
-import { Badge, Button, Card, ErrorText } from "@/components/ui";
+import { Badge, Button, ErrorText } from "@/components/ui";
+import { Modal } from "@/components/Modal";
 import { api } from "./AdminPanels";
 
 type Checked = { file: string; members: SheetMember[]; results: ImportResult[] };
@@ -36,7 +37,7 @@ function submit(members: SheetMember[], dryRun: boolean) {
   return api<ImportResponse>("/api/admin/users/import", { method: "POST", body: JSON.stringify({ rows, dryRun }) });
 }
 
-export function MemberImport({ onCreated }: { onCreated: () => Promise<void> }) {
+export function MemberImport({ onCreated, onClose }: { onCreated: () => Promise<void>; onClose: () => void }) {
   const [phase, setPhase] = useState<Phase>({ step: "idle" });
 
   async function pick(e: ChangeEvent<HTMLInputElement>) {
@@ -86,7 +87,18 @@ export function MemberImport({ onCreated }: { onCreated: () => Promise<void> }) 
   );
 
   return (
-    <Card title="엑셀로 회원 만들기">
+    <Modal
+      title="엑셀로 회원 만들기"
+      size="lg"
+      onClose={onClose}
+      footer={
+        phase.step === "preview" ? (
+          <PreviewActions checked={phase} error={phase.error} onCreate={() => create(phase)} onCancel={() => setPhase({ step: "idle" })} />
+        ) : (
+          picker(phase.step === "idle" || busy ? "엑셀 파일 고르기" : "다른 파일 고르기")
+        )
+      }
+    >
       <div className="space-y-4 text-sm">
         <p className="break-keep text-xs leading-relaxed text-muted">
           첫 시트에서 처음 채워진 줄을 제목으로 읽습니다. 이메일이 로그인 ID가 되고, 초기 비밀번호 <span className="font-mono text-foreground-2">{INITIAL_PASSWORD}</span>로 첫 로그인 때 새 비밀번호를 정합니다.
@@ -105,14 +117,8 @@ export function MemberImport({ onCreated }: { onCreated: () => Promise<void> }) 
           </div>
         )}
         {(phase.step === "preview" || phase.step === "done") && <Results checked={phase} />}
-
-        {phase.step === "preview" ? (
-          <PreviewActions checked={phase} error={phase.error} onCreate={() => create(phase)} onCancel={() => setPhase({ step: "idle" })} />
-        ) : (
-          picker(phase.step === "idle" || busy ? "엑셀 파일 고르기" : "다른 파일 고르기")
-        )}
       </div>
-    </Card>
+    </Modal>
   );
 }
 
@@ -187,7 +193,7 @@ function Results({ checked }: { checked: Checked & { step: "preview" | "done" } 
             </Badge>
           ))}
       </div>
-      <ul aria-label="행별 결과" className="max-h-80 divide-y divide-border overflow-y-auto rounded-md border border-border">
+      <ul aria-label="행별 결과" className="divide-y divide-border rounded-md border border-border">
         {rows.map(({ member, result }) => {
           const id = "username" in result ? result.username : member.email.trim() || "이메일 없음";
           return (

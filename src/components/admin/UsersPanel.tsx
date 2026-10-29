@@ -1,77 +1,105 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useId, useState, type FormEvent } from "react";
 import type { UserUsageRow } from "@/lib/stats";
-import { INITIAL_PASSWORD } from "@/lib/credentials";
+import { INITIAL_PASSWORD, loginId } from "@/lib/credentials";
 import { MAX_NICKNAME_LENGTH } from "@/lib/nickname";
 import { usd, fmtDate } from "@/lib/format";
-import { Badge, Button, Card, Field, Input, Select, Empty } from "@/components/ui";
+import { Badge, Button, Card, Field, Input, Select, Empty, ErrorText } from "@/components/ui";
+import { Modal } from "@/components/Modal";
 import { api } from "./AdminPanels";
 import { MemberImport } from "./MemberImport";
 
 type Detail = { id: number; username: string; nickname: string | null; role: string; active: boolean; note: string | null; apiKeyMasked: string | null; lockedUntil: string | null; failedAttempts: number; mustChangePassword: boolean };
 
+type Draft = { username: string; password: string; role: string; apiKey: string; note: string };
+
+type Editing = { kind: "edit"; member: Detail; error: string | null };
+
+type Open = { kind: "add"; busy: boolean; error: string | null } | { kind: "import" } | Editing;
+
+const EMPTY: Draft = { username: "", password: "", role: "user", apiKey: "", note: "" };
+
 const TEMPORARY_TONE = "bg-zinc-500/15 text-foreground-2 ring-zinc-500/30";
+
+function message(e: unknown) {
+  return e instanceof Error ? e.message : String(e);
+}
 
 export function UsersPanel({ adminId }: { adminId: number }) {
   const [rows, setRows] = useState<UserUsageRow[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [selected, setSelected] = useState<Detail | null>(null);
-  const [form, setForm] = useState({ username: "", password: "", role: "user", apiKey: "", note: "" });
-  const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState<Open | null>(null);
+  const [draft, setDraft] = useState<Draft>(EMPTY);
+  const [added, setAdded] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
       const b = await api<{ items: UserUsageRow[] }>("/api/admin/users");
       setRows(b.items);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(message(e));
     }
   }, []);
   useEffect(() => {
     api<{ items: UserUsageRow[] }>("/api/admin/users")
       .then((b) => setRows(b.items))
-      .catch((e) => setError(e instanceof Error ? e.message : String(e)));
+      .catch((e) => setError(message(e)));
   }, []);
+
+  function show(next: Open) {
+    setAdded(null);
+    setOpen(next);
+  }
+  const close = () => setOpen(null);
 
   async function create(e: FormEvent) {
     e.preventDefault();
-    setBusy(true);
-    setError(null);
+    setOpen({ kind: "add", busy: true, error: null });
     try {
-      await api("/api/admin/users", { method: "POST", body: JSON.stringify(form) });
-      setForm({ username: "", password: "", role: "user", apiKey: "", note: "" });
+      await api("/api/admin/users", { method: "POST", body: JSON.stringify(draft) });
+      setAdded(loginId(draft.username));
+      setDraft(EMPTY);
+      setOpen((o) => (o?.kind === "add" ? null : o));
       await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
+    } catch (err) {
+      setOpen((o) => (o?.kind === "add" ? { kind: "add", busy: false, error: message(err) } : o));
     }
   }
 
-  async function openDetail(id: number) {
+  async function edit(id: number) {
     try {
-      setSelected(await api<Detail>(`/api/admin/users/${id}`));
+      show({ kind: "edit", member: await api<Detail>(`/api/admin/users/${id}`), error: null });
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(message(e));
     }
   }
 
   async function patch(id: number, body: Record<string, unknown>) {
-    setError(null);
+    const update = (change: (o: Editing) => Editing) => setOpen((o) => (o?.kind === "edit" && o.member.id === id ? change(o) : o));
+    update((o) => ({ ...o, error: null }));
     try {
       await api(`/api/admin/users/${id}`, { method: "PATCH", body: JSON.stringify(body) });
       await load();
-      if (selected?.id === id) await openDetail(id);
+      const member = await api<Detail>(`/api/admin/users/${id}`);
+      update((o) => ({ ...o, member }));
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      update((o) => ({ ...o, error: message(e) }));
     }
   }
 
+  const toolbar = (
+    <div className="flex flex-wrap justify-end gap-2">
+      <Button size="sm" variant="outline" className="h-11 sm:h-9" aria-haspopup="dialog" onClick={() => show({ kind: "import" })}>엑셀로 회원 만들기</Button>
+      <Button size="sm" className="h-11 sm:h-9" aria-haspopup="dialog" onClick={() => show({ kind: "add", busy: false, error: null })}>사용자 추가</Button>
+    </div>
+  );
+
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-      <Card title={`사용자 ${rows.length}명`}>
+    <>
+      <Card title={`사용자 ${rows.length}명`} action={toolbar}>
         {error && <p className="mb-3 rounded-lg bg-rose-500/10 px-3 py-2 text-sm text-rose-300">{error}</p>}
+        {added && <p role="status" className="mb-3 break-all text-sm text-foreground-2">{added} 계정을 추가했습니다.</p>}
         {rows.length === 0 ? (
           <Empty>사용자가 없습니다.</Empty>
         ) : (
@@ -91,8 +119,22 @@ export function UsersPanel({ adminId }: { adminId: number }) {
               </thead>
               <tbody className="divide-y divide-border">
                 {rows.map((r) => (
-                  <tr key={r.id} onClick={() => openDetail(r.id)} className={`cursor-pointer hover:bg-white/5 ${selected?.id === r.id ? "bg-white/5" : ""}`}>
-                    <td className="py-2 pr-3 text-foreground">{r.username}{r.note && <span className="ml-2 text-xs text-subtle">{r.note}</span>}</td>
+                  <tr
+                    key={r.id}
+                    // The whole row is the pointer target. The ID button is the keyboard one and where focus returns when the editor closes.
+                    onClick={(e) => {
+                      e.currentTarget.querySelector("button")?.focus();
+                      edit(r.id);
+                    }}
+                    className="cursor-pointer hover:bg-white/5"
+                  >
+                    <td className="py-2 pr-3 text-foreground">
+                      <button type="button" aria-haspopup="dialog" className="text-left underline-offset-4 hover:underline">
+                        {r.username}
+                        <span className="sr-only"> 편집</span>
+                      </button>
+                      {r.note && <span className="ml-2 text-xs text-subtle">{r.note}</span>}
+                    </td>
                     <td className="whitespace-nowrap py-2 pr-3 text-foreground-2">{r.nickname ?? <span className="text-subtle">—</span>}</td>
                     <td className="py-2 pr-3 text-muted">{r.role}</td>
                     <td className="py-2 pr-3">{r.hasApiKey ? <span className="text-emerald-300">할당</span> : <span className="text-amber-300">없음</span>}</td>
@@ -111,60 +153,72 @@ export function UsersPanel({ adminId }: { adminId: number }) {
         )}
       </Card>
 
-      <div className="space-y-6">
-        {selected && (
-          <Card key={selected.id} title={`${selected.username} 편집`} action={<button className="text-xs text-subtle hover:text-foreground" onClick={() => setSelected(null)}>닫기</button>}>
-            <div className="space-y-3 text-sm">
-              <NicknameForm current={selected.nickname} onSave={(n) => patch(selected.id, { nickname: n })} />
-              <div className="flex items-center justify-between">
-                <span className="text-muted">API 키</span>
-                <span className="font-mono text-foreground-2">{selected.apiKeyMasked ?? "없음"}</span>
-              </div>
-              <ApiKeyForm onSave={(k) => patch(selected.id, { apiKey: k })} onClear={() => patch(selected.id, { apiKey: null })} hasKey={Boolean(selected.apiKeyMasked)} />
-              <PasswordForm temporary={selected.id !== adminId} onSave={(p) => patch(selected.id, { password: p })} />
-              {selected.id !== adminId && <ResetToInitial onReset={() => patch(selected.id, { password: INITIAL_PASSWORD })} />}
-              {selected.mustChangePassword && (
-                <p className="text-xs text-muted">임시 비밀번호 상태입니다. 다음 로그인 때 새 비밀번호를 정해야 들어올 수 있습니다.</p>
-              )}
-              <div className="grid grid-cols-2 gap-2 pt-2">
-                <Select value={selected.role} onChange={(e) => patch(selected.id, { role: e.target.value })} disabled={selected.id === adminId}>
-                  <option value="user">user</option>
-                  <option value="admin">admin</option>
-                </Select>
-                <Button variant={selected.active ? "outline" : "primary"} onClick={() => patch(selected.id, { active: !selected.active })} disabled={selected.id === adminId}>
-                  {selected.active ? "비활성화" : "활성화"}
-                </Button>
-              </div>
-              {(selected.failedAttempts > 0 || selected.lockedUntil) && (
-                <Button variant="ghost" size="sm" onClick={() => patch(selected.id, { unlock: true })}>
-                  잠금 해제 (실패 {selected.failedAttempts}회{selected.lockedUntil ? `, ${fmtDate(selected.lockedUntil)}까지 잠김` : ""})
-                </Button>
-              )}
-            </div>
-          </Card>
+      {open?.kind === "add" && <AddMember draft={draft} onChange={setDraft} busy={open.busy} error={open.error} onSubmit={create} onClose={close} />}
+      {open?.kind === "import" && <MemberImport onCreated={load} onClose={close} />}
+      {open?.kind === "edit" && <MemberEditor key={open.member.id} member={open.member} error={open.error} adminId={adminId} onPatch={(body) => patch(open.member.id, body)} onClose={close} />}
+    </>
+  );
+}
+
+function AddMember({ draft, onChange, busy, error, onSubmit, onClose }: { draft: Draft; onChange: (d: Draft) => void; busy: boolean; error: string | null; onSubmit: (e: FormEvent) => void; onClose: () => void }) {
+  const formId = useId();
+  return (
+    <Modal
+      title="사용자 추가"
+      onClose={onClose}
+      footer={<Button type="submit" form={formId} className="h-11 w-full sm:h-10" disabled={busy}>{busy ? "추가 중…" : "추가"}</Button>}
+    >
+      <form id={formId} onSubmit={onSubmit} className="space-y-3">
+        {error && <ErrorText>{error}</ErrorText>}
+        <Field label="ID"><Input data-autofocus value={draft.username} onChange={(e) => onChange({ ...draft, username: e.target.value })} required /></Field>
+        <Field label="임시 비밀번호" hint="8자 이상 · 첫 로그인 때 바꾸게 함"><Input type="text" value={draft.password} onChange={(e) => onChange({ ...draft, password: e.target.value })} required /></Field>
+        <Field label="Higgsfield API 키" hint="key-id:key-secret · 나중에 넣어도 됨"><Input value={draft.apiKey} onChange={(e) => onChange({ ...draft, apiKey: e.target.value })} placeholder="선택" /></Field>
+        <div className="grid grid-cols-2 gap-2">
+          <Field label="역할">
+            <Select value={draft.role} onChange={(e) => onChange({ ...draft, role: e.target.value })}>
+              <option value="user">user</option>
+              <option value="admin">admin</option>
+            </Select>
+          </Field>
+          <Field label="메모"><Input value={draft.note} onChange={(e) => onChange({ ...draft, note: e.target.value })} placeholder="선택" /></Field>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function MemberEditor({ member, error, adminId, onPatch, onClose }: { member: Detail; error: string | null; adminId: number; onPatch: (body: Record<string, unknown>) => Promise<void>; onClose: () => void }) {
+  return (
+    <Modal title={`${member.username} 편집`} onClose={onClose}>
+      <div className="space-y-3 text-sm">
+        {error && <ErrorText>{error}</ErrorText>}
+        <NicknameForm current={member.nickname} onSave={(n) => onPatch({ nickname: n })} />
+        <div className="flex items-center justify-between">
+          <span className="text-muted">API 키</span>
+          <span className="font-mono text-foreground-2">{member.apiKeyMasked ?? "없음"}</span>
+        </div>
+        <ApiKeyForm onSave={(k) => onPatch({ apiKey: k })} onClear={() => onPatch({ apiKey: null })} hasKey={Boolean(member.apiKeyMasked)} />
+        <PasswordForm temporary={member.id !== adminId} onSave={(p) => onPatch({ password: p })} />
+        {member.id !== adminId && <ResetToInitial onReset={() => onPatch({ password: INITIAL_PASSWORD })} />}
+        {member.mustChangePassword && (
+          <p className="text-xs text-muted">임시 비밀번호 상태입니다. 다음 로그인 때 새 비밀번호를 정해야 들어올 수 있습니다.</p>
         )}
-
-        <Card title="사용자 추가">
-          <form onSubmit={create} className="space-y-3">
-            <Field label="ID"><Input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} required /></Field>
-            <Field label="임시 비밀번호" hint="8자 이상 · 첫 로그인 때 바꾸게 함"><Input type="text" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required /></Field>
-            <Field label="Higgsfield API 키" hint="key-id:key-secret · 나중에 넣어도 됨"><Input value={form.apiKey} onChange={(e) => setForm({ ...form, apiKey: e.target.value })} placeholder="선택" /></Field>
-            <div className="grid grid-cols-2 gap-2">
-              <Field label="역할">
-                <Select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-                  <option value="user">user</option>
-                  <option value="admin">admin</option>
-                </Select>
-              </Field>
-              <Field label="메모"><Input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="선택" /></Field>
-            </div>
-            <Button type="submit" className="w-full" disabled={busy}>{busy ? "추가 중…" : "추가"}</Button>
-          </form>
-        </Card>
-
-        <MemberImport onCreated={load} />
+        <div className="grid grid-cols-2 gap-2 pt-2">
+          <Select value={member.role} onChange={(e) => onPatch({ role: e.target.value })} disabled={member.id === adminId}>
+            <option value="user">user</option>
+            <option value="admin">admin</option>
+          </Select>
+          <Button variant={member.active ? "outline" : "primary"} onClick={() => onPatch({ active: !member.active })} disabled={member.id === adminId}>
+            {member.active ? "비활성화" : "활성화"}
+          </Button>
+        </div>
+        {(member.failedAttempts > 0 || member.lockedUntil) && (
+          <Button variant="ghost" size="sm" onClick={() => onPatch({ unlock: true })}>
+            잠금 해제 (실패 {member.failedAttempts}회{member.lockedUntil ? `, ${fmtDate(member.lockedUntil)}까지 잠김` : ""})
+          </Button>
+        )}
       </div>
-    </div>
+    </Modal>
   );
 }
 
