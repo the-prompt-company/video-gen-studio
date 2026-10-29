@@ -7,7 +7,7 @@ export function UsageChart({ rows }: { rows: { day: string; count: number; costU
     <div>
       <div className="flex h-40 items-end gap-1">
         {rows.map((r) => (
-          <div key={r.day} className="group relative flex-1">
+          <div key={r.day} className="group relative flex h-full flex-1 flex-col justify-end">
             <div
               className="w-full rounded-t bg-sand/80 transition group-hover:bg-sand"
               style={{ height: `${Math.max(4, (r.costUsd / max) * 100)}%` }}

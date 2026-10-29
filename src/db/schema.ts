@@ -13,6 +13,7 @@ import {
   check,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
+import type { WireBody } from "../lib/catalog";
 import { GENERATION_STATUSES } from "../lib/generation-status";
 import type { RequestId } from "../lib/higgsfield";
 import type { ObjectKey } from "../lib/storage";
@@ -64,6 +65,11 @@ export const generations = pgTable(
     modelId: text("model_id").notNull(),
     prompt: text("prompt").notNull().default(""),
     params: jsonb("params").$type<Record<string, unknown>>().notNull().default({}),
+    /**
+     * The exact JSON text the first submit sent to model_id, written once at insert. Every resend sends these bytes, so
+     * a later deploy cannot change what a row Higgsfield may already hold asks for. Null on rows inserted before 0007.
+     */
+    requestBody: text("request_body").$type<WireBody>(),
     imageRefs: jsonb("image_refs").$type<string[]>().notNull().default([]),
     videoRefs: jsonb("video_refs").$type<string[]>().notNull().default([]),
     status: text("status", { enum: GENERATION_STATUSES }).notNull().default("pending"),

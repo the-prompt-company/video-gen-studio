@@ -111,23 +111,36 @@ export default async function admin({ page, ev, creds }) {
   await page.getByRole("button", { name: "모델 · 단가" }).click();
   const before = await ev.api("/api/admin/models");
   if (before.status !== 200 || !Array.isArray(before.body?.items)) ev.fail(`/api/admin/models returned ${before.status}`);
-  const target = before.body.items.find((m) => /hailuo/i.test(m.modelId)) ?? before.body.items[0];
-  if (!target) ev.fail("no model rows in admin");
+  const ids = before.body.items.map((m) => m.modelId);
+  if (ids.join(",") !== "bytedance/seedance-2.0,minimax/h3") ev.fail(`the 모델 tab should list exactly Seedance 2.0 and MiniMax H3, got ${ids.join(", ")}`);
+  for (const [id, unit] of [["bytedance/seedance-2.0", "480p·16:9 기준 초당 USD"], ["minimax/h3", "2K 기준 초당 USD"]]) {
+    const row = page.getByRole("listitem").filter({ hasText: id });
+    if (!(await row.getByText(unit).isVisible())) ev.fail(`${id} row does not say what its rate means (${unit})`);
+  }
+  ev.note("adm-rate-meaning: Seedance reads 480p·16:9 기준 초당 USD, H3 reads 2K 기준 초당 USD");
+  const target = before.body.items.find((m) => m.modelId === "minimax/h3");
   const original = Number(target.pricePerSecUsd);
-  const probe = Number((original + 0.0001).toFixed(4));
-  const rowEl = page.getByRole("row").filter({ hasText: target.modelId });
+  const rowEl = page.getByRole("listitem").filter({ hasText: target.modelId });
   await rowEl.waitFor({ timeout: 10_000 });
   const input = rowEl.getByRole("spinbutton");
   const save = rowEl.getByRole("button", { name: "저장" });
   const stored = async () => Number((await ev.api("/api/admin/models")).body?.items?.find((m) => m.modelId === target.modelId)?.pricePerSecUsd);
   try {
     await until(async () => loads.size === 0 && (await input.inputValue()) === String(original), `the price field never settled on the stored ${original}`);
-    await input.fill(String(probe));
-    if ((await input.inputValue()) !== String(probe)) ev.fail("the typed price was reset before 저장");
-    if (!(await save.isEnabled())) ev.fail("저장 stayed disabled after editing the price");
+    const fills = rowEl.getByRole("button", { name: /로 채우기$/ });
+    const published = await fills.evaluateAll((els) => els.map((el) => ({ name: el.getAttribute("aria-label"), rate: Number(/([\d.]+)로 채우기$/.exec(el.getAttribute("aria-label") ?? "")?.[1]) })));
+    const differing = published.find((p) => p.rate !== original);
+    if (!differing) ev.fail(`H3 offers no published rate other than the stored ${original} to fill`);
+    const probe = differing.rate;
+    await rowEl.getByRole("button", { name: differing.name, exact: true }).click();
+    if ((await input.inputValue()) !== String(probe)) ev.fail(`the published-rate chip filled ${await input.inputValue()}, wanted ${probe}`);
+    const example = await rowEl.getByText(/^예: 10초 \$/).textContent();
+    const cost = probe * 10;
+    if (example?.trim() !== `예: 10초 $${cost.toFixed(cost >= 1 ? 2 : 4)}`) ev.fail(`the example cost should follow the typed rate: ${example}`);
+    if (!(await save.isEnabled())) ev.fail("저장 stayed disabled after filling the price");
     await save.click();
     await until(async () => (await stored()) === probe, async () => `price save did not persist: wanted ${probe}, server has ${await stored()}`);
-    ev.note(`price round-trip on ${target.modelId}: ${original} → ${probe} (persisted)`);
+    ev.note(`price round-trip on ${target.modelId}: ${original} → ${probe} by the published-rate chip (persisted); ${example}`);
     await ev.shot("price-saved");
   } finally {
     const restore = await ev.api("/api/admin/models", { method: "PATCH", body: JSON.stringify({ modelId: target.modelId, pricePerSecUsd: original }) });

@@ -3,17 +3,30 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import type { ModelSpec, ParamSpec } from "@/lib/catalog";
-import { defaultParams } from "@/lib/catalog";
+import {
+  defaultParams,
+  describeModel,
+  FAMILIES,
+  MODE_LABEL,
+  MODES,
+  modelLine,
+  paramsFor,
+  planGeneration,
+  routeMode,
+  type Draft,
+  type FamilyId,
+  type Mode,
+  type ParamSpec,
+} from "@/lib/catalog";
 import type { PublicGeneration } from "@/lib/generations";
-import { usd, shortModel } from "@/lib/format";
+import { usd } from "@/lib/format";
 import { isLive, STATUS_LABEL } from "@/lib/generation-status";
 import { refUploadName } from "@/lib/ref-name";
 import { Button, ErrorText, Field, Input, Select, Textarea } from "@/components/ui";
 import { StatusBadge } from "@/components/StatusBadge";
 
-type ModelWithPrice = ModelSpec & { pricePerSecUsd: number };
-type Ref = { id: string; url: string; name: string; kind: "image" | "video"; local?: string; w?: number; h?: number };
+type Offer = { family: FamilyId; rateUsd: number };
+type Ref = { id: string; url: string; name: string; kind: "image" | "video"; local?: string; w?: number; h?: number; seconds?: number };
 type FeedAnswer = { items?: PublicGeneration[]; now?: number };
 
 const ASPECT_LABEL: Record<string, string> = {
@@ -23,8 +36,15 @@ const ASPECT_LABEL: Record<string, string> = {
   "9:16": "세로 9:16",
   "3:4": "세로 3:4",
   "1:1": "정사각 1:1",
-  adaptive: "레퍼런스 따라감",
+  auto: "자동",
 };
+
+function modeSentence(mode: Mode, images: number, videos: number) {
+  if (mode === "t2v") return "레퍼런스 없이 프롬프트만으로 만듭니다.";
+  if (mode === "i2v") return "1번 이미지를 첫 프레임으로 씁니다.";
+  const parts = [images > 0 && `이미지 ${images}장`, videos > 0 && `영상 ${videos}개`].filter(Boolean);
+  return `${parts.join(" · ")}를 레퍼런스로 씁니다.`;
+}
 
 function orientation(w?: number, h?: number) {
   if (!w || !h) return null;
@@ -42,9 +62,26 @@ function readImageSize(file: File): Promise<{ w: number; h: number } | null> {
   });
 }
 
+function readVideoSeconds(file: File): Promise<number | null> {
+  return new Promise((resolve) => {
+    const v = document.createElement("video");
+    const url = URL.createObjectURL(file);
+    let settled = false;
+    const done = (s: number | null) => {
+      if (settled) return;
+      settled = true;
+      URL.revokeObjectURL(url);
+      resolve(s);
+    };
+    v.preload = "metadata";
+    v.onloadedmetadata = () => done(Number.isFinite(v.duration) && v.duration > 0 ? v.duration : null);
+    v.onerror = () => done(null);
+    window.setTimeout(() => done(null), 10_000);
+    v.src = url;
+  });
+}
+
 const SMALL = 4 * 1024 * 1024;
-const MAX_IMAGES = 6;
-const MAX_VIDEOS = 3;
 const FEED_LIMIT = 12;
 const POLL_FIRST_MS = 2000;
 const POLL_MAX_MS = 10000;
@@ -80,13 +117,12 @@ function prefersReducedMotion() {
 
 function ParamInput({ spec, value, onChange }: { spec: ParamSpec; value: unknown; onChange: (v: unknown) => void }) {
   switch (spec.type) {
-    case "int":
-    case "float": {
+    case "int": {
       const isRange = spec.max - spec.min <= 100;
       return (
         <Field label={spec.label} hint={isRange ? String(value) : `${spec.min}~${spec.max}`}>
           {isRange ? (
-            <input type="range" min={spec.min} max={spec.max} step={spec.type === "float" ? spec.step : 1} value={Number(value)} onChange={(e) => onChange(Number(e.target.value))} className="w-full" />
+            <input type="range" min={spec.min} max={spec.max} step={1} value={Number(value)} onChange={(e) => onChange(Number(e.target.value))} className="w-full" />
           ) : (
             <Input type="number" min={spec.min} max={spec.max} value={String(value)} onChange={(e) => onChange(e.target.value)} />
           )}
@@ -108,12 +144,6 @@ function ParamInput({ spec, value, onChange }: { spec: ParamSpec; value: unknown
               <option key={o} value={o}>{o}</option>
             ))}
           </Select>
-        </Field>
-      );
-    case "text":
-      return (
-        <Field label={spec.label} hint={spec.optional ? "선택" : undefined}>
-          <Input value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} />
         </Field>
       );
   }
@@ -203,9 +233,10 @@ function FeedItem({ g, index, total, active, now, modelName }: { g: PublicGenera
       <div className={`pointer-events-none shrink-0 bg-surface px-4 pb-4 pt-3 lg:scrim lg:absolute lg:inset-x-0 lg:bottom-0 lg:z-10 lg:bg-transparent lg:px-5 lg:pt-24 ${g.status === "completed" && active ? "lg:pb-16" : "lg:pb-5"}`}>
         <div className="text-xs text-muted">
           <span className="text-foreground-2">{modelName}</span>
-          <span className="font-display ml-2 text-sm text-sand">{g.durationS}S · {usd(g.costUsd)}</span>
-          {typeof (g.params as Record<string, unknown>)?.aspect_ratio === "string" && (
-            <span className="font-display ml-2 text-sm text-sand">{String((g.params as Record<string, unknown>).aspect_ratio).toUpperCase()}</span>
+          {live && <span className="ml-2">예상</span>}
+          <span className={`font-display text-sm text-sand ${live ? "ml-1" : "ml-2"}`}>{g.durationS}S · {usd(g.costUsd)}</span>
+          {/^\d+:\d+$/.test(String((g.params as Record<string, unknown>)?.aspect_ratio)) && (
+            <span className="font-display ml-2 text-sm text-sand">{String((g.params as Record<string, unknown>).aspect_ratio)}</span>
           )}
         </div>
         <div className="mt-1 flex items-center gap-2 text-sm text-foreground">
@@ -257,7 +288,8 @@ function RefThumbs({ refs, images, videos, onRemove, size = "w-28" }: { refs: Re
               <video src={r.local ?? r.url} className="h-full w-full object-contain" muted playsInline aria-label={r.name} />
             )}
             <span aria-hidden className="font-display absolute left-1.5 top-1 text-[14px] text-foreground drop-shadow">{tag}</span>
-            {r.w && r.h && <span aria-hidden className="absolute bottom-1 right-1.5 text-[10px] tabular-nums text-foreground-2 drop-shadow">{orientation(r.w, r.h)}</span>}
+            {r.w && r.h && <span aria-hidden className="absolute bottom-1 right-1.5 text-[11px] tabular-nums text-foreground-2 drop-shadow">{orientation(r.w, r.h)}</span>}
+            {r.seconds !== undefined && <span aria-hidden className="absolute bottom-1 right-1.5 text-[11px] tabular-nums text-foreground-2 drop-shadow">{r.seconds.toFixed(1)}s</span>}
             <button type="button" aria-label={`${r.kind === "image" ? "이미지" : "영상"} 레퍼런스 ${tag} ${r.name} 제거`} onClick={() => onRemove(r.id)} className="absolute inset-x-0 bottom-0 min-h-7 bg-background/80 text-[11px] text-rose-300 opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100">
               제거
             </button>
@@ -290,8 +322,8 @@ function DropZone({ kind, max, count, disabled, uploading, hint, accept, onFiles
   );
 }
 
-function RefDialog({ model, refs, images, videos, imageMax, videoMax, uploading, largeUploads, error, onAdd, onRemove, onClose }: {
-  model: ModelWithPrice; refs: Ref[]; images: Ref[]; videos: Ref[]; imageMax: number; videoMax: number; uploading: boolean; largeUploads: boolean; error: string | null;
+function RefDialog({ modelName, refs, images, videos, imageMax, videoMax, uploading, largeUploads, error, onAdd, onRemove, onClose }: {
+  modelName: string; refs: Ref[]; images: Ref[]; videos: Ref[]; imageMax: number; videoMax: number; uploading: boolean; largeUploads: boolean; error: string | null;
   onAdd: (files: FileList | null, kind: "image" | "video") => void; onRemove: (id: string) => void; onClose: () => void;
 }) {
   const panel = useRef<HTMLDivElement>(null);
@@ -301,14 +333,13 @@ function RefDialog({ model, refs, images, videos, imageMax, videoMax, uploading,
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
-  const first = images[0];
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-background/85 p-0 backdrop-blur-sm sm:items-center sm:p-4" onClick={onClose}>
       <div ref={panel} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="ref-dialog-title" className="flex max-h-[92dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-xl border border-border bg-surface focus:outline-none sm:rounded-xl" onClick={(e) => e.stopPropagation()}>
         <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-3">
           <div>
             <h2 id="ref-dialog-title" className="text-base font-semibold">레퍼런스 추가</h2>
-            <p className="text-xs text-muted">{model.name} · 이미지 최대 {imageMax}장{videoMax > 0 ? ` · 영상 최대 ${videoMax}개` : " · 영상 미지원"}</p>
+            <p className="text-xs text-muted">{modelName} · 이미지 최대 {imageMax}장 · 영상 최대 {videoMax}개 · 선택</p>
           </div>
           <Button variant="ghost" size="sm" onClick={onClose} aria-label="닫기">닫기</Button>
         </header>
@@ -316,15 +347,11 @@ function RefDialog({ model, refs, images, videos, imageMax, videoMax, uploading,
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
           <div className="grid gap-3 sm:grid-cols-2">
             <DropZone kind="image" max={imageMax} count={images.length} disabled={false} uploading={uploading} hint="jpeg · png · webp · gif · 4 MB 이하" accept="image/jpeg,image/png,image/webp,image/gif" onFiles={(f) => onAdd(f, "image")} />
-            <DropZone kind="video" max={videoMax} count={videos.length} disabled={videoMax === 0} uploading={uploading} hint={videoMax === 0 ? "" : largeUploads ? "mp4 · 최대 200 MB" : "mp4 · 4 MB 이하"} accept="video/mp4" onFiles={(f) => onAdd(f, "video")} />
+            <DropZone kind="video" max={videoMax} count={videos.length} disabled={false} uploading={uploading} hint={largeUploads ? "mp4 · 최대 200 MB" : "mp4 · 4 MB 이하"} accept="video/mp4" onFiles={(f) => onAdd(f, "video")} />
           </div>
 
           <p className="text-xs leading-relaxed text-muted">
-            {model.images.field === "image_url" ? (
-              <>이 모델은 1번 이미지를 첫 프레임, 2번 이미지를 마지막 프레임으로 씁니다. 화면비 옵션이 없어 영상은 1번 이미지의 비율을 따릅니다{first?.w && first.h ? <>: 지금은 <span className="font-medium text-foreground">{orientation(first.w, first.h)}</span>({first.w}×{first.h}).</> : "."}</>
-            ) : (
-              <>이미지와 영상은 올린 순서대로 번호가 붙고 그 순서로 모델에 전달됩니다. 출력 화면비는 서랍의 ‘출력 화면비’에서 따로 고릅니다.</>
-            )}
+            레퍼런스는 선택입니다. 없으면 프롬프트만으로 만들고, 이미지 한 장만 올리면 그 이미지로 시작할지 서랍에서 고릅니다. 이미지와 영상은 올린 순서대로 번호가 붙고 그 순서로 모델에 전달됩니다. 영상 레퍼런스는 길이만큼 비용에 더해질 수 있습니다.
           </p>
 
           {error && <ErrorText>{error}</ErrorText>}
@@ -347,12 +374,13 @@ function RefDialog({ model, refs, images, videos, imageMax, videoMax, uploading,
   );
 }
 
-export function Playground({ models, hasApiKey, largeUploadPrefix, galleryCount }: { models: ModelWithPrice[]; hasApiKey: boolean; largeUploadPrefix: string | null; galleryCount: number }) {
-  const [modelId, setModelId] = useState(models[0]?.id ?? "");
-  const model = useMemo(() => models.find((m) => m.id === modelId) ?? models[0], [models, modelId]);
-  const [params, setParams] = useState<Record<string, unknown>>(() => (model ? defaultParams(model) : {}));
+export function Playground({ offers, hasApiKey, largeUploadPrefix, galleryCount }: { offers: Offer[]; hasApiKey: boolean; largeUploadPrefix: string | null; galleryCount: number }) {
+  const [familyId, setFamilyId] = useState<FamilyId | null>(offers[0]?.family ?? null);
+  const offer = offers.find((o) => o.family === familyId) ?? offers[0];
+  const [params, setParams] = useState<Record<string, unknown>>(() => (offer ? { ...defaultParams(offer.family) } : {}));
   const [prompt, setPrompt] = useState("");
   const [refs, setRefs] = useState<Ref[]>([]);
+  const [startFromImage, setStartFromImage] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -469,26 +497,40 @@ export function Playground({ models, hasApiKey, largeUploadPrefix, galleryCount 
   const active = items.find((i) => i.id === activeId) ?? items[0] ?? null;
   const images = refs.filter((r) => r.kind === "image");
   const videos = refs.filter((r) => r.kind === "video");
-  const imageMax = model ? Math.min(MAX_IMAGES, model.images.max) : 0;
-  const videoMax = model?.videos ? Math.min(MAX_VIDEOS, model.videos.max) : 0;
-  const duration = Number(params[model?.durationKey ?? "duration"] ?? 0);
-  const estimate = (model?.pricePerSecUsd ?? 0) * duration;
+  const family = offer ? FAMILIES[offer.family] : null;
+  const imageMax = family?.maxImages ?? 0;
+  const videoMax = family?.maxVideos ?? 0;
+  const mode = routeMode(images.length, videos.length, startFromImage);
+  const draft: Draft | null = offer
+    ? {
+        family: offer.family,
+        mode,
+        prompt,
+        params,
+        images: images.map((r) => r.url),
+        videos: videos.map((r) => ({ url: r.url, seconds: r.seconds ?? 0 })),
+        startFromImage,
+      }
+    : null;
+  const plan = draft && offer ? planGeneration(draft, offer.rateUsd) : null;
 
   async function addFiles(files: FileList | null, kind: "image" | "video") {
-    if (!files || !model) return;
+    if (!files || !family) return;
     const room = kind === "image" ? imageMax - images.length : videoMax - videos.length;
     const picked = Array.from(files).slice(0, Math.max(0, room));
     if (picked.length === 0) {
-      setError(kind === "image" ? `이미지는 최대 ${imageMax}장` : videoMax === 0 ? "이 모델은 영상 레퍼런스를 받지 않습니다" : `영상은 최대 ${videoMax}개`);
+      setError(kind === "image" ? `이미지는 최대 ${imageMax}장` : `영상은 최대 ${videoMax}개`);
       return;
     }
     setUploading(true);
     setError(null);
     try {
       for (const f of picked) {
+        const seconds = kind === "video" ? await readVideoSeconds(f) : undefined;
+        if (seconds === null) throw new Error(`${f.name}: 영상 길이를 읽지 못했습니다. 다른 mp4로 올려 주세요`);
         const url = await uploadFile(f, largeUploadPrefix);
         const size = kind === "image" ? await readImageSize(f) : null;
-        setRefs((r) => [...r, { id: crypto.randomUUID(), url, name: f.name, kind, local: URL.createObjectURL(f), w: size?.w, h: size?.h }]);
+        setRefs((r) => [...r, { id: crypto.randomUUID(), url, name: f.name, kind, local: URL.createObjectURL(f), w: size?.w, h: size?.h, seconds }]);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -498,14 +540,15 @@ export function Playground({ models, hasApiKey, largeUploadPrefix, galleryCount 
   }
 
   async function generate() {
-    if (!model) return;
+    if (!draft || !plan) return;
+    if (!plan.ready) return setError(plan.blocker);
     setSubmitting(true);
     setError(null);
     try {
       const res = await fetch("/api/generations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ modelId: model.id, prompt, params, imageUrls: images.map((r) => r.url), videoUrls: videos.map((r) => r.url) }),
+        body: JSON.stringify(draft),
       });
       const body = (await res.json().catch(() => ({}))) as { item?: PublicGeneration; error?: string };
       const item = body.item;
@@ -538,29 +581,45 @@ export function Playground({ models, hasApiKey, largeUploadPrefix, galleryCount 
     }
   }
 
+  function pickFamily(next: FamilyId) {
+    setFamilyId(next);
+    setParams({ ...defaultParams(next) });
+    setError(null);
+  }
+
   function reuse(g: PublicGeneration) {
-    const m = models.find((x) => x.id === g.modelId) ?? model;
-    if (!m) return;
-    setModelId(m.id);
-    setParams({ ...defaultParams(m), ...((g.params as Record<string, unknown>) ?? {}) });
+    const m = describeModel(g.modelId);
+    const next = m.family && offers.some((o) => o.family === m.family) ? m.family : offer?.family;
+    if (!next) return;
+    setFamilyId(next);
+    setParams({ ...defaultParams(next), ...(m.family === next ? (g.params as Record<string, unknown>) : {}) });
+    setStartFromImage(m.mode === "i2v");
     setPrompt(g.prompt ?? "");
     setRefs([]);
     setError(null);
     document.getElementById("prompt")?.focus();
   }
 
-  if (!model) return <div className="p-8 text-center text-sm text-subtle">사용할 수 있는 모델이 없습니다. 관리자에게 문의하세요.</div>;
+  if (!offer || !family || !plan) return <div className="p-8 text-center text-sm text-subtle">사용할 수 있는 모델이 없습니다. 관리자에게 문의하세요.</div>;
 
-  const aspectSpec = model.params.find((p): p is Extract<ParamSpec, { type: "enum" }> => p.key === "aspect_ratio" && p.type === "enum");
+  const specs = paramsFor(family.id, mode);
+  const aspectSpec = specs.find((p): p is Extract<ParamSpec, { type: "enum" }> => p.key === "aspect_ratio" && p.type === "enum");
   const firstImage = images[0];
   const currentAspect: [number?, number?] = (() => {
-    const v = aspectSpec ? String(params[aspectSpec.key]) : "";
-    const m = /^(\d+):(\d+)$/.exec(v);
-    if (m) return [Number(m[1]), Number(m[2])];
-    if (v === "adaptive" && firstImage?.w && firstImage.h) return [firstImage.w, firstImage.h];
-    return [undefined, undefined];
+    const m = /^(\d+):(\d+)$/.exec(aspectSpec ? String(params[aspectSpec.key]) : "");
+    return m ? [Number(m[1]), Number(m[2])] : [undefined, undefined];
   })();
-  const canGenerate = hasApiKey && !submitting && !uploading;
+  const priced = offer.rateUsd > 0;
+  const inputVideoS = mode === "r2v" ? videos.reduce((s, r) => s + (r.seconds ?? 0), 0) : 0;
+  const estimateNote = [
+    `${plan.durationS}s`,
+    typeof plan.params.resolution === "string" ? plan.params.resolution : null,
+    inputVideoS > 0 && family.id === "bytedance/seedance-2.0" ? `입력 영상 ${inputVideoS.toFixed(1)}s` : null,
+    `단가 ${usd(offer.rateUsd)}/s`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const canGenerate = hasApiKey && !submitting && !uploading && plan.ready;
   const canCancel = Boolean(active && (active.status === "pending" || active.status === "queued"));
   const activeStarted = active ? new Date(active.createdAt).getTime() : 0;
   const activeIndex = active ? items.findIndex((i) => i.id === active.id) : -1;
@@ -595,7 +654,7 @@ export function Playground({ models, hasApiKey, largeUploadPrefix, galleryCount 
               )}
             </div>
           ) : (
-            items.map((g, i) => <FeedItem key={g.id} g={g} index={i} total={items.length} active={g.id === active?.id} now={now} modelName={models.find((m) => m.id === g.modelId)?.name ?? shortModel(g.modelId)} />)
+            items.map((g, i) => <FeedItem key={g.id} g={g} index={i} total={items.length} active={g.id === active?.id} now={now} modelName={modelLine(g.modelId)} />)
           )}
         </div>
         <div aria-label="결과 동작" className="flex shrink-0 items-center justify-center gap-3 border-t border-border px-2 py-3 sm:gap-5 lg:w-24 lg:flex-col lg:gap-4 lg:border-t-0 lg:border-l lg:py-4">
@@ -614,7 +673,7 @@ export function Playground({ models, hasApiKey, largeUploadPrefix, galleryCount 
               </button>
             </div>
           )}
-          <Glyph label="생성" counter={model.pricePerSecUsd > 0 ? usd(estimate) : "—"} icon={I.play} active={canGenerate} disabled={!canGenerate} onClick={generate} />
+          <Glyph label="생성" counter={priced && plan.ready ? usd(plan.costUsd) : "—"} icon={I.play} active={canGenerate} disabled={!canGenerate} onClick={generate} />
           <Glyph label="취소" counter={canCancel ? fmtElapsed(now - activeStarted) : "—"} icon={I.x} disabled={!canCancel} onClick={() => active && cancel(active)} />
           <Glyph label="다운로드" counter={active?.video ? "MP4" : "—"} icon={I.down} disabled={!active?.video} href={active?.video?.downloadUrl} download />
           <Glyph label="갤러리" counter={galleryTotal > 0 ? String(galleryTotal) : "—"} icon={I.grid} href="/gallery" />
@@ -646,36 +705,56 @@ export function Playground({ models, hasApiKey, largeUploadPrefix, galleryCount 
               <span className="text-xs tabular-nums text-muted">
                 이미지 {images.length}/{imageMax}
                 <span className="mx-1.5 text-subtle">·</span>
-                영상 {videoMax === 0 ? "미지원" : `${videos.length}/${videoMax}`}
+                영상 {videos.length}/{videoMax}
+                <span className="mx-1.5 text-subtle">·</span>
+                <span className="text-subtle">선택</span>
               </span>
             </div>
             {refs.length > 0 && <RefThumbs refs={refs} images={images} videos={videos} onRemove={(id) => setRefs((list) => list.filter((x) => x.id !== id))} />}
+            {plan.offersStartFromImage && (
+              <label className="flex min-h-11 items-center gap-2 text-sm text-foreground-2 lg:min-h-10">
+                <input type="checkbox" checked={startFromImage} onChange={(e) => setStartFromImage(e.target.checked)} className="h-4 w-4" />
+                이 이미지로 시작
+                <span className="text-xs text-subtle">1번 이미지를 첫 프레임으로</span>
+              </label>
+            )}
+            <div className="space-y-1.5">
+              <div className="text-xs font-medium text-muted">생성 방식</div>
+              <ol aria-label="생성 방식" className="flex flex-wrap gap-1.5">
+                {MODES.map((m) => (
+                  <li
+                    key={m}
+                    aria-current={m === mode ? "step" : undefined}
+                    className={`inline-flex min-h-8 items-center rounded-full px-3 text-xs ${m === mode ? "bg-foreground font-medium text-background" : "text-subtle"}`}
+                  >
+                    {MODE_LABEL[m]}
+                  </li>
+                ))}
+              </ol>
+              <p aria-live="polite" className="text-xs text-muted">{modeSentence(mode, images.length, videos.length)}</p>
+            </div>
           </section>
 
           <section className="space-y-3">
             <h2 className="text-xs font-semibold tracking-wider text-muted">2 · 모델과 하이퍼파라미터</h2>
-            <Field label="모델" hint={model.pricePerSecUsd > 0 ? `${usd(model.pricePerSecUsd)}/s` : "단가 미설정"}>
+            <Field label="모델" hint={priced ? `${family.rate.basis} 기준 ${usd(offer.rateUsd)}/s` : "단가 미설정"}>
               <Select
-                value={model.id}
+                value={family.id}
                 onChange={(e) => {
-                  const m = models.find((x) => x.id === e.target.value);
-                  if (!m) return;
-                  setModelId(m.id);
-                  setParams(defaultParams(m));
-                  setRefs([]);
-                  setError(null);
+                  const next = offers.find((o) => o.family === e.target.value);
+                  if (next) pickFamily(next.family);
                 }}
               >
-                {models.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name} · {m.vendor}{m.pricePerSecUsd > 0 ? ` · ${usd(m.pricePerSecUsd)}/s` : ""}
+                {offers.map((o) => (
+                  <option key={o.family} value={o.family}>
+                    {FAMILIES[o.family].name} · {FAMILIES[o.family].vendor}{o.rateUsd > 0 ? ` · ${usd(o.rateUsd)}/s` : ""}
                   </option>
                 ))}
               </Select>
             </Field>
             <p className="text-xs leading-relaxed text-muted">
-              {model.blurb}
-              {model.note && <span className="block text-subtle">{model.note}</span>}
+              {family.blurb}
+              <span className="block text-subtle">{family.note}</span>
             </p>
             <div className="space-y-1">
               <div className="flex items-baseline justify-between gap-3 text-xs font-medium text-muted">
@@ -683,7 +762,7 @@ export function Playground({ models, hasApiKey, largeUploadPrefix, galleryCount 
                 {aspectSpec ? (
                   <span className="font-normal text-subtle">{orientation(...currentAspect) ?? ""}</span>
                 ) : (
-                  <span className="font-normal text-subtle">레퍼런스 이미지 비율을 따름</span>
+                  <span className="font-normal text-subtle">첫 프레임 이미지 비율을 따름</span>
                 )}
               </div>
               {aspectSpec ? (
@@ -701,16 +780,16 @@ export function Playground({ models, hasApiKey, largeUploadPrefix, galleryCount 
                 <p className="rounded-md border border-border bg-surface px-3 py-1.5 text-xs leading-relaxed text-foreground-2">
                   {firstImage?.w && firstImage.h ? (
                     <>
-                      1번 레퍼런스가 <span className="tabular-nums">{firstImage.w}×{firstImage.h}</span>({orientation(firstImage.w, firstImage.h)})이라 영상도 <span className="font-medium text-foreground">{orientation(firstImage.w, firstImage.h)}</span>로 나옵니다. 가로 영상이 필요하면 가로 이미지를 올리세요.
+                      1번 이미지가 <span className="tabular-nums">{firstImage.w}×{firstImage.h}</span>({orientation(firstImage.w, firstImage.h)})이라 영상도 <span className="font-medium text-foreground">{orientation(firstImage.w, firstImage.h)}</span>로 나옵니다. 가로 영상이 필요하면 가로 이미지를 올리세요.
                     </>
                   ) : (
-                    <>화면비 옵션이 없는 모델입니다. 1번 레퍼런스 이미지의 비율을 따르니 가로 영상은 가로 이미지를 올리세요.</>
+                    <>이미지→영상은 화면비를 따로 고르지 않고 첫 프레임 이미지의 비율을 따릅니다.</>
                   )}
                 </p>
               )}
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
-              {model.params.filter((p) => p.key !== "aspect_ratio").map((p) => (
+              {specs.filter((p) => p.key !== "aspect_ratio").map((p) => (
                 <ParamInput key={p.key} spec={p} value={params[p.key]} onChange={(v) => setParams((s) => ({ ...s, [p.key]: v }))} />
               ))}
             </div>
@@ -718,29 +797,38 @@ export function Playground({ models, hasApiKey, largeUploadPrefix, galleryCount 
           </section>
         </div>
 
-        <div className="flex items-center justify-between gap-4 border-t border-border bg-background/90 px-5 py-3 backdrop-blur">
-          <div className="min-w-0 text-sm text-muted">
-            <div className="flex items-baseline gap-2">
-              <span>예상 비용</span>
-              {model.pricePerSecUsd > 0 ? (
-                <span className="font-display text-2xl leading-none text-sand">{usd(estimate)}</span>
-              ) : (
-                <span className="font-semibold text-foreground">미정</span>
-              )}
+        <div className="border-t border-border bg-background/90 px-5 py-3 backdrop-blur">
+          {!plan.ready && (
+            <p role="status" className="mb-2 flex items-start gap-2 text-xs leading-relaxed text-foreground-2">
+              <span aria-hidden className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" />
+              {plan.blocker}
+            </p>
+          )}
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0 text-sm text-muted">
+              <div className="flex items-baseline gap-2">
+                <span>예상 비용</span>
+                {priced && plan.ready ? (
+                  <span className="font-display text-2xl leading-none text-sand">{usd(plan.costUsd)}</span>
+                ) : (
+                  <span className="font-semibold text-foreground">{priced ? "—" : "미정"}</span>
+                )}
+                <span className="text-xs text-subtle">{MODE_LABEL[mode]}</span>
+              </div>
+              <div className="mt-0.5 truncate text-[11px] text-subtle tabular-nums">
+                {priced ? estimateNote : `관리자가 단가를 넣으면 ${plan.durationS}s 기준으로 계산`}
+              </div>
             </div>
-            <div className="mt-0.5 truncate text-[11px] text-subtle tabular-nums">
-              {model.pricePerSecUsd > 0 ? `${duration}s × ${usd(model.pricePerSecUsd)}/s` : `관리자가 단가를 넣으면 ${duration}s 기준으로 계산`}
-            </div>
+            <Button size="lg" onClick={generate} disabled={!canGenerate}>
+              {submitting ? "제출 중…" : "생성하기"}
+            </Button>
           </div>
-          <Button size="lg" onClick={generate} disabled={!canGenerate}>
-            {submitting ? "제출 중…" : "생성하기"}
-          </Button>
         </div>
       </aside>
 
       {refsOpen && (
         <RefDialog
-          model={model}
+          modelName={family.name}
           refs={refs}
           images={images}
           videos={videos}

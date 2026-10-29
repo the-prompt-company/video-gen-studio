@@ -50,6 +50,13 @@
       "when": 1793239083745,
       "tag": "0006_account_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793254207308,
+      "tag": "0007_request_body",
+      "breakpoints": true
     }
   ]
 }

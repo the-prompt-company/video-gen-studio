@@ -18,8 +18,3 @@ export function fmtRelative(d: Date | string | null | undefined): string {
   if (s < 86400) return `${Math.floor(s / 3600)}시간 전`;
   return `${Math.floor(s / 86400)}일 전`;
 }
-
-export function shortModel(id: string): string {
-  const parts = id.split("/");
-  return parts.length > 2 ? parts.slice(0, 2).join("/") : id;
-}

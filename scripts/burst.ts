@@ -50,7 +50,7 @@ type FakeStats = {
 type FakeKnobs = { dropWebhooks: number; dupWebhooks: boolean; firstN429: number; retryAfterS: number; submitFailN: number };
 
 const PREFIX = "gp6-burst-";
-const MODEL = "minimax/hailuo-2.3/standard/image-to-video";
+const MODEL = "minimax/h3";
 const USERS = Number(process.env.BURST_USERS ?? 20);
 const PER_USER = Number(process.env.BURST_PER_USER ?? 15);
 const TIMEOUT_MS = Number(process.env.BURST_TIMEOUT_MS ?? 600_000);
@@ -212,7 +212,7 @@ async function person(u: BurstUser, n: number, stopAt: number, postCodes: number
     const res = await fetch(`${base}/api/generations`, {
       method: "POST",
       headers,
-      body: JSON.stringify({ modelId: MODEL, prompt: `GP-6 burst ${u.username} ${i}/${n}`, params: {}, imageUrls: ["https://example.com/gp6-burst.jpg"] }),
+      body: JSON.stringify({ family: MODEL, mode: "r2v", prompt: `GP-6 burst ${u.username} ${i}/${n}`, params: {}, images: ["https://example.com/gp6-burst.jpg"], videos: [], startFromImage: false }),
     });
     const body = (await res.json().catch(() => ({}))) as { item?: Item };
     postCodes.push(res.status);

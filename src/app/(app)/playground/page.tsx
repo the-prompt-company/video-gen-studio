@@ -1,7 +1,8 @@
 import { and, count, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { getCurrentUser } from "@/lib/auth";
-import { CATALOG } from "@/lib/catalog";
+import { FAMILY_IDS } from "@/lib/catalog";
+import { loadModelSettings } from "@/lib/model-settings";
 import { refPrefix } from "@/lib/storage";
 import { Playground } from "@/components/Playground";
 
@@ -10,19 +11,17 @@ export const metadata = { title: "플레이그라운드" };
 export default async function PlaygroundPage() {
   const user = await getCurrentUser();
   const db = getDb();
-  const rows = await db.select().from(schema.models);
-  const [{ completed }] = user
-    ? await db.select({ completed: count() }).from(schema.generations).where(and(eq(schema.generations.userId, user.id), eq(schema.generations.status, "completed")))
-    : [{ completed: 0 }];
-  const byId = new Map(rows.map((r) => [r.modelId, r]));
-  const models = CATALOG.filter((m) => byId.get(m.id)?.enabled !== false).map((m) => ({
-    ...m,
-    pricePerSecUsd: Number(byId.get(m.id)?.pricePerSecUsd ?? 0),
-  }));
+  const [settings, [{ completed }]] = await Promise.all([
+    loadModelSettings(),
+    user
+      ? db.select({ completed: count() }).from(schema.generations).where(and(eq(schema.generations.userId, user.id), eq(schema.generations.status, "completed")))
+      : Promise.resolve([{ completed: 0 }]),
+  ]);
+  const offers = FAMILY_IDS.filter((f) => settings[f].enabled).map((family) => ({ family, rateUsd: settings[family].rateUsd }));
 
   return (
     <Playground
-      models={models}
+      offers={offers}
       hasApiKey={Boolean(user?.apiKeyEnc)}
       largeUploadPrefix={user && process.env.BLOB_READ_WRITE_TOKEN ? refPrefix(user.id) : null}
       galleryCount={Number(completed)}

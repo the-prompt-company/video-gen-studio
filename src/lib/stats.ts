@@ -1,6 +1,7 @@
 import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { TeamId } from "@/lib/teams";
+import { describeModel } from "@/lib/catalog";
 
 export type UsageSummary = {
   generations: number;
@@ -9,7 +10,8 @@ export type UsageSummary = {
   totalCostUsd: number;
   totalSeconds: number;
   last30dCostUsd: number;
-  byModel: { modelId: string; count: number; costUsd: number }[];
+  /** Per model: every endpoint a model was asked through counts under it, and a retired id under itself. */
+  byModel: { group: string; name: string; count: number; costUsd: number }[];
   byDay: { day: string; count: number; costUsd: number }[];
 };
 
@@ -35,7 +37,7 @@ export async function usageFor(userId: number | null): Promise<UsageSummary> {
     .from(g)
     .where(scope ? and(scope, gte(g.createdAt, since)) : gte(g.createdAt, since));
 
-  const byModel = await db
+  const byEndpoint = await db
     .select({
       modelId: g.modelId,
       count: sql<number>`count(*)::int`,
@@ -64,9 +66,19 @@ export async function usageFor(userId: number | null): Promise<UsageSummary> {
     totalCostUsd: totals?.totalCostUsd ?? 0,
     totalSeconds: totals?.totalSeconds ?? 0,
     last30dCostUsd: recent?.cost ?? 0,
-    byModel,
+    byModel: foldByModel(byEndpoint),
     byDay,
   };
+}
+
+function foldByModel(rows: { modelId: string; count: number; costUsd: number }[]): UsageSummary["byModel"] {
+  const out = new Map<string, UsageSummary["byModel"][number]>();
+  for (const r of rows) {
+    const m = describeModel(r.modelId);
+    const acc = out.get(m.group) ?? { group: m.group, name: m.name, count: 0, costUsd: 0 };
+    out.set(m.group, { ...acc, count: acc.count + r.count, costUsd: acc.costUsd + r.costUsd });
+  }
+  return [...out.values()].sort((a, b) => b.count - a.count);
 }
 
 export type UserUsageRow = {

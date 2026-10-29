@@ -3,15 +3,15 @@ import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { User } from "@/db/schema";
 import { requireUser, errorResponse, HttpError } from "@/lib/auth";
-import { findModel, coerceParams } from "@/lib/catalog";
-import { isGenerationId, priceFor, publicGeneration, settle, submitGeneration } from "@/lib/generations";
+import { FAMILIES, isFamilyId, MODES, planGeneration, type Draft, type Mode } from "@/lib/catalog";
+import { isGenerationId, publicGeneration, settle, submitGeneration } from "@/lib/generations";
+import { loadModelSetting } from "@/lib/model-settings";
 
 /** The copy a settle schedules with `after` runs inside this budget. MIRROR_LEASE_S in generations.ts outlasts it. */
 export const maxDuration = 300;
 
-const MAX_IMAGES = 6;
-const MAX_VIDEOS = 3;
 const MAX_IDS = 24;
+const MAX_REFS = 9;
 
 /**
  * The database's clock in epoch ms. It wrote created_at, so the playground times live rows by it, not by the member's
@@ -69,57 +69,58 @@ export async function GET(req: Request) {
   }
 }
 
-type Body = {
-  modelId?: string;
-  prompt?: string;
-  params?: Record<string, unknown>;
-  imageUrls?: string[];
-  videoUrls?: string[];
-};
+function publicUrl(v: unknown, label: string): string {
+  const u = String(v ?? "");
+  if (!/^https?:\/\//.test(u)) throw new HttpError(400, `${label}: 공개 URL만 허용됩니다`);
+  return u;
+}
 
-function urlList(v: unknown, max: number, label: string): string[] {
+function list(v: unknown, label: string): unknown[] {
   if (v === undefined) return [];
   if (!Array.isArray(v)) throw new HttpError(400, `${label}: 배열이어야 합니다`);
-  const out = v.map(String).filter((s) => s.trim() !== "");
-  if (out.length > max) throw new HttpError(400, `${label}: 최대 ${max}개`);
-  for (const u of out) {
-    if (!/^https?:\/\//.test(u)) throw new HttpError(400, `${label}: 공개 URL만 허용됩니다`);
-  }
-  return out;
+  if (v.length > MAX_REFS) throw new HttpError(400, `${label}: 최대 ${MAX_REFS}개`);
+  return v;
+}
+
+function parseDraft(raw: unknown): Draft {
+  const b = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const family = String(b.family ?? "");
+  if (!isFamilyId(family)) throw new HttpError(400, "알 수 없는 모델입니다. 페이지를 새로고침하세요");
+  const mode = String(b.mode ?? "") as Mode;
+  if (!MODES.includes(mode)) throw new HttpError(400, "생성 방식이 없습니다. 페이지를 새로고침하세요");
+  return {
+    family,
+    mode,
+    prompt: String(b.prompt ?? ""),
+    params: b.params && typeof b.params === "object" ? (b.params as Record<string, unknown>) : {},
+    images: list(b.images, "이미지").map((u) => publicUrl(u, "이미지")),
+    videos: list(b.videos, "영상").map((v) => {
+      const o = (v && typeof v === "object" ? v : {}) as Record<string, unknown>;
+      return { url: publicUrl(o.url, "영상"), seconds: Number(o.seconds) };
+    }),
+    startFromImage: b.startFromImage === true,
+  };
 }
 
 /**
- * POST /api/generations — submit one generation. 201 when Higgsfield accepted it, 202 when it waits as 제출 대기 and
- * submits itself again, 502 when Higgsfield refused it. Every answer carries the row as `item`.
+ * POST /api/generations — submit one generation. The body is a Draft: { family, mode, prompt, params, images,
+ * videos: [{ url, seconds }], startFromImage }. 201 when Higgsfield accepted it, 202 when it waits as 제출 대기 and
+ * submits itself again, 502 when Higgsfield refused it, 400 when the plan is not ready. Every answer after insert
+ * carries the row as `item`, and estimatedCostUsd is the row's cost, decided now.
  */
 export async function POST(req: Request) {
   try {
     const user = await requireUser();
-    const body = (await req.json().catch(() => ({}))) as Body;
+    const draft = parseDraft(await req.json().catch(() => ({})));
+    const setting = await loadModelSetting(draft.family);
+    if (!setting.enabled) throw new HttpError(400, `관리자가 ${FAMILIES[draft.family].name}을(를) 껐습니다`);
+    const plan = planGeneration(draft, setting.rateUsd);
+    if (!plan.ready) throw new HttpError(400, plan.blocker);
 
-    const spec = findModel(String(body.modelId ?? ""));
-    if (!spec) throw new HttpError(400, "알 수 없는 모델입니다");
-
-    const db = getDb();
-    const [m] = await db.select().from(schema.models).where(eq(schema.models.modelId, spec.id)).limit(1);
-    if (m && !m.enabled) throw new HttpError(400, "관리자가 비활성화한 모델입니다");
-
-    const prompt = String(body.prompt ?? "");
-    const imageUrls = urlList(body.imageUrls, Math.min(MAX_IMAGES, spec.images.max), "이미지");
-    const videoUrls = urlList(body.videoUrls, spec.videos ? Math.min(MAX_VIDEOS, spec.videos.max) : 0, "영상");
-
-    let params: Record<string, unknown>;
-    try {
-      params = coerceParams(spec, body.params ?? {});
-    } catch (e) {
-      throw new HttpError(400, e instanceof Error ? e.message : String(e));
-    }
-
-    const row = await submitGeneration(user, { spec, prompt, params, imageUrls, videoUrls }, after);
-    const price = await priceFor(spec.id);
+    const row = await submitGeneration(user, plan, after);
     const failed = row.status === "failed";
     return Response.json(
-      { item: publicGeneration(row), error: failed ? row.error : undefined, estimatedCostUsd: price * row.durationS },
+      { item: publicGeneration(row), error: failed ? row.error : undefined, estimatedCostUsd: Number(row.costUsd) },
       { status: failed ? 502 : row.status === "pending" ? 202 : 201 },
     );
   } catch (e) {

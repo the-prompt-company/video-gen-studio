@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { getUnverifiedSession } from "@/lib/auth";
-import { CATALOG } from "@/lib/catalog";
+import { FAMILIES, FAMILY_IDS } from "@/lib/catalog";
 import { Button } from "@/components/ui";
 
 const STEPS = [
-  { n: "01", t: "레퍼런스 올리기", d: "텍스트 프롬프트에 이미지 최대 6장, 영상 레퍼런스를 더합니다." },
-  { n: "02", t: "모델과 파라미터", d: "Seedance 2.0과 연습용 Hailuo 2.3 중 고르고 길이, 해상도, 화면비를 조정합니다." },
+  { n: "01", t: "프롬프트와 레퍼런스", d: "프롬프트만으로 만들거나, 이미지 한 장을 첫 프레임으로, 이미지 최대 6장·영상 3개를 레퍼런스로 더합니다." },
+  { n: "02", t: "모델과 파라미터", d: "Seedance 2.0과 MiniMax H3 중 고르고 길이, 해상도, 화면비를 조정합니다. 예상 비용이 바로 보입니다." },
   { n: "03", t: "생성과 기록", d: "진행 상태를 실시간으로 보고, 완료되면 갤러리와 사용량에 자동 기록됩니다." },
 ];
 
@@ -60,9 +60,9 @@ export default async function Landing() {
         </div>
 
         <div className="mt-10 flex flex-wrap gap-2">
-          {CATALOG.map((m) => (
-            <span key={m.id} className="rounded-full border border-border bg-surface px-3 py-1 text-xs text-foreground-2">
-              {m.name} <span className="text-subtle">· {m.vendor}</span>
+          {FAMILY_IDS.map((id) => (
+            <span key={id} className="rounded-full border border-border bg-surface px-3 py-1 text-xs text-foreground-2">
+              {FAMILIES[id].name} <span className="text-subtle">· {FAMILIES[id].vendor}</span>
             </span>
           ))}
         </div>

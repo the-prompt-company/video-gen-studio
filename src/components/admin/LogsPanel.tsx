@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { PublicGeneration } from "@/lib/generations";
-import { CATALOG } from "@/lib/catalog";
-import { usd, fmtDate, shortModel } from "@/lib/format";
+import { FAMILIES, FAMILY_IDS, modelLine } from "@/lib/catalog";
+import { usd, fmtDate } from "@/lib/format";
 import { STATUS_LABEL } from "@/lib/generation-status";
 import { Button, Card, Select, Empty } from "@/components/ui";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -68,8 +68,8 @@ export function LogsPanel() {
         </Select>
         <Select value={f.modelId} onChange={(e) => setF({ ...f, modelId: e.target.value })}>
           <option value="">모든 모델</option>
-          {CATALOG.map((m) => (
-            <option key={m.id} value={m.id}>{m.name}</option>
+          {FAMILY_IDS.map((id) => (
+            <option key={id} value={id}>{FAMILIES[id].name}</option>
           ))}
         </Select>
         <Select value={f.status} onChange={(e) => setF({ ...f, status: e.target.value })}>
@@ -102,7 +102,7 @@ export function LogsPanel() {
                   <td className="whitespace-nowrap py-2 pr-3 text-muted">{fmtDate(g.createdAt)}</td>
                   <td className="py-2 pr-3 text-foreground">{g.username}</td>
                   <td className="py-2 pr-3"><StatusBadge status={g.status} /></td>
-                  <td className="whitespace-nowrap py-2 pr-3 text-foreground-2">{shortModel(g.modelId)}</td>
+                  <td className="whitespace-nowrap py-2 pr-3 text-foreground-2">{modelLine(g.modelId)}</td>
                   <td className="max-w-[280px] truncate py-2 pr-3 text-foreground-2">{g.prompt || "—"}</td>
                   <td className="py-2 pr-3 text-right tabular-nums text-muted">{g.durationS}s</td>
                   <td className="py-2 text-right tabular-nums">{usd(g.costUsd)}</td>
@@ -127,7 +127,7 @@ export function LogsPanel() {
             </div>
             {open.video && <video src={open.video.url} controls className="w-full rounded-lg bg-black" />}
             <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs text-muted">
-              <dt>모델</dt><dd className="font-mono text-foreground-2">{open.modelId}</dd>
+              <dt>모델</dt><dd className="text-foreground-2">{modelLine(open.modelId)} <span className="font-mono text-subtle">{open.modelId}</span></dd>
               <dt>프롬프트</dt><dd className="text-foreground-2">{open.prompt || "—"}</dd>
               <dt>파라미터</dt><dd className="font-mono text-foreground-2">{JSON.stringify(open.params)}</dd>
               <dt>이미지</dt><dd className="break-all text-foreground-2">{open.imageRefs.join(", ") || "—"}</dd>
