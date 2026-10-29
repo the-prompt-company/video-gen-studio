@@ -2,7 +2,9 @@
  * The only module that knows the store, the auth and the URL format of Vercel Blob.
  * Rows store an object key, never a URL, so moving to another store or vendor is an env change plus an object copy.
  */
+import { randomUUID } from "node:crypto";
 import { createMultipartUploader, del, getDownloadUrl, put, type Part } from "@vercel/blob";
+import type { AvatarType } from "./avatar";
 import { REF_NAME } from "./ref-name";
 
 export type ObjectKey = string & { readonly __brand: "ObjectKey" };
@@ -259,6 +261,53 @@ export async function deleteRefs(urls: string[], ownerId: number): Promise<strin
   const doomed = [...new Set(keys)].map((k) => publicUrl(c, k));
   if (doomed.length > 0) await del(doomed, { token: c.token });
   return doomed;
+}
+
+/** A random file name newAvatarKey generates. Nothing else under avatars/<id>/ is ever deleted. */
+const AVATAR_NAME = /^[0-9a-f]{32}\.(?:webp|jpg|png)$/;
+
+function avatarPrefix(userId: number): string {
+  return `avatars/${userId}/`;
+}
+
+/** A new key for every upload, so a photo URL never changes content and caches for a year. */
+export function newAvatarKey(userId: number, ext: AvatarType["ext"]): ObjectKey {
+  return `${avatarPrefix(userId)}${randomUUID().replaceAll("-", "")}.${ext}` as ObjectKey;
+}
+
+export async function putAvatar(key: ObjectKey, bytes: Uint8Array, contentType: AvatarType["contentType"]): Promise<void> {
+  const c = config();
+  if (!c) throw new Error("Vercel Blob is not configured");
+  const { url } = await put(key, Buffer.from(bytes), {
+    access: "public",
+    token: c.token,
+    addRandomSuffix: false,
+    cacheControlMaxAge: ONE_YEAR_S,
+    contentType,
+  });
+  const derived = publicUrl(c, key);
+  if (new URL(url).href !== new URL(derived).href) {
+    throw new Error(`blob URL mismatch: the store answered ${url}, avatarUrl derives ${derived}`);
+  }
+}
+
+/** Null while storage is off. */
+export function avatarUrl(key: ObjectKey): string | null {
+  const c = config();
+  return c ? publicUrl(c, key) : null;
+}
+
+/**
+ * Delete one of the member's own photos and say whether del() was called. Only a key that is an AVATAR_NAME directly
+ * under the member's avatars/<id>/ gets through, and del() gets the public URL built from it, so no spelling of a key
+ * (another member, videos/, refs/, dot segments, percent escapes, a URL) reaches anything else in the store.
+ */
+export async function deleteAvatar(key: string, userId: number): Promise<boolean> {
+  const c = config();
+  const prefix = avatarPrefix(userId);
+  if (!c || !key.startsWith(prefix) || !AVATAR_NAME.test(key.slice(prefix.length))) return false;
+  await del(publicUrl(c, key), { token: c.token });
+  return true;
 }
 
 /** The pathname a URL names in this store, or null for a URL anywhere else. */

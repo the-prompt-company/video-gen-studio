@@ -17,7 +17,7 @@ import type { AddressInfo } from "node:net";
 import { createInterface } from "node:readline";
 import { put } from "@vercel/blob";
 import { configFromEnv, createFakeHiggsfield } from "./fake-higgsfield";
-import { byteLimit, copyVideo, deleteRefs, isRefPathname, putVideo, refPrefix, storageEnabled, videoKey, videoUrls } from "../src/lib/storage";
+import { avatarUrl, byteLimit, copyVideo, deleteAvatar, deleteRefs, isRefPathname, newAvatarKey, putAvatar, putVideo, refPrefix, storageEnabled, videoKey, videoUrls } from "../src/lib/storage";
 import { refUploadName } from "../src/lib/ref-name";
 
 const MB = 1024 * 1024;
@@ -357,6 +357,86 @@ test("refUploadName gives every file, however it is named, a name the upload rou
   }
   assert.match(refUploadName("레퍼런스 영상 최종본.MP4", 1793200000000), /^1793200000000-[0-9a-f]{8}\.mp4$/);
   assert.notEqual(refUploadName("clip.mp4", 1), refUploadName("clip.mp4", 1), "two uploads in the same millisecond get different names");
+});
+
+test("putAvatar stores a photo at a fresh avatars/<id>/ key with its type, and avatarUrl serves it", async () => {
+  const fake = await blobFake();
+  try {
+    const photo = Buffer.from("RIFF\x24\0\0\0WEBPVP8 photo bytes", "latin1");
+    const key = newAvatarKey(OWNER, "webp");
+    assert.match(key, new RegExp(`^avatars/${OWNER}/[0-9a-f]{32}\\.webp$`));
+    assert.match(newAvatarKey(OWNER, "jpg"), new RegExp(`^avatars/${OWNER}/[0-9a-f]{32}\\.jpg$`));
+    assert.notEqual(newAvatarKey(OWNER, "webp"), key, "every upload gets its own key");
+    await putAvatar(key, photo, "image/webp");
+    const url = avatarUrl(key);
+    assert.equal(url, `${fake.base}/blob/${key}`);
+    const res = await fetch(url ?? "");
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get("content-type"), "image/webp");
+    assert.deepEqual(Buffer.from(await res.arrayBuffer()), photo);
+    delete process.env.BLOB_READ_WRITE_TOKEN;
+    assert.equal(avatarUrl(key), null, "with storage off there is no photo URL");
+  } finally {
+    fake.close();
+  }
+});
+
+test("deleteAvatar deletes the member's own photo and never another member's, a video, a reference, or any other spelling", async () => {
+  const fake = await blobFake();
+  try {
+    const upload = async (key: string) => {
+      await put(key, Buffer.from(key), { access: "public", addRandomSuffix: false, token: TOKEN });
+      return key;
+    };
+    const own = await Promise.all((["webp", "jpg", "png"] as const).map((ext) => upload(newAvatarKey(OWNER, ext))));
+    const name = own[0].slice(`avatars/${OWNER}/`.length);
+    const member = await upload(`avatars/${MEMBER}/${name}`);
+    const kept = [member, await upload(`avatars/${OWNER}${OWNER}/${name}`), await upload(`avatars/${name}`), await upload(videoKey(ID)), await upload(`refs/${OWNER}/1-clip.mp4`)];
+    const blob = `${fake.base}/blob`;
+    const crafted = [
+      ...kept,
+      `avatars/${OWNER}/../${MEMBER}/${name}`,
+      `avatars/${OWNER}/%2e%2e/${MEMBER}/${name}`,
+      `avatars/${OWNER}/%252e%252e/${MEMBER}/${name}`,
+      `avatars/${OWNER}/..%2F${MEMBER}%2F${name}`,
+      `avatars/${OWNER}/..%5C${MEMBER}%5C${name}`,
+      `avatars/${OWNER}/..\\${MEMBER}\\${name}`,
+      `avatars/${OWNER}/%EF%BC%8E%EF%BC%8E/${MEMBER}/${name}`,
+      `avatars/${OWNER}/．．/${MEMBER}/${name}`,
+      `avatars/${OWNER}//../${MEMBER}/${name}`,
+      `avatars/${OWNER}/${name}/../../${MEMBER}/${name}`,
+      `avatars/${OWNER}/../../${videoKey(ID)}`,
+      `avatars/${OWNER}/../../refs/${OWNER}/1-clip.mp4`,
+      `avatars/${OWNER}/%2e%2e%2f%2e%2e%2f${videoKey(ID).replace("/", "%2f")}`,
+      `avatars/${OWNER}/${name}?x=/../../${MEMBER}/${name}`,
+      `avatars/${OWNER}/${name}#/../../${MEMBER}/${name}`,
+      `avatars/${OWNER}/${name.toUpperCase()}`,
+      `avatars/${OWNER}/${name}.png`,
+      `avatars/${OWNER}/${name}\u0000`,
+      `avatars/${OWNER}/`,
+      `avatars/${OWNER}/.`,
+      `/avatars/${OWNER}/${name}`,
+      `AVATARS/${OWNER}/${name}`,
+      `${blob}/${member}`,
+      `${blob}/${own[0]}`,
+      `https://fakestore.public.blob.vercel-storage.com/${member}`,
+      `https://evil.example/${own[0]}`,
+      `//evil.example/${own[0]}`,
+      "",
+    ];
+    for (const key of crafted) assert.equal(await deleteAvatar(key, OWNER), false, key);
+    assert.deepEqual((await fake.stats()).deleted, [], "no crafted key reached del()");
+    for (const key of own) assert.equal(await deleteAvatar(key, OWNER), true, key);
+    const store = await fake.stats();
+    assert.deepEqual(store.deleteUrls, own.map((k) => `${blob}/${k}`), "del() got the canonical URL of each of the member's own photos alone");
+    assert.deepEqual(store.deleted, own);
+    for (const k of kept) assert.equal((await fetch(`${blob}/${k}`)).status, 200, `${k} is still served`);
+    for (const k of own) assert.equal((await fetch(`${blob}/${k}`)).status, 404, `${k} is gone`);
+    delete process.env.BLOB_READ_WRITE_TOKEN;
+    assert.equal(await deleteAvatar(member, MEMBER), false, "with storage off nothing is deleted");
+  } finally {
+    fake.close();
+  }
 });
 
 /** The fake in its own process, so the bytes it keeps stay out of this process's memory samples. */
