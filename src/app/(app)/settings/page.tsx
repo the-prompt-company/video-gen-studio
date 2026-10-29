@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { getCurrentUser } from "@/lib/auth";
+import { viewerOf } from "@/lib/scope";
 import { avatarUrl, storageEnabled } from "@/lib/storage";
 import { PageContainer } from "@/components/ui";
 import { PasswordChangeForm } from "@/components/PasswordChangeForm";
@@ -24,6 +25,7 @@ function Section({ id, title, lead, children }: { id: string; title: string; lea
 export default async function SettingsPage() {
   const user = await getCurrentUser();
   if (!user) return null;
+  const { team } = await viewerOf(user);
 
   return (
     <PageContainer>
@@ -38,10 +40,16 @@ export default async function SettingsPage() {
             photoStorage={storageEnabled()}
           />
         </Section>
-        <Section id="settings-account" title="계정" lead="로그인에 쓰는 ID는 바꿀 수 없습니다. 바꿔야 하면 관리자에게 요청하세요.">
-          <dl>
-            <dt className="text-xs font-medium text-muted">ID</dt>
-            <dd className="mt-1.5 break-all text-sm text-foreground-2">{user.username}</dd>
+        <Section id="settings-account" title="계정" lead="로그인에 쓰는 ID와 팀은 직접 바꿀 수 없습니다. 바꿔야 하면 관리자에게 요청하세요.">
+          <dl className="space-y-4">
+            <div>
+              <dt className="text-xs font-medium text-muted">ID</dt>
+              <dd className="mt-1.5 break-all text-sm text-foreground-2">{user.username}</dd>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-muted">팀</dt>
+              <dd className="mt-1.5 break-words text-sm text-foreground-2">{team ? team.name : <span className="text-subtle">미소속</span>}</dd>
+            </div>
           </dl>
         </Section>
         <Section
