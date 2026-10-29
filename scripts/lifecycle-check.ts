@@ -33,6 +33,11 @@
  * sweep settles every due row in the database, so each sweep check first refuses to run while any row this run did
  * not create could be due.
  *
+ * The image checks (--images runs only those) drive GPT Image 2 rows against the same fake's OpenAI endpoints
+ * (OPENAI_BASE_URL is set to <fake>/openai/v1 and refused when it points anywhere else, with a fake OPENAI_API_KEY):
+ * one request per row, the stored image and its cost from usage, a refusal sent again, rejections at cost 0, a call
+ * that never answers while polls add nothing, and rows a dead runner left, ended from the row and Blob alone.
+ *
  * --measure <base> inserts 15 live rows, keeps /playground of the app at <base> open for 60 s in a headless browser
  * (Playwright from the verify-video-gen-studio skill), and prints the app requests and the fake's status calls.
  * The app at <base> must use the same HIGGSFIELD_BASE_URL, and the fake's FAKE_HF_DURATION_MS must outlast the window.
@@ -51,12 +56,13 @@ import { once } from "node:events";
 import { createServer, type IncomingHttpHeaders, type IncomingMessage, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { resolve } from "node:path";
+import { readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { put } from "@vercel/blob";
 import { and, count, desc, eq, gt, inArray, isNotNull, isNull, like, notInArray, or, sql, type SQL } from "drizzle-orm";
 import { getDb, schema } from "../src/db";
 import type { Generation, User } from "../src/db/schema";
-import { describeModel, estimateCostUsd, planGeneration, resendRequest, type FamilyId, type ReadyPlan } from "../src/lib/catalog";
+import { describeModel, costUsd, planGeneration, resendRequest, type Draft, type FamilyId, type ImageFormat, type ReadyPlan } from "../src/lib/catalog";
 import { loadModelSetting, saveModelSetting } from "../src/lib/model-settings";
 import { encrypt, hashPassword, signToken } from "../src/lib/crypto";
 import { isLive, LIVE_STATUSES } from "../src/lib/generation-status";
@@ -73,7 +79,16 @@ type Stats = {
   statusPolls: { byRequest: Record<string, { total: number; perSecondMax: number }>; byApiKey: Record<string, number> };
   webhooks: { sent: number; dropped: number; failed: number; retried: number; byRequest: Record<string, number[]> };
   media: { downloads: number };
-  storage: { deleted: string[]; byKey: Record<string, { writes: number; size: number; sha256: string }> };
+  storage: { deleted: string[]; byKey: Record<string, { writes: number; size: number; sha256: string; contentType: string }> };
+  openai: {
+    requests: {
+      op: string;
+      body: Record<string, unknown>;
+      status: number;
+      usage?: { input_tokens_details: { image_tokens: number; text_tokens: number }; output_tokens: number };
+    }[];
+    answered: number;
+  };
 };
 type Knobs = Partial<
   Pick<
@@ -239,7 +254,7 @@ async function withKnownPrice<T>(run: () => Promise<T>): Promise<T> {
 function quoteOf(row: Generation, rate: number): string {
   const mode = describeModel(row.modelId).mode;
   if (!mode) throw new Error(`FAIL ${row.modelId} is not a catalog endpoint`);
-  return estimateCostUsd({ family: FAMILY, mode, params: row.params, inputVideoS: 0 }, rate).toFixed(4);
+  return costUsd({ family: FAMILY, mode, params: row.params, inputVideoS: 0 }, rate).toFixed(4);
 }
 
 async function stats(upstream: string): Promise<Stats> {
@@ -1479,6 +1494,285 @@ async function submitChecks(owner: Owner, admin: User, upstream: string, proxy: 
  * webhook gets 503 until the lease runs out, then a redelivery sends the row again with the same key and body, gets
  * the original request_id, and completes it.
  */
+const GPT: FamilyId = "openai/gpt-image-2";
+const FAKE_OPENAI_KEY = "sk-lifecycle-fake-0000";
+const OPENAI_DEFAULTS = { delayMs: 0, refuseFirstN: 0, overloadedFirstN: 0, retryAfterS: 1, fail: null, usage: true };
+const MAYBE_BILLED = /청구됐을 수 있어/;
+
+async function setOpenAi(upstream: string, knobs: Record<string, unknown>): Promise<void> {
+  await fetch(`${upstream}/_config`, { method: "POST", body: JSON.stringify({ openai: { ...OPENAI_DEFAULTS, ...knobs } }) });
+}
+
+async function imageRequests(upstream: string, prompt: string) {
+  return (await stats(upstream)).openai.requests.filter((r) => r.body.prompt === prompt);
+}
+
+function imagePlan(label: string, rate: number, over: Partial<Draft> = {}): ReadyPlan {
+  const images = over.images ?? [];
+  const p = planGeneration(
+    { family: GPT, mode: images.length > 0 ? "r2i" : "t2i", prompt: `${TAG}${label}`, params: {}, images, videos: [], startFromImage: false, ...over },
+    rate,
+  );
+  if (!p.ready) throw new Error(`FAIL setup: ${p.blocker}`);
+  return p;
+}
+
+/** submitGeneration for an image, as the POST route calls it; `schedule` defaults to running the runner and keeping its promise. */
+async function submitImage(owner: Owner, admin: User, label: string, over: Partial<Draft> = {}, schedule?: Schedule) {
+  const plan = imagePlan(label, (await loadModelSetting(GPT)).rateUsd, over);
+  const rec = recorder();
+  const row = await owner.submitGeneration(admin, plan, schedule ?? rec.schedule);
+  created.push(row.id);
+  await Promise.all(rec.tasks);
+  return { row, plan, final: await readRow(row.id) };
+}
+
+/** An image row as submitGeneration leaves it, with its lease already run out: `sent` says whether its runner had claimed it. */
+async function insertImageRow(admin: User, label: string, sent: boolean, format: ImageFormat = "png") {
+  const plan = imagePlan(label, (await loadModelSetting(GPT)).rateUsd, { params: { output_format: format } });
+  const [row] = await getDb()
+    .insert(schema.generations)
+    .values({
+      userId: admin.id,
+      modelId: plan.endpoint,
+      prompt: plan.prompt,
+      params: plan.params,
+      requestBody: plan.body,
+      status: "in_progress",
+      maybeAccepted: sent,
+      nextCheckAt: sql`now() - interval '1 second'`,
+      durationS: 0,
+      costUsd: plan.costUsd.toFixed(4),
+    })
+    .returning();
+  created.push(row.id);
+  return { row, plan };
+}
+
+function usageCost(plan: ReadyPlan, u: NonNullable<Stats["openai"]["requests"][number]["usage"]>): string {
+  const usage = { inputTextTokens: u.input_tokens_details.text_tokens, inputImageTokens: u.input_tokens_details.image_tokens, outputTokens: u.output_tokens };
+  return costUsd({ ...plan.costBasis, usage }, plan.rateUsd).toFixed(4);
+}
+
+async function imageCompletes(owner: Owner, admin: User, upstream: string) {
+  const { row, plan, final } = await submitImage(owner, admin, "이미지 생성 완료");
+  check(row.status === "in_progress" && row.maybeAccepted === false && row.requestId === null, "an image row is inserted in_progress and unsent, with no Higgsfield request id", `${row.status}, sent ${row.maybeAccepted}`);
+  const sent = await imageRequests(upstream, plan.prompt);
+  check(sent.length === 1 && sent[0].op === "generations" && sent[0].status === 200, "with no reference the runner made exactly one OpenAI request, to images/generations", JSON.stringify(sent.map((r) => [r.op, r.status])));
+  const body = JSON.parse(final.requestBody ?? "{}") as Record<string, unknown>;
+  check(
+    JSON.stringify(sent[0].body) === JSON.stringify(body) && typeof body.safety_identifier === "string" && (body.safety_identifier as string).length === 32,
+    "OpenAI got exactly the stored request_body, which ends with a 32-character safety_identifier for the member",
+    final.requestBody ?? "",
+  );
+  check(
+    final.status === "completed" && final.storagePath === `images/${row.id}.png` && final.maybeAccepted && final.error === null,
+    "the row completed with its image stored at images/<id>.png",
+    `${final.status} ${final.storagePath}`,
+  );
+  const object = (await stats(upstream)).storage.byKey[final.storagePath ?? ""];
+  const image = owner.publicGeneration(final).image;
+  const served = image ? await fetch(image.url) : null;
+  const bytes = served ? Buffer.from(await served.arrayBuffer()) : Buffer.alloc(0);
+  check(
+    object?.writes === 1 && object.contentType === "image/png" && final.sizeBytes === object.size && bytes.subarray(1, 4).toString() === "PNG",
+    "Blob holds one image/png object of size_bytes, and the public URL serves a PNG",
+    `writes ${object?.writes}, ${object?.contentType}, ${object?.size} bytes`,
+  );
+  const download = image ? await fetch(image.downloadUrl) : null;
+  check(
+    owner.publicGeneration(final).video === null && image?.format === "png" && download?.headers.get("content-disposition") === `attachment; filename="${row.id}.png"`,
+    "the browser shape has image (format png, a download named <id>.png) and no video",
+    download?.headers.get("content-disposition") ?? "",
+  );
+  check(final.costUsd === usageCost(plan, sent[0].usage!), "the cost is OpenAI's usage priced at the plan's rate", `${final.costUsd} (estimate ${plan.costUsd})`);
+}
+
+async function imageEdit(owner: Owner, admin: User, upstream: string) {
+  const refs = ["https://example.com/gp-img-a.png", "https://example.com/gp-img-b.png"];
+  const { plan, final } = await submitImage(owner, admin, "레퍼런스 편집", { images: refs, params: { output_format: "jpeg", aspect_ratio: "16:9", quality: "low" } });
+  const sent = await imageRequests(upstream, plan.prompt);
+  const images = sent[0]?.body.images as { image_url: string }[] | undefined;
+  check(
+    sent.length === 1 && sent[0].op === "edits" && JSON.stringify(images) === JSON.stringify(refs.map((image_url) => ({ image_url }))) && sent[0].body.size === "1536x864",
+    "with references the one request went to images/edits with each reference as image_url, at 1536x864",
+    JSON.stringify(sent[0]?.body ?? {}),
+  );
+  const object = (await stats(upstream)).storage.byKey[final.storagePath ?? ""];
+  check(final.status === "completed" && final.storagePath === `images/${final.id}.jpg` && object?.contentType === "image/jpeg", "a JPEG request is stored as images/<id>.jpg, image/jpeg", `${final.storagePath} ${object?.contentType}`);
+  check(
+    final.costUsd === usageCost(plan, sent[0].usage!) && final.costUsd !== plan.costUsd.toFixed(4),
+    "the edit's cost prices OpenAI's reported image input tokens, not the estimate's guess per reference",
+    `${final.costUsd} (estimate ${plan.costUsd})`,
+  );
+  check(JSON.stringify(final.imageRefs) === JSON.stringify(refs), "the row keeps its references", JSON.stringify(final.imageRefs));
+}
+
+async function imageWithoutUsage(owner: Owner, admin: User, upstream: string) {
+  await setOpenAi(upstream, { usage: false });
+  try {
+    const { plan, final } = await submitImage(owner, admin, "usage 없는 응답");
+    check(final.status === "completed" && final.costUsd === plan.costUsd.toFixed(4), "an answer without usage completes at the estimate the member saw", `${final.costUsd} vs ${plan.costUsd}`);
+  } finally {
+    await setOpenAi(upstream, {});
+  }
+}
+
+async function imageRefusedThenAnswered(owner: Owner, admin: User, upstream: string) {
+  await setOpenAi(upstream, { refuseFirstN: 1, overloadedFirstN: 1, retryAfterS: 1 });
+  try {
+    const { plan, final } = await submitImage(owner, admin, "429와 503 뒤 응답");
+    const sent = await imageRequests(upstream, plan.prompt);
+    check(
+      final.status === "completed" && JSON.stringify(sent.map((r) => r.status)) === "[429,503,200]",
+      "a rate-limit 429 and an overloaded 503 were turned away before any work, so the runner sent the same bytes again and the third answer completed the row",
+      JSON.stringify(sent.map((r) => r.status)),
+    );
+    check(sent.every((r) => JSON.stringify(r.body) === JSON.stringify(sent[0].body)), "every attempt carried identical bytes");
+  } finally {
+    await setOpenAi(upstream, {});
+  }
+}
+
+async function imageRejected(owner: Owner, admin: User, upstream: string) {
+  for (const [fail, status] of [["moderation", "nsfw"], ["badkey", "failed"], ["quota", "failed"]] as const) {
+    await setOpenAi(upstream, { fail });
+    try {
+      const { plan, final } = await submitImage(owner, admin, `거절 ${fail}`);
+      const sent = await imageRequests(upstream, plan.prompt);
+      check(
+        final.status === status && final.costUsd === "0.0000" && sent.length === 1 && !/sk-/.test(final.error ?? ""),
+        `OpenAI's ${fail} refusal ends the row ${status} at cost 0 after one request, with no key fragment in the error`,
+        final.error ?? "",
+      );
+    } finally {
+      await setOpenAi(upstream, {});
+    }
+  }
+}
+
+/** The runner's call never gets an answer it can use: while it waits, polls change nothing and send nothing; then it ends maybe billed. */
+async function imageCallNeverAnswers(owner: Owner, admin: User, upstream: string) {
+  for (const fail of ["hangup", "server"] as const) {
+    await setOpenAi(upstream, { fail, delayMs: 2500 });
+    try {
+      const plan = imagePlan(`응답 없음 ${fail}`, (await loadModelSetting(GPT)).rateUsd);
+      const rec = recorder();
+      const row = await owner.submitGeneration(admin, plan, rec.schedule);
+      created.push(row.id);
+      await sleep(800);
+      const polls = [];
+      for (let i = 0; i < 3; i++) polls.push(await owner.settle(await readRow(row.id), rec.schedule));
+      const during = await imageRequests(upstream, plan.prompt);
+      check(
+        polls.every((p) => p.status === "in_progress") && during.length === 1,
+        `while the call (${fail}) is in flight, three polls leave the row in_progress and add no request`,
+        `${polls.map((p) => p.status).join(",")}, ${during.length} requests`,
+      );
+      await Promise.all(rec.tasks);
+      const ended = await readRow(row.id);
+      check(
+        ended.status === "failed" && MAYBE_BILLED.test(ended.error ?? "") && ended.costUsd === plan.costUsd.toFixed(4),
+        `a call that ends without an answer (${fail}) fails the row as maybe billed and keeps the estimate`,
+        ended.error ?? "",
+      );
+      await owner.settle(ended, rec.schedule);
+      await assertSweepScope();
+      const report = await owner.sweep(sweepDeadline());
+      const after = await imageRequests(upstream, plan.prompt);
+      check(after.length === 1 && (await readRow(row.id)).status === "failed", "a later poll and a sweep send nothing more: one request in all", `${after.length} requests, sweep ${JSON.stringify(report)}`);
+    } finally {
+      await setOpenAi(upstream, {});
+    }
+  }
+}
+
+async function imageLeases(owner: Owner, admin: User, upstream: string) {
+  const rec = recorder();
+  const dropped = await submitImage(owner, admin, "runner가 시작하지 못함", {}, () => {});
+  const inside = await owner.settle(dropped.final, rec.schedule);
+  check(inside.status === "in_progress" && !inside.maybeAccepted, "inside its start grace an unsent row is left alone by a poll", inside.status);
+
+  const unsent = await insertImageRow(admin, "보내기 전 멈춘 서버", false);
+  const failedUnsent = await owner.settle(unsent.row, rec.schedule);
+  check(
+    failedUnsent.status === "failed" && failedUnsent.costUsd === "0.0000" && /청구되지 않았습니다/.test(failedUnsent.error ?? ""),
+    "an unsent row past its grace fails at cost 0: provably nothing was sent",
+    failedUnsent.error ?? "",
+  );
+
+  const died = await insertImageRow(admin, "보낸 뒤 멈춘 서버", true);
+  const failedDied = await owner.settle(died.row, rec.schedule);
+  check(
+    failedDied.status === "failed" && failedDied.costUsd === died.plan.costUsd.toFixed(4) && MAYBE_BILLED.test(failedDied.error ?? ""),
+    "a sent row past its lease with nothing in Blob fails as maybe billed and keeps the estimate",
+    failedDied.error ?? "",
+  );
+
+  const stored = await insertImageRow(admin, "저장 뒤 멈춘 서버", true, "webp");
+  const key = `images/${stored.row.id}.webp`;
+  await put(key, Buffer.from("UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA", "base64"), { access: "public", addRandomSuffix: false, allowOverwrite: true, contentType: "image/webp", token: process.env.BLOB_READ_WRITE_TOKEN });
+  const completed = await owner.settle(stored.row, rec.schedule);
+  check(
+    completed.status === "completed" && completed.storagePath === key && completed.sizeBytes === 42 && completed.costUsd === stored.plan.costUsd.toFixed(4),
+    "a sent row past its lease whose image already sits in Blob completes from it, at the estimate",
+    `${completed.status} ${completed.storagePath} ${completed.sizeBytes}`,
+  );
+
+  const swept = await insertImageRow(admin, "sweep이 마무리", true);
+  await assertSweepScope();
+  const report = await owner.sweep(sweepDeadline());
+  const sweptRow = await readRow(swept.row.id);
+  check(sweptRow.status === "failed" && MAYBE_BILLED.test(sweptRow.error ?? "") && report.moved >= 1, "the sweep ends an image row whose lease ran out, with no OpenAI request", JSON.stringify(report));
+  const prompts = new Set([unsent, died, stored, swept].map((r) => r.plan.prompt));
+  const reqs = (await stats(upstream)).openai.requests.filter((r) => prompts.has(String(r.body.prompt)));
+  check(reqs.length === 0, "finalizing four abandoned rows made no OpenAI request", `${reqs.length}`);
+  await Promise.all(rec.tasks);
+}
+
+async function imageUnavailable(owner: Owner, admin: User) {
+  for (const env of ["OPENAI_API_KEY", "BLOB_READ_WRITE_TOKEN"] as const) {
+    const saved = process.env[env];
+    delete process.env[env];
+    const label = `${env} 없음`;
+    try {
+      const plan = imagePlan(label, 30);
+      const refused = await owner.submitGeneration(admin, plan, () => {}).then(
+        () => null,
+        (e: unknown) => e as { status?: number; message?: string },
+      );
+      const [{ n }] = await getDb().select({ n: count() }).from(schema.generations).where(eq(schema.generations.prompt, plan.prompt));
+      check(refused?.status === 503 && n === 0, `without ${env} the server refuses an image with 503 and writes no row`, refused?.message ?? "accepted");
+    } finally {
+      process.env[env] = saved;
+    }
+  }
+}
+
+async function imageTimingFitsRoute(owner: Owner) {
+  const source = readFileSync(resolve(fileURLToPath(new URL(".", import.meta.url)), "../src/app/api/generations/route.ts"), "utf8");
+  const maxDurationMs = Number(/export const maxDuration = (\d+);/.exec(source)?.[1]) * 1000;
+  const t = owner.IMAGE_TIMING;
+  check(
+    t.runBudgetMs + 10_000 < maxDurationMs && maxDurationMs < t.callLeaseS * 1000 && t.callTimeoutMs + t.storeReserveMs <= t.runBudgetMs && 2 * t.storeAttemptMs <= t.storeReserveMs,
+    "the image budget fits POST /api/generations: 10 s before submit + 270 s run < 300 s maxDuration < 360 s lease, and 225 s call + 40 s store fit the run",
+    `maxDuration ${maxDurationMs} ms`,
+  );
+}
+
+async function imageChecks(owner: Owner, admin: User, upstream: string) {
+  await setOpenAi(upstream, {});
+  await imageTimingFitsRoute(owner);
+  await imageUnavailable(owner, admin);
+  await imageCompletes(owner, admin, upstream);
+  await imageEdit(owner, admin, upstream);
+  await imageWithoutUsage(owner, admin, upstream);
+  await imageRefusedThenAnswered(owner, admin, upstream);
+  await imageRejected(owner, admin, upstream);
+  await imageCallNeverAnswers(owner, admin, upstream);
+  await imageLeases(owner, admin, upstream);
+}
+
 async function crashAfterAccept(owner: Owner, admin: User, upstream: string, proxy: Proxy, hooks: Hooks) {
   const label = "수락 뒤 죽은 제출자";
   const tap = proxy.tapNextSubmit();
@@ -1735,6 +2029,16 @@ function pointBlobAtFake(upstream: string) {
   process.env.BLOB_READ_WRITE_TOKEN = FAKE_BLOB_TOKEN;
 }
 
+/** The image checks pay nothing: OpenAI is the fake's, and its key is a fake one. */
+function pointOpenAiAtFake(upstream: string) {
+  const set = process.env.OPENAI_BASE_URL;
+  if (set && new URL(set).origin !== new URL(upstream).origin) {
+    throw new Error(`FAIL OPENAI_BASE_URL is ${new URL(set).origin}; the image checks send requests, so point it at the fake ${upstream}/openai/v1`);
+  }
+  process.env.OPENAI_BASE_URL = `${upstream}/openai/v1`;
+  process.env.OPENAI_API_KEY = FAKE_OPENAI_KEY;
+}
+
 async function main() {
   const onceAt = process.argv.indexOf("--submit-once");
   if (onceAt >= 0) return submitOnce(process.argv[onceAt + 1]);
@@ -1750,7 +2054,10 @@ async function main() {
     upstream = await listen(ownFake);
   }
   const proxy = base ? null : startProxy(upstream);
-  if (proxy) pointBlobAtFake(upstream);
+  if (proxy) {
+    pointBlobAtFake(upstream);
+    pointOpenAiAtFake(upstream);
+  }
   process.env.HIGGSFIELD_BASE_URL = proxy ? await listen(proxy.server) : upstream;
   delete process.env.PUBLIC_BASE_URL;
   delete process.env.VERCEL_PROJECT_PRODUCTION_URL;
@@ -1769,6 +2076,12 @@ async function main() {
       const only = onlyAt >= 0 ? (process.argv[onlyAt + 1] ?? "").split(",").filter(Boolean) : null;
       const triggers = process.argv.includes("--triggers");
       const submits = process.argv.includes("--submits") || only !== null;
+      const images = process.argv.includes("--images");
+      if (!triggers && !submits) await imageChecks(owner, admin, upstream);
+      if (images) {
+        console.log("all image checks passed");
+        return;
+      }
       if (!triggers && !submits) {
         await withKnownPrice(() => fiftyCallers(owner, admin, upstream));
         await reversedObservations(owner, admin, upstream, proxy);

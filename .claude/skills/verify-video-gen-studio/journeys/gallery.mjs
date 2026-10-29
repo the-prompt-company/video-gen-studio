@@ -8,20 +8,25 @@ export default async function gallery({ page, ev }) {
   if (count === 0) ev.fail("no completed generations for this user: run `npm run db:mock` first (precondition), or complete a real generation");
   ev.note(`${count} tile(s)`);
 
-  // gallery-detail: open the first tile; the dialog shows the video, meta line, and a download link.
+  // gallery-detail: open the first tile; the dialog shows its video (or, for an image model, its image), meta line, and a download link.
   await tiles.first().click();
   const dialog = page.getByRole("dialog", { name: "생성 상세" });
   await dialog.waitFor({ timeout: 5_000 });
-  const video = dialog.getByLabel("생성된 영상");
-  const src = await video.getAttribute("src");
-  if (!src) ev.fail("detail video has no src");
-  await video.evaluate((v) => new Promise((res, rej) => { if (v.readyState >= 1) return res(); v.onloadedmetadata = res; v.onerror = () => rej(new Error("video failed to load")); setTimeout(() => rej(new Error("video metadata timeout")), 15_000); }));
-  const size = await video.evaluate((v) => `${v.videoWidth}×${v.videoHeight}`);
-  ev.note(`detail video ${src} loaded at ${size}`);
+  const isImage = (await dialog.getByRole("img", { name: "생성된 이미지" }).count()) > 0;
+  const media = isImage ? dialog.getByRole("img", { name: "생성된 이미지" }) : dialog.getByLabel("생성된 영상");
+  const src = await media.getAttribute("src");
+  if (!src) ev.fail(`detail ${isImage ? "image" : "video"} has no src`);
+  if (isImage) {
+    await media.evaluate((el) => new Promise((res, rej) => { if (el.complete && el.naturalWidth > 0) return res(); el.onload = res; el.onerror = () => rej(new Error("image failed to load")); setTimeout(() => rej(new Error("image load timeout")), 15_000); }));
+  } else {
+    await media.evaluate((v) => new Promise((res, rej) => { if (v.readyState >= 1) return res(); v.onloadedmetadata = res; v.onerror = () => rej(new Error("video failed to load")); setTimeout(() => rej(new Error("video metadata timeout")), 15_000); }));
+  }
+  const size = await media.evaluate((el) => (el.tagName === "IMG" ? `${el.naturalWidth}×${el.naturalHeight}` : `${el.videoWidth}×${el.videoHeight}`));
+  ev.note(`detail ${isImage ? "image" : "video"} ${src} loaded at ${size}`);
   const download = dialog.getByRole("link", { name: "다운로드" });
   if (!(await download.isVisible())) ev.fail("download link missing in detail");
   const href = await download.getAttribute("href");
-  if (href !== src && !href?.startsWith(`${src}?download=`)) ev.fail("download href differs from the video src");
+  if (href !== src && !href?.startsWith(`${src}?download=`)) ev.fail("download href differs from the media src");
   await ev.shot("detail");
 
   // gallery-close: Esc closes the dialog.

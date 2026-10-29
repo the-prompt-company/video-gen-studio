@@ -54,7 +54,7 @@ vgs run <journey>            # desktop 1440×900
 VGS_MOBILE=1 vgs run <journey>   # 390×844 touch viewport, evidence folder gets a -mobile suffix
 ```
 
-Journeys (`journeys/*.mjs`): `login`, `password`, `import`, `settings`, `teams`, `playground`, `gallery`, `dashboard`, `admin`. Each gets `{ page, context, ev, base, creds, env, webDir, local }` (`local` is `.env.local` parsed); `ev.login(to, p)` signs in through the real form, `ev.shot(label, { page })` captures PNG + ARIA snapshot, `ev.note()` logs, `ev.fail(reason)` aborts with the reason, `ev.api(path, init, p)` is a same-origin fetch with that page's session cookie for read-backs, and `ev.newPage()` opens a page in a fresh browser context (its own cookies, same viewport) for a second device. `p` defaults to the journey's page.
+Journeys (`journeys/*.mjs`): `login`, `password`, `import`, `settings`, `teams`, `playground`, `images`, `gallery`, `dashboard`, `admin`. Each gets `{ page, context, ev, base, creds, env, webDir, local }` (`local` is `.env.local` parsed); `ev.login(to, p)` signs in through the real form, `ev.shot(label, { page })` captures PNG + ARIA snapshot, `ev.note()` logs, `ev.fail(reason)` aborts with the reason, `ev.api(path, init, p)` is a same-origin fetch with that page's session cookie for read-backs, and `ev.newPage()` opens a page in a fresh browser context (its own cookies, same viewport) for a second device. `p` defaults to the journey's page.
 
 Stable handles this app exposes (prefer these over CSS or coordinates):
 

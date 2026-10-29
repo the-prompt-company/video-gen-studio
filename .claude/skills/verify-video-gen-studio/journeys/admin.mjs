@@ -112,12 +112,17 @@ export default async function admin({ page, ev, creds }) {
   const before = await ev.api("/api/admin/models");
   if (before.status !== 200 || !Array.isArray(before.body?.items)) ev.fail(`/api/admin/models returned ${before.status}`);
   const ids = before.body.items.map((m) => m.modelId);
-  if (ids.join(",") !== "bytedance/seedance-2.0,minimax/h3") ev.fail(`the 모델 tab should list exactly Seedance 2.0 and MiniMax H3, got ${ids.join(", ")}`);
-  for (const [id, unit] of [["bytedance/seedance-2.0", "480p·16:9 기준 초당 USD"], ["minimax/h3", "2K 기준 초당 USD"]]) {
+  if (ids.join(",") !== "bytedance/seedance-2.0,minimax/h3,openai/gpt-image-2") ev.fail(`the 모델 tab should list Seedance 2.0, MiniMax H3 and GPT Image 2, got ${ids.join(", ")}`);
+  for (const [id, unit] of [["bytedance/seedance-2.0", "480p·16:9 기준 초당 USD"], ["minimax/h3", "2K 기준 초당 USD"], ["openai/gpt-image-2", "이미지 출력 기준 100만 토큰당 USD"]]) {
     const row = page.getByRole("listitem").filter({ hasText: id });
     if (!(await row.getByText(unit).isVisible())) ev.fail(`${id} row does not say what its rate means (${unit})`);
   }
-  ev.note("adm-rate-meaning: Seedance reads 480p·16:9 기준 초당 USD, H3 reads 2K 기준 초당 USD");
+  ev.note("adm-rate-meaning: Seedance reads 480p·16:9 기준 초당 USD, H3 reads 2K 기준 초당 USD, GPT Image 2 reads 이미지 출력 기준 100만 토큰당 USD");
+  const gptRow = page.getByRole("listitem").filter({ hasText: "openai/gpt-image-2" });
+  if (!(await gptRow.getByRole("button", { name: "OpenAI 정가 30로 채우기" }).isVisible())) ev.fail("GPT Image 2 offers no one-click OpenAI price");
+  if (!(await gptRow.getByText(/^예: 1024×1024 중간 품질 1장 \$/).isVisible())) ev.fail("GPT Image 2 shows no example cost");
+  if (!(await gptRow.getByRole("button", { name: /사용 중 · 끄기|꺼짐 · 켜기/ }).isVisible())) ev.fail("GPT Image 2 has no enable toggle");
+  ev.note(`adm-image-model: GPT Image 2 listed with its unit, the OpenAI 정가 $30 fill, "${(await gptRow.getByText(/^예: /).textContent())?.trim()}", and its toggle`);
   const target = before.body.items.find((m) => m.modelId === "minimax/h3");
   const original = Number(target.pricePerSecUsd);
   const rowEl = page.getByRole("listitem").filter({ hasText: target.modelId });

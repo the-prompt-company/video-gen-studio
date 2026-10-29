@@ -6,9 +6,11 @@
  *   GET  /media/{id}.mp4             deterministic bytes once completed
  *   POST /files/generate-upload-url  then PUT the bytes to upload_url, GET public_url
  *   GET  /_stats, POST /_reset       test hooks, not part of the real API
+ *   POST /openai/v1/images/{generations,edits}   OpenAI's Images API, see scripts/fake-openai.ts
  *   POST /_config                    test hook: {"mediaDelayMs"?, "storageFailN"?, "statusFailN"?, "dropWebhooks"?,
  *                                    "dupWebhooks"?, "firstN429"?, "retryAfterS"?, "submitFailN"?, "submitDelayMs"?}
- *                                    changes those knobs while running and answers with all of them
+ *                                    changes those knobs while running and answers with all of them; its "openai"
+ *                                    object sets the OpenAI fake's knobs, and /_stats lists that fake under "openai"
  *
  * Webhooks go to ?hf_webhook=<url> when a request completes. Like Higgsfield, a 5xx or network error is redelivered
  * (here after FAKE_HF_WEBHOOK_RETRY_MS, doubling, for up to 2 hours) and a 4xx is not.
@@ -35,6 +37,7 @@ import type { AddressInfo } from "node:net";
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { getPayloadFromClientToken } from "@vercel/blob/client";
+import { createOpenAiFake, openAiConfigFromEnv, type OpenAiFakeConfig } from "./fake-openai";
 
 export type Config = {
   port: number;
@@ -272,7 +275,8 @@ function newStats() {
   };
 }
 
-export function createFakeHiggsfield(config: Config): Server {
+export function createFakeHiggsfield(config: Config, openAiConfig: OpenAiFakeConfig = openAiConfigFromEnv({})): Server {
+  const openai = createOpenAiFake(openAiConfig);
   const jobs = new Map<string, Job>();
   const byIdempotencyKey = new Map<string, string>();
   const submitsByApiKey = new Map<string, number>();
@@ -310,6 +314,7 @@ export function createFakeHiggsfield(config: Config): Server {
     objects.clear();
     multiparts.clear();
     stats = newStats();
+    openai.reset();
     storageWrites = 0;
     statusFails = config.statusFailN;
     submitFails = config.submitFailN;
@@ -674,7 +679,7 @@ export function createFakeHiggsfield(config: Config): Server {
     const path = url.pathname;
     const method = req.method ?? "GET";
 
-    if (method === "GET" && path === "/_stats") return json(res, 200, stats);
+    if (method === "GET" && path === "/_stats") return json(res, 200, { ...stats, openai: openai.stats() });
     if (method === "POST" && path === "/_reset") {
       reset();
       return json(res, 200, { ok: true });
@@ -682,7 +687,8 @@ export function createFakeHiggsfield(config: Config): Server {
     if (method === "POST" && path === "/_config") {
       const patch = JSON.parse((await readBody(req)) || "{}") as Partial<
         Pick<Config, "mediaDelayMs" | "storageFailN" | "statusFailN" | "dropWebhooks" | "dupWebhooks" | Submits>
-      >;
+      > & { openai?: Partial<OpenAiFakeConfig> };
+      const openaiKnobs = openai.configure(patch.openai ?? {});
       if (typeof patch.mediaDelayMs === "number") config.mediaDelayMs = patch.mediaDelayMs;
       if (typeof patch.storageFailN === "number") {
         config.storageFailN = patch.storageFailN;
@@ -699,8 +705,9 @@ export function createFakeHiggsfield(config: Config): Server {
       if (typeof patch.submitFailN === "number") submitFails = config.submitFailN = patch.submitFailN;
       if (typeof patch.submitDelayMs === "number") config.submitDelayMs = patch.submitDelayMs;
       const { mediaDelayMs, storageFailN, statusFailN, dropWebhooks, dupWebhooks, firstN429, retryAfterS, submitFailN, submitDelayMs } = config;
-      return json(res, 200, { mediaDelayMs, storageFailN, statusFailN, dropWebhooks, dupWebhooks, firstN429, retryAfterS, submitFailN, submitDelayMs });
+      return json(res, 200, { mediaDelayMs, storageFailN, statusFailN, dropWebhooks, dupWebhooks, firstN429, retryAfterS, submitFailN, submitDelayMs, openai: openaiKnobs });
     }
+    if (await openai.handle(req, res, url)) return;
 
     const publicObject = path.match(/^\/blob\/(.+)$/);
     if (method === "GET" && publicObject) {
@@ -798,7 +805,7 @@ export function createFakeHiggsfield(config: Config): Server {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const config = configFromEnv(process.env);
-  const server = createFakeHiggsfield(config);
+  const server = createFakeHiggsfield(config, openAiConfigFromEnv(process.env));
   server.listen(config.port, () => {
     console.log(`fake higgsfield on http://localhost:${(server.address() as AddressInfo).port}`);
   });

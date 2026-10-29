@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { estimateCostUsd, FAMILIES, isFamilyId } from "@/lib/catalog";
+import { costUsd, FAMILIES, isFamilyId } from "@/lib/catalog";
 import { usd } from "@/lib/format";
 import { Button, Card, Input } from "@/components/ui";
 import { api } from "./AdminPanels";
@@ -44,14 +44,14 @@ export function ModelsPanel() {
   return (
     <Card title="모델 단가">
       <p className="mb-4 text-xs leading-relaxed text-subtle">
-        Higgsfield 응답에는 비용이 없어서, 생성을 요청할 때 이 단가와 Higgsfield의 요금 규칙(해상도, 화면비, 길이, 영상 레퍼런스 길이)으로 비용을 정해 기록합니다. 단가를 바꾸면 그다음 요청부터 적용되고, 실제 청구 금액은 Higgsfield 인보이스가 기준입니다.
+        Higgsfield 응답에는 비용이 없어서, 영상은 생성을 요청할 때 이 단가와 Higgsfield의 요금 규칙(해상도, 화면비, 길이, 영상 레퍼런스 길이)으로 비용을 정해 기록합니다. GPT Image 2는 OpenAI가 응답에 알려 준 토큰 수에 이 단가(이미지 출력 100만 토큰당)와 OpenAI의 입력 단가 비율(텍스트 5/30, 이미지 8/30)을 곱해 기록하고, 토큰 수가 없으면 예상 비용을 씁니다. 단가를 바꾸면 그다음 요청부터 적용되고, 실제 청구 금액은 각 회사의 인보이스가 기준입니다.
       </p>
       {error && <p className="mb-3 rounded-lg bg-rose-500/10 px-3 py-2 text-sm text-rose-300">{error}</p>}
       <ul aria-label="모델" className="divide-y divide-border text-sm">
         {rows.map((r) => {
             const family = isFamilyId(r.modelId) ? FAMILIES[r.modelId] : null;
             const typed = Number(draft[r.modelId]);
-            const example = family && Number.isFinite(typed) && typed > 0 ? estimateCostUsd(family.rate.example.basis, typed) : null;
+            const example = family && Number.isFinite(typed) && typed > 0 ? costUsd(family.rate.example.basis, typed) : null;
             const unitId = `rate-unit-${r.modelId.replace(/\W/g, "-")}`;
             return (
               <li key={r.modelId} aria-label={r.name} className="grid gap-3 py-4 sm:grid-cols-[minmax(0,13rem)_minmax(0,1fr)_auto] sm:items-start">
@@ -60,7 +60,7 @@ export function ModelsPanel() {
                   <div className="font-mono text-[11px] text-subtle">{r.modelId}</div>
                 </div>
                 <div>
-                  {family && <div id={unitId} className="mb-1.5 text-xs font-medium text-muted">{family.rate.basis} 기준 초당 USD</div>}
+                  {family && <div id={unitId} className="mb-1.5 text-xs font-medium text-muted">{family.rate.basis} 기준 {family.rate.per.long} USD</div>}
                   <div className="flex items-center gap-2">
                     <div className="w-36">
                       <Input

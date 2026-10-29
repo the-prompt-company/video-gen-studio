@@ -80,28 +80,33 @@ function Tile({ g, onOpen }: { g: PublicGeneration; onOpen: () => void }) {
   const { ref, size, read } = useVideoSize();
   const { ref: tileRef, near } = useNearViewport<HTMLLIElement>("0px 0px 80px 0px");
   const label = aspectLabel(g, size?.w, size?.h);
-  const keep = retention(g.video);
+  const keep = g.image ? "영구" : retention(g.video);
   return (
     <li ref={tileRef} className="group overflow-hidden rounded-xl border border-border bg-surface">
       <button type="button" onClick={onOpen} className="relative block w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent" aria-label={`${g.prompt || "프롬프트 없음"} 자세히 보기`}>
-        <video
-          ref={ref}
-          src={near ? g.video?.url : undefined}
-          muted
-          loop
-          playsInline
-          preload="metadata"
-          className="aspect-video w-full bg-background object-contain"
-          onLoadedMetadata={read}
-          onMouseEnter={(e) => e.currentTarget.play().catch(() => {})}
-          onMouseLeave={(e) => e.currentTarget.pause()}
-        />
+        {g.image ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={near ? g.image.url : undefined} alt="" className="aspect-video w-full bg-background object-contain" />
+        ) : (
+          <video
+            ref={ref}
+            src={near ? g.video?.url : undefined}
+            muted
+            loop
+            playsInline
+            preload="metadata"
+            className="aspect-video w-full bg-background object-contain"
+            onLoadedMetadata={read}
+            onMouseEnter={(e) => e.currentTarget.play().catch(() => {})}
+            onMouseLeave={(e) => e.currentTarget.pause()}
+          />
+        )}
         {label && (
           <span className="font-display absolute left-2 top-2 rounded-sm bg-background/80 px-1.5 pt-0.5 text-[14px] leading-none text-sand">
             {label}
           </span>
         )}
-        <span className="font-display absolute right-2 top-2 rounded-sm bg-background/80 px-1.5 pt-0.5 text-[14px] leading-none text-foreground-2">{g.durationS}S</span>
+        <span className="font-display absolute right-2 top-2 rounded-sm bg-background/80 px-1.5 pt-0.5 text-[14px] leading-none text-foreground-2">{g.image ? g.image.format.toUpperCase() : `${g.durationS}S`}</span>
       </button>
       <div className="space-y-1.5 p-3">
         <p className="line-clamp-2 text-sm text-foreground-2">{g.prompt || "(프롬프트 없음)"}</p>
@@ -118,7 +123,9 @@ function Tile({ g, onOpen }: { g: PublicGeneration; onOpen: () => void }) {
 }
 
 function Detail({ g, onClose }: { g: PublicGeneration; onClose: () => void }) {
-  const { ref, size, read } = useVideoSize();
+  const { ref, size: videoSize, read } = useVideoSize();
+  const [imageSize, setImageSize] = useState<{ w: number; h: number } | null>(null);
+  const size = videoSize ?? imageSize;
   const label = aspectLabel(g, size?.w, size?.h);
   const params = Object.entries((g.params as Record<string, unknown>) ?? {});
   useEffect(() => {
@@ -130,17 +137,27 @@ function Detail({ g, onClose }: { g: PublicGeneration; onClose: () => void }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/85 p-4 backdrop-blur-sm" onClick={onClose}>
       <div role="dialog" aria-modal="true" aria-label="생성 상세" className="flex max-h-[92dvh] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-border bg-surface" onClick={(e) => e.stopPropagation()}>
         <div className="flex h-[58dvh] min-h-[240px] shrink-0 items-center justify-center overflow-hidden bg-background">
-          <video
-            ref={ref}
-            src={g.video?.url}
-            controls
-            autoPlay
-            loop
-            playsInline
-            className="h-full w-full object-contain"
-            onLoadedMetadata={read}
-            aria-label="생성된 영상"
-          />
+          {g.image ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={g.image.url}
+              alt="생성된 이미지"
+              className="h-full w-full object-contain"
+              onLoad={(e) => setImageSize({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
+            />
+          ) : (
+            <video
+              ref={ref}
+              src={g.video?.url}
+              controls
+              autoPlay
+              loop
+              playsInline
+              className="h-full w-full object-contain"
+              onLoadedMetadata={read}
+              aria-label="생성된 영상"
+            />
+          )}
         </div>
         <div className="grid min-h-0 flex-1 gap-5 overflow-y-auto p-5 md:grid-cols-[minmax(0,1fr)_200px]">
           <div className="min-w-0 space-y-4">
@@ -154,7 +171,7 @@ function Detail({ g, onClose }: { g: PublicGeneration; onClose: () => void }) {
                   </span>
                 )}
                 {size && <span className="tabular-nums">{size.w}×{size.h}</span>}
-                <span className="font-display text-[15px] text-sand">{g.durationS}S · {usd(g.costUsd)}</span>
+                <span className="font-display text-[15px] text-sand">{g.image ? usd(g.costUsd) : `${g.durationS}S · ${usd(g.costUsd)}`}</span>
                 <span>{STATUS_LABEL[g.status]}</span>
               </div>
               <p className="mt-2 break-words text-sm leading-relaxed text-foreground">{g.prompt || "(프롬프트 없음)"}</p>
@@ -198,7 +215,7 @@ function Detail({ g, onClose }: { g: PublicGeneration; onClose: () => void }) {
                   <dd className="tabular-nums text-foreground-2">{fmtDate(g.completedAt)}</dd>
                 </>
               )}
-              {g.video?.kind === "stored" && (
+              {(g.video?.kind === "stored" || g.image) && (
                 <>
                   <dt className="text-muted">보관</dt>
                   <dd className="text-foreground-2">영구</dd>
@@ -219,8 +236,8 @@ function Detail({ g, onClose }: { g: PublicGeneration; onClose: () => void }) {
             </dl>
           </div>
           <div className="flex gap-2 md:flex-col">
-            {g.video && (
-              <a href={g.video.downloadUrl} download target="_blank" rel="noreferrer" className="inline-flex h-10 flex-1 items-center justify-center rounded-full bg-accent px-5 text-sm font-medium text-background transition hover:bg-accent-hover md:flex-none">
+            {(g.image ?? g.video) && (
+              <a href={(g.image ?? g.video)?.downloadUrl} download target="_blank" rel="noreferrer" className="inline-flex h-10 flex-1 items-center justify-center rounded-full bg-accent px-5 text-sm font-medium text-background transition hover:bg-accent-hover md:flex-none">
                 다운로드
               </a>
             )}
@@ -244,7 +261,7 @@ export function Gallery({ items, isAdmin, showAll }: { items: PublicGeneration[]
         <div>
           <h1 className="text-2xl font-semibold">갤러리</h1>
           <p className="mt-1 text-sm text-muted">
-            완료된 영상 {items.length}건.{expiring ? " 영구 보관이 아닌 결과는 Higgsfield에 7일간만 남으니 필요한 건 다운로드하세요." : ""}
+            완료된 결과 {items.length}건.{expiring ? " 영구 보관이 아닌 결과는 Higgsfield에 7일간만 남으니 필요한 건 다운로드하세요." : ""}
           </p>
         </div>
         {isAdmin && (
@@ -261,7 +278,7 @@ export function Gallery({ items, isAdmin, showAll }: { items: PublicGeneration[]
 
       {items.length === 0 ? (
         <Empty>
-          완료된 영상이 없습니다. <Link href="/playground" className="text-accent-soft underline-offset-4 hover:underline">플레이그라운드</Link>에서 첫 영상을 만들어 보세요.
+          완료된 결과가 없습니다. <Link href="/playground" className="text-accent-soft underline-offset-4 hover:underline">플레이그라운드</Link>에서 첫 결과를 만들어 보세요.
         </Empty>
       ) : (
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">

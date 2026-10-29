@@ -42,7 +42,7 @@ Higgsfield 웹사이트를 직접 쓰는 것과 다른 점은 셋이며, 사용�
 
 **확정된 기능**
 - 경로: `/`(랜딩), `/login`, `/playground`, `/gallery`, `/dashboard`, `/settings`, `/admin`.
-- 모델 2종(Seedance 2.0, MiniMax H3)과 각 모델의 엔드포인트 선택(텍스트→영상, 이미지→영상, 레퍼런스→영상), 파라미터, 비용 규칙은 `src/lib/catalog.ts`가 단일 출처다. 클라이언트 폼과 서버 생성 라우트가 같은 `planGeneration`을 쓴다. 레퍼런스는 필수가 아니다.
+- 모델 3종(영상: Seedance 2.0, MiniMax H3 / 이미지: OpenAI GPT Image 2)과 각 모델의 엔드포인트 선택(텍스트→영상, 이미지→영상, 레퍼런스→영상 / 텍스트→이미지, 레퍼런스→이미지), 파라미터, 비용 규칙은 `src/lib/catalog.ts`가 단일 출처다. 이미지 모델은 서버 환경 변수 `OPENAI_API_KEY` 하나를 팀이 같이 쓰고, 멤버의 Higgsfield 키는 필요 없다. 이미지 요청은 다시 보내면 두 번 청구될 수 있어 자동으로 다시 보내지 않는다(README 이미지 생성 흐름). 클라이언트 폼과 서버 생성 라우트가 같은 `planGeneration`을 쓴다. 레퍼런스는 필수가 아니다.
 - 상태 어휘: 제출 대기(pending, Higgsfield가 아직 받지 않아 스스로 다시 제출함), 대기(queued), 생성 중(in_progress), 완료(completed), 실패(failed), NSFW 차단(nsfw), 취소(canceled). 제출 대기·실패·NSFW·취소는 과금하지 않는다.
 - 어드민: 사용자 추가, 엑셀(`nickname`·`email` 열) 한 장으로 회원 최대 200명 일괄 생성(브라우저가 읽고 서버가 행마다 판정, 초기 비밀번호 `oooooooo`), API 키 할당, 닉네임·비밀번호·역할·활성 변경과 초기 비밀번호로 되돌리기, 팀 만들기·이름 바꾸기·삭제와 팀원 지정(표에서 여러 명을 골라 한 번에, 또는 회원 편집에서 한 명씩), 모델 단가·활성, 전체 로그 필터와 CSV.
 

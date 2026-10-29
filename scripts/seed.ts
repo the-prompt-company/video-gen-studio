@@ -12,7 +12,8 @@ async function main() {
   const db = getDb();
 
   for (const id of FAMILY_IDS) {
-    await db.insert(schema.models).values({ modelId: id, name: FAMILIES[id].name, note: FAMILIES[id].blurb }).onConflictDoNothing();
+    const f = FAMILIES[id];
+    await db.insert(schema.models).values({ modelId: id, name: f.name, note: f.blurb, pricePerSecUsd: f.rate.defaultUsd.toFixed(4) }).onConflictDoNothing();
   }
   console.log(`models: ${FAMILY_IDS.length} rows ensured`);
 

@@ -17,7 +17,7 @@ import type { AddressInfo } from "node:net";
 import { createInterface } from "node:readline";
 import { put } from "@vercel/blob";
 import { configFromEnv, createFakeHiggsfield } from "./fake-higgsfield";
-import { avatarUrl, byteLimit, copyVideo, deleteAvatar, deleteRefs, isRefPathname, newAvatarKey, putAvatar, putVideo, refPrefix, storageEnabled, videoKey, videoUrls } from "../src/lib/storage";
+import { avatarUrl, byteLimit, copyVideo, deleteAvatar, deleteRefs, isRefPathname, newAvatarKey, putAvatar, putVideo, refPrefix, storageEnabled, videoKey, objectUrls } from "../src/lib/storage";
 import { refUploadName } from "../src/lib/ref-name";
 
 const MB = 1024 * 1024;
@@ -101,15 +101,15 @@ async function blobStats(base: string) {
   return ((await (await fetch(`${base}/_stats`)).json()) as { storage: { deleted: string[]; deleteUrls: string[]; byKey: ByKey } }).storage;
 }
 
-test("videoUrls derives the public and download URLs from the token's store id, with no network call", () => {
+test("objectUrls derives the public and download URLs from the token's store id, with no network call", () => {
   delete process.env.BLOB_PUBLIC_BASE_URL;
   delete process.env.BLOB_READ_WRITE_TOKEN;
   assert.equal(storageEnabled(), false);
-  assert.equal(videoUrls(videoKey(ID)), null);
+  assert.equal(objectUrls(videoKey(ID)), null);
   process.env.BLOB_READ_WRITE_TOKEN = "vercel_blob_rw_Ce0rCu23VrrDzQap_SECRETsecret";
   assert.equal(storageEnabled(), true);
   assert.equal(videoKey(ID), `videos/${ID}.mp4`);
-  assert.deepEqual(videoUrls(videoKey(ID)), {
+  assert.deepEqual(objectUrls(videoKey(ID)), {
     url: `https://ce0rcu23vrrdzqap.public.blob.vercel-storage.com/videos/${ID}.mp4`,
     downloadUrl: `https://ce0rcu23vrrdzqap.public.blob.vercel-storage.com/videos/${ID}.mp4?download=1`,
   });
@@ -130,7 +130,7 @@ test("copyVideo streams a result to videos/<id>.mp4 with a one-year cache, and t
       { writes: 1, size, sha256: patternDigest(size), contentType: "video/mp4", maxAge: 365 * 24 * 3600, parts: 1 },
       "a body that fits in one 8 MB part goes up in one put",
     );
-    const urls = videoUrls(key);
+    const urls = objectUrls(key);
     assert.ok(urls);
     assert.equal(urls.url, `${fake.base}/blob/${key}`);
     const served = await fetch(urls.url);
@@ -228,7 +228,7 @@ test("a source that stalls mid-body fails at the timeout with its cause, in one 
   }
 });
 
-test("putVideo fails instead of recording a key when the store answers at a URL videoUrls would not derive", async () => {
+test("putVideo fails instead of recording a key when the store answers at a URL objectUrls would not derive", async () => {
   const fake = await blobFake();
   try {
     process.env.BLOB_PUBLIC_BASE_URL = `${fake.base.replace("127.0.0.1", "localhost")}/blob`;
@@ -244,7 +244,7 @@ test("deleteRefs deletes reference uploads in this store and never a stored vide
     const key = videoKey(ID);
     await putVideo(key, streamOf("video bytes"), { contentType: "video/mp4" });
     const ref = await put(`refs/${OWNER}/1-clip.mp4`, Buffer.from("ref"), { access: "public", addRandomSuffix: true, token: TOKEN });
-    const video = videoUrls(key)?.url ?? "";
+    const video = objectUrls(key)?.url ?? "";
     const spellings = [
       video,
       video.replace("/videos/", "/%76ideos/"),

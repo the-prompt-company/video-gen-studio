@@ -8,8 +8,8 @@ import {
   describeModel,
   FAMILIES,
   MODE_LABEL,
-  MODES,
   modelLine,
+  modesOf,
   paramsFor,
   planGeneration,
   routeMode,
@@ -18,32 +18,39 @@ import {
   type Mode,
   type ParamSpec,
 } from "@/lib/catalog";
-import type { PublicGeneration } from "@/lib/generations";
+import type { PublicGeneration, Unavailable } from "@/lib/generations";
 import { usd } from "@/lib/format";
 import { isLive, STATUS_LABEL } from "@/lib/generation-status";
 import { refUploadName } from "@/lib/ref-name";
 import { Button, ErrorText, Field, Input, Select, Textarea } from "@/components/ui";
 import { StatusBadge } from "@/components/StatusBadge";
 
-type Offer = { family: FamilyId; rateUsd: number };
+/**
+ * `unavailable` 503: the server cannot run the model at all, so it is listed but cannot be picked. 403: this member
+ * has no key for it, and the drawer says so while 생성하기 stays off.
+ */
+type Offer = { family: FamilyId; rateUsd: number; unavailable: Unavailable | null };
 type Ref = { id: string; url: string; name: string; kind: "image" | "video"; local?: string; w?: number; h?: number; seconds?: number };
 type FeedAnswer = { items?: PublicGeneration[]; now?: number };
 
 const ASPECT_LABEL: Record<string, string> = {
   "16:9": "가로 16:9",
+  "3:2": "가로 3:2",
   "21:9": "가로 21:9",
   "4:3": "가로 4:3",
   "9:16": "세로 9:16",
   "3:4": "세로 3:4",
+  "2:3": "세로 2:3",
   "1:1": "정사각 1:1",
   auto: "자동",
 };
 
 function modeSentence(mode: Mode, images: number, videos: number) {
-  if (mode === "t2v") return "레퍼런스 없이 프롬프트만으로 만듭니다.";
+  if (mode === "t2v" || mode === "t2i") return "레퍼런스 없이 프롬프트만으로 만듭니다.";
   if (mode === "i2v") return "1번 이미지를 첫 프레임으로 씁니다.";
+  if (mode === "r2i") return `이미지 ${images}장을 레퍼런스로 OpenAI 편집에 보냅니다.`;
   const parts = [images > 0 && `이미지 ${images}장`, videos > 0 && `영상 ${videos}개`].filter(Boolean);
-  return `${parts.join(" · ")}를 레퍼런스로 씁니다.`;
+  return `${parts.join(" · ")}${videos > 0 ? "를" : "을"} 레퍼런스로 씁니다.`;
 }
 
 function orientation(w?: number, h?: number) {
@@ -91,8 +98,12 @@ const POLL_JITTER_MS = 400;
 const POLL_TIMEOUT_MS = 10_000;
 const STORE_WAIT_MS = 120_000;
 
-async function uploadFile(file: File, largeUploadPrefix: string | null): Promise<string> {
-  if (file.size <= SMALL) {
+/**
+ * Small files go through the server to Higgsfield's storage with the member's key. An OpenAI model's references always
+ * go straight to Blob (`viaBlob`), so no Higgsfield key is involved.
+ */
+async function uploadFile(file: File, largeUploadPrefix: string | null, viaBlob: boolean): Promise<string> {
+  if (file.size <= SMALL && !viaBlob) {
     const fd = new FormData();
     fd.append("file", file);
     const res = await fetch("/api/uploads", { method: "POST", body: fd });
@@ -100,7 +111,7 @@ async function uploadFile(file: File, largeUploadPrefix: string | null): Promise
     if (!res.ok || !body.url) throw new Error(body.error ?? (res.status === 413 ? "파일이 너무 큽니다 (4 MB 이하)" : `업로드 실패 (${res.status})`));
     return body.url;
   }
-  if (largeUploadPrefix === null) throw new Error("4 MB를 넘는 파일은 Blob 스토어가 연결돼야 올릴 수 있습니다");
+  if (largeUploadPrefix === null) throw new Error(viaBlob ? "이미지 레퍼런스는 Blob 스토어가 연결돼야 올릴 수 있습니다" : "4 MB를 넘는 파일은 Blob 스토어가 연결돼야 올릴 수 있습니다");
   const { upload: blobUpload } = await import("@vercel/blob/client");
   const blob = await blobUpload(`${largeUploadPrefix}${refUploadName(file.name)}`, file, { access: "public", handleUploadUrl: "/api/uploads/blob", multipart: true });
   return blob.url;
@@ -141,7 +152,7 @@ function ParamInput({ spec, value, onChange }: { spec: ParamSpec; value: unknown
         <Field label={spec.label}>
           <Select value={String(value)} onChange={(e) => onChange(e.target.value)}>
             {spec.options.map((o) => (
-              <option key={o} value={o}>{o}</option>
+              <option key={o} value={o}>{spec.labels?.[o] ?? o}</option>
             ))}
           </Select>
         </Field>
@@ -193,6 +204,7 @@ const I = {
 
 function FeedItem({ g, index, total, active, now, modelName }: { g: PublicGeneration; index: number; total: number; active: boolean; now: number; modelName: string }) {
   const live = isLive(g.status);
+  const isImage = describeModel(g.modelId).output === "image";
   const started = new Date(g.createdAt).getTime();
   const took = g.completedAt ? new Date(g.completedAt).getTime() - started : now - started;
   const label = STATUS_LABEL[g.status];
@@ -211,6 +223,11 @@ function FeedItem({ g, index, total, active, now, modelName }: { g: PublicGenera
         <div className="min-h-0 flex-1 pt-[72px] lg:h-full lg:pt-0">
           <video src={g.video.url} controls={active} autoPlay={active} loop muted playsInline preload={active ? "auto" : "metadata"} className="h-full w-full object-contain" aria-label="생성된 영상" />
         </div>
+      ) : g.image ? (
+        <div className="min-h-0 flex-1 pt-[72px] lg:h-full lg:pt-0">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={g.image.url} alt="생성된 이미지" loading={active ? "eager" : "lazy"} className="h-full w-full object-contain" />
+        </div>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-6 pt-[72px] text-center lg:h-full lg:pt-0">
           {live ? (
@@ -219,22 +236,23 @@ function FeedItem({ g, index, total, active, now, modelName }: { g: PublicGenera
               <span className="font-display text-7xl leading-none text-foreground sm:text-8xl" aria-live="polite">{fmtElapsed(took)}</span>
               <span className="text-sm text-muted">{label} · 경과 시간</span>
               {g.status === "pending" && <span className="max-w-xs text-xs text-muted">Higgsfield가 요청을 받는 대로 자동으로 시작합니다</span>}
+              {isImage && <span className="max-w-xs text-xs text-muted">OpenAI가 이미지를 만드는 중입니다. 보통 수십 초에서 2분 걸립니다</span>}
             </>
           ) : (
             <>
               <span className="text-4xl font-semibold leading-none tracking-tight text-foreground-2 sm:text-5xl">{label}</span>
-              <p className="max-w-md text-sm text-muted">{g.error ?? (g.status === "canceled" ? "취소된 생성입니다." : "결과 영상이 없습니다.")}</p>
+              <p className="max-w-md text-sm text-muted">{g.error ?? (g.status === "canceled" ? "취소된 생성입니다." : isImage ? "결과 이미지가 없습니다." : "결과 영상이 없습니다.")}</p>
             </>
           )}
         </div>
       )}
 
       {/* Caption scrim */}
-      <div className={`pointer-events-none shrink-0 bg-surface px-4 pb-4 pt-3 lg:scrim lg:absolute lg:inset-x-0 lg:bottom-0 lg:z-10 lg:bg-transparent lg:px-5 lg:pt-24 ${g.status === "completed" && active ? "lg:pb-16" : "lg:pb-5"}`}>
+      <div className={`pointer-events-none shrink-0 bg-surface px-4 pb-4 pt-3 lg:scrim lg:absolute lg:inset-x-0 lg:bottom-0 lg:z-10 lg:bg-transparent lg:px-5 lg:pt-24 ${g.video && active ? "lg:pb-16" : "lg:pb-5"}`}>
         <div className="text-xs text-muted">
           <span className="text-foreground-2">{modelName}</span>
           {live && <span className="ml-2">예상</span>}
-          <span className={`font-display text-sm text-sand ${live ? "ml-1" : "ml-2"}`}>{g.durationS}S · {usd(g.costUsd)}</span>
+          <span className={`font-display text-sm text-sand ${live ? "ml-1" : "ml-2"}`}>{isImage ? usd(g.costUsd) : `${g.durationS}S · ${usd(g.costUsd)}`}</span>
           {/^\d+:\d+$/.test(String((g.params as Record<string, unknown>)?.aspect_ratio)) && (
             <span className="font-display ml-2 text-sm text-sand">{String((g.params as Record<string, unknown>).aspect_ratio)}</span>
           )}
@@ -322,8 +340,8 @@ function DropZone({ kind, max, count, disabled, uploading, hint, accept, onFiles
   );
 }
 
-function RefDialog({ modelName, refs, images, videos, imageMax, videoMax, uploading, largeUploads, error, onAdd, onRemove, onClose }: {
-  modelName: string; refs: Ref[]; images: Ref[]; videos: Ref[]; imageMax: number; videoMax: number; uploading: boolean; largeUploads: boolean; error: string | null;
+function RefDialog({ modelName, refNote, imageHint, imageAccept, refs, images, videos, imageMax, videoMax, uploading, largeUploads, error, onAdd, onRemove, onClose }: {
+  modelName: string; refNote: string; imageHint: string; imageAccept: string; refs: Ref[]; images: Ref[]; videos: Ref[]; imageMax: number; videoMax: number; uploading: boolean; largeUploads: boolean; error: string | null;
   onAdd: (files: FileList | null, kind: "image" | "video") => void; onRemove: (id: string) => void; onClose: () => void;
 }) {
   const panel = useRef<HTMLDivElement>(null);
@@ -339,20 +357,18 @@ function RefDialog({ modelName, refs, images, videos, imageMax, videoMax, upload
         <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-3">
           <div>
             <h2 id="ref-dialog-title" className="text-base font-semibold">레퍼런스 추가</h2>
-            <p className="text-xs text-muted">{modelName} · 이미지 최대 {imageMax}장 · 영상 최대 {videoMax}개 · 선택</p>
+            <p className="text-xs text-muted">{modelName} · 이미지 최대 {imageMax}장{videoMax > 0 && ` · 영상 최대 ${videoMax}개`} · 선택</p>
           </div>
           <Button variant="ghost" size="sm" onClick={onClose} aria-label="닫기">닫기</Button>
         </header>
 
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
           <div className="grid gap-3 sm:grid-cols-2">
-            <DropZone kind="image" max={imageMax} count={images.length} disabled={false} uploading={uploading} hint="jpeg · png · webp · gif · 4 MB 이하" accept="image/jpeg,image/png,image/webp,image/gif" onFiles={(f) => onAdd(f, "image")} />
-            <DropZone kind="video" max={videoMax} count={videos.length} disabled={false} uploading={uploading} hint={largeUploads ? "mp4 · 최대 200 MB" : "mp4 · 4 MB 이하"} accept="video/mp4" onFiles={(f) => onAdd(f, "video")} />
+            <DropZone kind="image" max={imageMax} count={images.length} disabled={false} uploading={uploading} hint={imageHint} accept={imageAccept} onFiles={(f) => onAdd(f, "image")} />
+            <DropZone kind="video" max={videoMax} count={videos.length} disabled={videoMax === 0} uploading={uploading} hint={largeUploads ? "mp4 · 최대 200 MB" : "mp4 · 4 MB 이하"} accept="video/mp4" onFiles={(f) => onAdd(f, "video")} />
           </div>
 
-          <p className="text-xs leading-relaxed text-muted">
-            레퍼런스는 선택입니다. 없으면 프롬프트만으로 만들고, 이미지 한 장만 올리면 그 이미지로 시작할지 서랍에서 고릅니다. 이미지와 영상은 올린 순서대로 번호가 붙고 그 순서로 모델에 전달됩니다. 영상 레퍼런스는 길이만큼 비용에 더해질 수 있습니다.
-          </p>
+          <p className="text-xs leading-relaxed text-muted">{refNote}</p>
 
           {error && <ErrorText>{error}</ErrorText>}
 
@@ -374,8 +390,8 @@ function RefDialog({ modelName, refs, images, videos, imageMax, videoMax, upload
   );
 }
 
-export function Playground({ offers, hasApiKey, largeUploadPrefix, galleryCount }: { offers: Offer[]; hasApiKey: boolean; largeUploadPrefix: string | null; galleryCount: number }) {
-  const [familyId, setFamilyId] = useState<FamilyId | null>(offers[0]?.family ?? null);
+export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers: Offer[]; largeUploadPrefix: string | null; galleryCount: number }) {
+  const [familyId, setFamilyId] = useState<FamilyId | null>(() => (offers.find((o) => !o.unavailable) ?? offers.find((o) => o.unavailable?.status !== 503) ?? offers[0])?.family ?? null);
   const offer = offers.find((o) => o.family === familyId) ?? offers[0];
   const [params, setParams] = useState<Record<string, unknown>>(() => (offer ? { ...defaultParams(offer.family) } : {}));
   const [prompt, setPrompt] = useState("");
@@ -500,7 +516,7 @@ export function Playground({ offers, hasApiKey, largeUploadPrefix, galleryCount 
   const family = offer ? FAMILIES[offer.family] : null;
   const imageMax = family?.maxImages ?? 0;
   const videoMax = family?.maxVideos ?? 0;
-  const mode = routeMode(images.length, videos.length, startFromImage);
+  const mode = family ? routeMode(family.id, images.length, videos.length, startFromImage) : "t2v";
   const draft: Draft | null = offer
     ? {
         family: offer.family,
@@ -526,9 +542,12 @@ export function Playground({ offers, hasApiKey, largeUploadPrefix, galleryCount 
     setError(null);
     try {
       for (const f of picked) {
+        const { types, hint, maxBytes } = family.refImages;
+        if (kind === "image" && !types.includes(f.type === "image/jpg" ? "image/jpeg" : f.type)) throw new Error(`${f.name}: ${family.name}이(가) 받지 않는 형식입니다. ${hint}인 파일로 올려 주세요`);
+        if (kind === "image" && maxBytes !== null && f.size > maxBytes) throw new Error(`${f.name}: ${Math.round(maxBytes / 1024 / 1024)} MB를 넘습니다. 줄여서 다시 올려 주세요`);
         const seconds = kind === "video" ? await readVideoSeconds(f) : undefined;
         if (seconds === null) throw new Error(`${f.name}: 영상 길이를 읽지 못했습니다. 다른 mp4로 올려 주세요`);
-        const url = await uploadFile(f, largeUploadPrefix);
+        const url = await uploadFile(f, largeUploadPrefix, family.provider === "openai");
         const size = kind === "image" ? await readImageSize(f) : null;
         setRefs((r) => [...r, { id: crypto.randomUUID(), url, name: f.name, kind, local: URL.createObjectURL(f), w: size?.w, h: size?.h, seconds }]);
       }
@@ -610,16 +629,10 @@ export function Playground({ offers, hasApiKey, largeUploadPrefix, galleryCount 
     return m ? [Number(m[1]), Number(m[2])] : [undefined, undefined];
   })();
   const priced = offer.rateUsd > 0;
-  const inputVideoS = mode === "r2v" ? videos.reduce((s, r) => s + (r.seconds ?? 0), 0) : 0;
-  const estimateNote = [
-    `${plan.durationS}s`,
-    typeof plan.params.resolution === "string" ? plan.params.resolution : null,
-    inputVideoS > 0 && family.id === "bytedance/seedance-2.0" ? `입력 영상 ${inputVideoS.toFixed(1)}s` : null,
-    `단가 ${usd(offer.rateUsd)}/s`,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-  const canGenerate = hasApiKey && !submitting && !uploading && plan.ready;
+  const ratePer = `${usd(offer.rateUsd)}/${family.rate.per.short}`;
+  const estimateNote = [...plan.facts, `단가 ${ratePer}`].join(" · ");
+  const canGenerate = !offer.unavailable && !submitting && !uploading && plan.ready;
+  const offline = offers.filter((o) => o.unavailable?.status === 503 && o.family !== family.id);
   const canCancel = Boolean(active && (active.status === "pending" || active.status === "queued"));
   const activeStarted = active ? new Date(active.createdAt).getTime() : 0;
   const activeIndex = active ? items.findIndex((i) => i.id === active.id) : -1;
@@ -675,7 +688,7 @@ export function Playground({ offers, hasApiKey, largeUploadPrefix, galleryCount 
           )}
           <Glyph label="생성" counter={priced && plan.ready ? usd(plan.costUsd) : "—"} icon={I.play} active={canGenerate} disabled={!canGenerate} onClick={generate} />
           <Glyph label="취소" counter={canCancel ? fmtElapsed(now - activeStarted) : "—"} icon={I.x} disabled={!canCancel} onClick={() => active && cancel(active)} />
-          <Glyph label="다운로드" counter={active?.video ? "MP4" : "—"} icon={I.down} disabled={!active?.video} href={active?.video?.downloadUrl} download />
+          <Glyph label="다운로드" counter={active?.video ? "MP4" : active?.image ? active.image.format.toUpperCase() : "—"} icon={I.down} disabled={!active?.video && !active?.image} href={(active?.video ?? active?.image)?.downloadUrl} download />
           <Glyph label="갤러리" counter={galleryTotal > 0 ? String(galleryTotal) : "—"} icon={I.grid} href="/gallery" />
           <Glyph label="다시" counter={active ? `×${reuseCount}` : "—"} icon={I.redo} disabled={!active} onClick={() => active && reuse(active)} />
         </div>
@@ -686,10 +699,10 @@ export function Playground({ offers, hasApiKey, largeUploadPrefix, galleryCount 
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-5">
           <h1 className="text-base font-semibold">플레이그라운드</h1>
 
-          {!hasApiKey && (
+          {offer.unavailable && (
             <div role="status" className="flex items-start gap-2.5 rounded-md border border-border bg-surface px-3 py-2 text-xs leading-relaxed text-foreground-2">
               <span aria-hidden className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" />
-              <span>API 키가 아직 할당되지 않았습니다. 관리자가 어드민에서 키를 넣어야 생성할 수 있습니다.</span>
+              <span>{offer.unavailable.message}</span>
             </div>
           )}
 
@@ -704,8 +717,12 @@ export function Playground({ offers, hasApiKey, largeUploadPrefix, galleryCount 
               </Button>
               <span className="text-xs tabular-nums text-muted">
                 이미지 {images.length}/{imageMax}
-                <span className="mx-1.5 text-subtle">·</span>
-                영상 {videos.length}/{videoMax}
+                {videoMax > 0 && (
+                  <>
+                    <span className="mx-1.5 text-subtle">·</span>
+                    영상 {videos.length}/{videoMax}
+                  </>
+                )}
                 <span className="mx-1.5 text-subtle">·</span>
                 <span className="text-subtle">선택</span>
               </span>
@@ -721,7 +738,7 @@ export function Playground({ offers, hasApiKey, largeUploadPrefix, galleryCount 
             <div className="space-y-1.5">
               <div className="text-xs font-medium text-muted">생성 방식</div>
               <ol aria-label="생성 방식" className="flex flex-wrap gap-1.5">
-                {MODES.map((m) => (
+                {modesOf(family.id).map((m) => (
                   <li
                     key={m}
                     aria-current={m === mode ? "step" : undefined}
@@ -737,7 +754,7 @@ export function Playground({ offers, hasApiKey, largeUploadPrefix, galleryCount 
 
           <section className="space-y-3">
             <h2 className="text-xs font-semibold tracking-wider text-muted">2 · 모델과 하이퍼파라미터</h2>
-            <Field label="모델" hint={priced ? `${family.rate.basis} 기준 ${usd(offer.rateUsd)}/s` : "단가 미설정"}>
+            <Field label="모델" hint={priced ? `${family.rate.basis} 기준 ${ratePer}` : "단가 미설정"}>
               <Select
                 value={family.id}
                 onChange={(e) => {
@@ -745,13 +762,33 @@ export function Playground({ offers, hasApiKey, largeUploadPrefix, galleryCount 
                   if (next) pickFamily(next.family);
                 }}
               >
-                {offers.map((o) => (
-                  <option key={o.family} value={o.family}>
-                    {FAMILIES[o.family].name} · {FAMILIES[o.family].vendor}{o.rateUsd > 0 ? ` · ${usd(o.rateUsd)}/s` : ""}
-                  </option>
-                ))}
+                {(["video", "image"] as const).map((output) => {
+                  const group = offers.filter((o) => FAMILIES[o.family].modes.output === output);
+                  if (group.length === 0) return null;
+                  return (
+                    <optgroup key={output} label={output === "video" ? "영상" : "이미지"}>
+                      {group.map((o) => {
+                        const f = FAMILIES[o.family];
+                        const off = o.unavailable?.status === 503;
+                        return (
+                          <option key={o.family} value={o.family} disabled={off}>
+                            {f.name} · {f.vendor}{off ? " · 사용 불가" : o.rateUsd > 0 ? ` · ${usd(o.rateUsd)}/${f.rate.per.short}` : ""}
+                          </option>
+                        );
+                      })}
+                    </optgroup>
+                  );
+                })}
               </Select>
             </Field>
+            {offline.map((o) => (
+              <p key={o.family} role="status" className="flex items-start gap-2 text-xs leading-relaxed text-foreground-2">
+                <span aria-hidden className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" />
+                <span>
+                  <span className="text-foreground">{FAMILIES[o.family].name}</span> 사용 불가 · {o.unavailable?.message}
+                </span>
+              </p>
+            ))}
             <p className="text-xs leading-relaxed text-muted">
               {family.blurb}
               <span className="block text-subtle">{family.note}</span>
@@ -816,7 +853,7 @@ export function Playground({ offers, hasApiKey, largeUploadPrefix, galleryCount 
                 <span className="text-xs text-subtle">{MODE_LABEL[mode]}</span>
               </div>
               <div className="mt-0.5 truncate text-[11px] text-subtle tabular-nums">
-                {priced ? estimateNote : `관리자가 단가를 넣으면 ${plan.durationS}s 기준으로 계산`}
+                {priced ? estimateNote : `관리자가 단가를 넣으면 ${plan.facts.join(" · ")} 기준으로 계산`}
               </div>
             </div>
             <Button size="lg" onClick={generate} disabled={!canGenerate}>
@@ -829,6 +866,9 @@ export function Playground({ offers, hasApiKey, largeUploadPrefix, galleryCount 
       {refsOpen && (
         <RefDialog
           modelName={family.name}
+          refNote={family.refNote}
+          imageHint={family.refImages.hint}
+          imageAccept={family.refImages.types.join(",")}
           refs={refs}
           images={images}
           videos={videos}
