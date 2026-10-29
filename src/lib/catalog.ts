@@ -11,6 +11,9 @@
  * Higgsfield's API has no "Seedance 2.0 Mini" endpoint; Seedance 2.0 is the closest model.
  */
 
+/** The exact JSON text Higgsfield receives for one request. Stored on the row and sent verbatim on every attempt. */
+export type WireBody = string & { readonly __brand: "WireBody" };
+
 export type ParamSpec =
   | { key: string; label: string; type: "int"; min: number; max: number; default: number }
   | { key: string; label: string; type: "float"; min: number; max: number; step: number; default: number }
