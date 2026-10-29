@@ -4,10 +4,10 @@ Login lets a team member sign in with a distributed ID and password, tells them 
 
 ## Sub-features
 
-- `login-form` renders the ID / 비밀번호 form with the wordmark and h1 로그인.
+- `login-form` renders the ID / 비밀번호 form with the wordmark and h1 로그인, and a 비밀번호 변경 button under 로그인 (see [Password](./password.md)).
 - `login-wrong` shows a generic error (`ID 또는 비밀번호가 맞지 않습니다`) and stays on `/login`.
 - `login-ok` signs in and lands on `/playground` (or `?next=`), header shows the username.
-- `login-guard` a signed-in visit to `/login` redirects to `/playground`; a signed-out visit to a protected page redirects to `/login?next=<path>`.
+- `login-guard` a signed-in visit to `/login` redirects to `/playground`; a signed-out visit to a protected page redirects to `/login?next=<path>`. A session ended by a password change counts as signed out: it gets the form, not a redirect.
 - `logout` the header button clears the session and returns to `/login`.
 
 ## How to get to it (user POV)
