@@ -102,6 +102,8 @@ test("the generated .xlsx fixtures read back through read-excel-file as the admi
     assert.deepEqual(members[0], { sheetRow: 4, nickname: "  최유나  ", email: importEmail("t", 4).toUpperCase() });
     assert.equal(members[7].nickname, "줄\n바꿈");
 
+    const full = await read("two-hundred.xlsx");
+    assert.equal(full.ok && full.members.length, 200);
     const many = await read("too-many.xlsx");
     assert.equal(many.ok && many.members.length, 201);
 

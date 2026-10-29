@@ -7,6 +7,7 @@ import { MAX_NICKNAME_LENGTH } from "@/lib/nickname";
 import { usd, fmtDate } from "@/lib/format";
 import { Badge, Button, Card, Field, Input, Select, Empty } from "@/components/ui";
 import { api } from "./AdminPanels";
+import { MemberImport } from "./MemberImport";
 
 type Detail = { id: number; username: string; nickname: string | null; role: string; active: boolean; note: string | null; apiKeyMasked: string | null; lockedUntil: string | null; failedAttempts: number; mustChangePassword: boolean };
 
@@ -160,6 +161,8 @@ export function UsersPanel({ adminId }: { adminId: number }) {
             <Button type="submit" className="w-full" disabled={busy}>{busy ? "추가 중…" : "추가"}</Button>
           </form>
         </Card>
+
+        <MemberImport onCreated={load} />
       </div>
     </div>
   );

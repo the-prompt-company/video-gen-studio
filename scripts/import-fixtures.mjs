@@ -37,7 +37,8 @@ export function importFixtures(stamp) {
       [null, email(8), "줄\n바꿈", "제어 문자"],
       [null, null, null, "다른 열만 있음"],
     ],
-    "too-many.xlsx": [["nickname", "email"], ...Array.from({ length: 201 }, (_, i) => [`회원 ${i + 1}`, email(100 + i)])],
+    "two-hundred.xlsx": [["nickname", "email"], ...Array.from({ length: 200 }, (_, i) => [`회원 ${i + 1}`, email(100 + i)])],
+    "too-many.xlsx": [["nickname", "email"], ...Array.from({ length: 201 }, (_, i) => [`회원 ${i + 1}`, email(400 + i)])],
     "missing-column.xlsx": [
       ["이름", "메일", "nickname"],
       ["김민지", email(9), "민지"],
