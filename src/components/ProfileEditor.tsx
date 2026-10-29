@@ -70,6 +70,7 @@ export function ProfileEditor({
   async function pick(file: File | undefined) {
     if (!file) return;
     setPhotoNote(null);
+    setNicknameNote(null);
     setPhoto({ kind: "preparing" });
     try {
       const blob = await squarePhoto(file);
@@ -83,6 +84,8 @@ export function ProfileEditor({
 
   async function savePhoto() {
     if (photo.kind !== "picked") return;
+    setPhotoNote(null);
+    setNicknameNote(null);
     setPhoto({ ...photo, kind: "saving" });
     try {
       const res = await fetch("/api/me/avatar", { method: "PUT", headers: { "Content-Type": photo.blob.type }, body: photo.blob, cache: "no-store" });
@@ -104,6 +107,7 @@ export function ProfileEditor({
 
   async function removePhoto() {
     setPhotoNote(null);
+    setNicknameNote(null);
     setPhoto({ kind: "removing" });
     try {
       const res = await fetch("/api/me/avatar", { method: "DELETE", cache: "no-store" });
@@ -126,6 +130,7 @@ export function ProfileEditor({
 
   async function saveNickname(e: FormEvent) {
     e.preventDefault();
+    setPhotoNote(null);
     if (!parsed.ok) {
       setNicknameNote({ tone: "failed", text: parsed.error });
       return;
@@ -220,7 +225,7 @@ export function ProfileEditor({
               <Input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={username} autoComplete="nickname" aria-describedby="nickname-help" />
             </Field>
           </div>
-          <Button type="submit" disabled={savingNickname || unchanged} aria-busy={savingNickname}>
+          <Button type="submit" variant={unchanged ? "outline" : "primary"} disabled={savingNickname || unchanged} aria-busy={savingNickname}>
             {savingNickname ? "저장 중…" : "닉네임 저장"}
           </Button>
         </div>

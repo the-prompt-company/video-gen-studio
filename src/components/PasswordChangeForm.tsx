@@ -5,14 +5,16 @@ import { Button, ErrorText, Field, Input } from "@/components/ui";
 
 type Status = { kind: "idle" } | { kind: "sending" } | { kind: "failed"; error: string } | { kind: "changed" };
 
-type Known = { username?: undefined; currentPassword?: undefined } | { username: string; currentPassword?: string };
+type Known =
+  | { username?: undefined; currentPassword?: undefined; hideId?: undefined }
+  | { username: string; currentPassword?: string; hideId?: boolean };
 
 export type PasswordChangeFormProps = Known & {
   onChanged?: () => void;
   autoFocus?: boolean;
 };
 
-export function PasswordChangeForm({ username, currentPassword, onChanged, autoFocus }: PasswordChangeFormProps) {
+export function PasswordChangeForm({ username, currentPassword, hideId, onChanged, autoFocus }: PasswordChangeFormProps) {
   const [id, setId] = useState("");
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
@@ -54,13 +56,17 @@ export function PasswordChangeForm({ username, currentPassword, onChanged, autoF
 
   return (
     <form onSubmit={submit} className="space-y-4">
-      <Field label="ID">
-        {asksId ? (
-          <Input value={id} onChange={(e) => setId(e.target.value)} autoComplete="username" autoFocus={autoFocus} required />
-        ) : (
-          <Input value={username} readOnly autoComplete="username" className="text-muted" />
-        )}
-      </Field>
+      {hideId ? (
+        <input type="text" value={username} readOnly autoComplete="username" tabIndex={-1} aria-hidden="true" className="sr-only" />
+      ) : (
+        <Field label="ID">
+          {asksId ? (
+            <Input value={id} onChange={(e) => setId(e.target.value)} autoComplete="username" autoFocus={autoFocus} required />
+          ) : (
+            <Input value={username} readOnly autoComplete="username" className="text-muted" />
+          )}
+        </Field>
+      )}
       {asksCurrent && (
         <Field label="현재 비밀번호">
           <Input

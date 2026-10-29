@@ -67,7 +67,7 @@ export function Nav({ username, nickname, avatarUrl, role }: { username: string;
             type="button"
             onClick={logout}
             title="로그아웃"
-            className="inline-flex size-9 shrink-0 items-center justify-center whitespace-nowrap rounded-full border border-border text-xs text-foreground-2 transition hover:border-foreground hover:text-foreground sm:w-auto sm:px-3"
+            className="inline-flex size-11 shrink-0 items-center justify-center whitespace-nowrap rounded-full border border-border text-xs text-foreground-2 transition hover:border-foreground hover:text-foreground sm:h-9 sm:w-auto sm:px-3"
           >
             <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="size-4 sm:hidden">
               <path d="M8 3.5H5.5a1.5 1.5 0 0 0-1.5 1.5v10a1.5 1.5 0 0 0 1.5 1.5H8M12.5 6.5 16 10l-3.5 3.5M16 10H8" />
