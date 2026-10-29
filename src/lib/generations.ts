@@ -2,10 +2,22 @@ import { and, eq, getTableColumns, gt, inArray, isNotNull, isNull, lte, notInArr
 import { getDb, schema } from "@/db";
 import type { Generation, User } from "@/db/schema";
 import { HttpError } from "@/lib/auth";
-import { resendRequest, type ReadyPlan } from "@/lib/catalog";
+import {
+  costUsd,
+  describeModel,
+  endpointsOfProvider,
+  FAMILIES,
+  resendRequest,
+  type FamilyId,
+  type ImageFormat,
+  type ReadyPlan,
+  type TokenUsage,
+  type WireBody,
+} from "@/lib/catalog";
 import { decrypt, signToken, verifyToken } from "@/lib/crypto";
 import { isLive, LIVE_STATUSES, predecessorsOf, RANK, type GenerationStatus } from "@/lib/generation-status";
 import * as hf from "@/lib/higgsfield";
+import * as openai from "@/lib/openai";
 import * as storage from "@/lib/storage";
 
 /** Runs slow follow-up work after the caller has its answer. Routes pass `after` from next/server. */
@@ -15,6 +27,9 @@ export type Scheduler = (task: () => Promise<void>) => void;
 export type PublicVideo =
   | { kind: "stored"; url: string; downloadUrl: string }
   | { kind: "provider"; url: string; downloadUrl: string; expiresAt: Date | null; storing: boolean };
+
+/** Where the browser shows an image result. Always our bucket: OpenAI answers with bytes, not a URL. */
+export type PublicImage = { url: string; downloadUrl: string; format: ImageFormat };
 
 /** A live row is asked about at most once per CHECK_GAP_S, whoever asks. */
 const CHECK_GAP_S = 15;
@@ -39,6 +54,31 @@ const MAX_COPY_BYTES = 1024 ** 3;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const NO_KEY = "API 키가 아직 할당되지 않았습니다. 관리자에게 문의하세요";
 const SUBMITTING = "제출 중입니다. 몇 초 뒤 다시 취소하세요";
+const NO_OPENAI_KEY = "이미지 생성은 관리자가 서버 환경 변수 OPENAI_API_KEY를 넣어야 쓸 수 있습니다. 관리자에게 문의하세요";
+const NO_IMAGE_STORE = "이미지 생성은 결과를 보관할 Vercel Blob 스토어(BLOB_READ_WRITE_TOKEN)가 연결돼야 쓸 수 있습니다. 관리자에게 문의하세요";
+const NO_RESEND = "두 번 청구되지 않도록 자동으로 다시 보내지 않습니다. 필요하면 다시 생성하세요";
+const IMAGE_NEVER_SENT = "서버가 OpenAI에 요청을 보내기 전에 멈췄습니다. 요금은 청구되지 않았습니다. 다시 생성하세요";
+const IMAGE_RUNNER_DIED = `OpenAI의 답을 기다리던 서버가 멈췄습니다. 요금이 청구됐을 수 있어 예상 비용을 기록했습니다. ${NO_RESEND}`;
+
+/**
+ * The image call's clock. POST /api/generations runs the call in after(), inside its maxDuration = 300 s, and
+ * lifecycle-check holds these against that literal.
+ */
+export const IMAGE_TIMING = {
+  /** An unsent row nobody claimed by then never started, and fails at cost 0. */
+  startGraceS: 60,
+  /** A sent row's lease. Longer than maxDuration, so an expired lease means its runner is gone. */
+  callLeaseS: 360,
+  /** From submitGeneration's entry to the runner's last write. */
+  runBudgetMs: 270_000,
+  /** One OpenAI attempt at most. The guide's worst case is about 120 s. */
+  callTimeoutMs: 225_000,
+  /** Kept free after the call for the Blob puts and the completing UPDATE. */
+  storeReserveMs: 40_000,
+  storeAttemptMs: 15_000,
+  /** A refused request is sent again only if a call this long still fits. */
+  minResendCallMs: 120_000,
+} as const;
 
 export function isGenerationId(s: string): boolean {
   return UUID.test(s);
@@ -50,13 +90,28 @@ export function apiKeyFor(user: User): hf.ApiKey {
   return key;
 }
 
+export type Unavailable = { status: 403 | 503; message: string };
+
 /**
- * Insert the planned row as pending, holding its submit lease, then submit once. Returns it queued (accepted), failed
- * (rejected), or still pending (deferred by a 429, 5xx, network error or timeout). A pending row is sent again by the
- * next poll, webhook or sweep, with the same Idempotency-Key, endpoint and body. The plan's estimate is the row's cost
- * from now on: completion keeps it, every other end sets it to 0.
+ * Why `user` cannot generate with `family` now, or null. A Higgsfield model needs the member's own key (403). The
+ * OpenAI model needs the server's OPENAI_API_KEY and Blob, since its image exists only in the runner's memory until it
+ * is stored (503); the member's Higgsfield key is never consulted for it.
+ */
+export function unavailableFor(family: FamilyId, user: Pick<User, "apiKeyEnc">): Unavailable | null {
+  if (FAMILIES[family].provider === "higgsfield") return user.apiKeyEnc ? null : { status: 403, message: NO_KEY };
+  if (!openai.serverKey()) return { status: 503, message: NO_OPENAI_KEY };
+  if (!storage.storageEnabled()) return { status: 503, message: NO_IMAGE_STORE };
+  return null;
+}
+
+/**
+ * Higgsfield: insert the planned row as pending, holding its submit lease, then submit once. Returns it queued
+ * (accepted), failed (rejected), or still pending (deferred by a 429, 5xx, network error or timeout). A pending row is
+ * sent again by the next poll, webhook or sweep, with the same Idempotency-Key, endpoint and body. The plan's estimate
+ * is the row's cost from now on: completion keeps it, every other end sets it to 0. OpenAI: see startImage.
  */
 export async function submitGeneration(user: User, plan: ReadyPlan, schedule: Scheduler): Promise<Generation> {
+  if (FAMILIES[plan.family].provider === "openai") return startImage(user, plan, schedule);
   const key = apiKeyFor(user);
   const [row] = await getDb()
     .insert(schema.generations)
@@ -215,8 +270,9 @@ export async function storeVideo(gen: Generation): Promise<Generation> {
   }
 }
 
-/** Shape sent to the browser (never the request id or anything secret). */
+/** Shape sent to the browser (never the request id or anything secret). An image row has `image`, a video row `video`. */
 export function publicGeneration(g: Generation, username?: string) {
+  const isImage = describeModel(g.modelId).output === "image";
   return {
     id: g.id,
     username,
@@ -226,7 +282,8 @@ export function publicGeneration(g: Generation, username?: string) {
     imageRefs: g.imageRefs,
     videoRefs: g.videoRefs,
     status: g.status,
-    video: publicVideo(g),
+    video: isImage ? null : publicVideo(g),
+    image: isImage ? publicImage(g) : null,
     durationS: g.durationS,
     costUsd: Number(g.costUsd),
     error: g.error,
@@ -243,12 +300,20 @@ export type PublicGeneration = ReturnType<typeof publicGeneration>;
  */
 function publicVideo(g: Generation): PublicVideo | null {
   if (g.status !== "completed") return null;
-  const stored = g.storagePath && storage.videoUrls(g.storagePath);
+  const stored = g.storagePath && storage.objectUrls(g.storagePath);
   if (stored) return { kind: "stored", ...stored };
   if (!g.resultUrl) return null;
   const unexpired = g.expiresAt === null || g.expiresAt.getTime() > Date.now();
   const storing = storage.storageEnabled() && unexpired && g.requestId !== null;
   return { kind: "provider", url: g.resultUrl, downloadUrl: g.resultUrl, expiresAt: g.expiresAt, storing };
+}
+
+/** An image row completes only once its bytes are stored, so the key is all it takes. Null while storage is off. */
+function publicImage(g: Generation): PublicImage | null {
+  if (g.status !== "completed" || !g.storagePath) return null;
+  const urls = storage.objectUrls(g.storagePath);
+  const format = storage.imageFormatOf(g.storagePath);
+  return urls && format ? { ...urls, format } : null;
 }
 
 /**
@@ -267,7 +332,7 @@ const POLICY = {
 
 /** next_check_at is a claim clock, compared with the database's now(), so it is only ever written as SQL. */
 type LifecyclePatch = Partial<
-  Pick<typeof schema.generations.$inferInsert, "requestId" | "resultUrl" | "expiresAt" | "completedAt" | "costUsd" | "error">
+  Pick<typeof schema.generations.$inferInsert, "requestId" | "resultUrl" | "expiresAt" | "completedAt" | "costUsd" | "error" | "storagePath" | "sizeBytes">
 > & { nextCheckAt?: SQL };
 
 /**
@@ -283,10 +348,11 @@ type Observation =
 
 /**
  * `wait` keeps a pending row pending, records why, and lets nobody send it again for `afterS`. `maybeAccepted` says the
- * answer was lost, so Higgsfield may hold a job for the row's key.
+ * answer was lost, so Higgsfield may hold a job for the row's key. `leaseAsSeen` makes a move match only while the
+ * row's maybe_accepted is what the caller read and its lease has run out on the database's clock.
  */
 type Step =
-  | { kind: "move"; to: GenerationStatus; patch: LifecyclePatch }
+  | { kind: "move"; to: GenerationStatus; patch: LifecyclePatch; leaseAsSeen?: true }
   | { kind: "wait"; afterS: number; reason: string; maybeAccepted: boolean }
   | { kind: "none" };
 
@@ -365,10 +431,11 @@ async function apply(gen: Generation, step: Step, schedule: Scheduler): Promise<
       .returning();
     return waiting ?? current(gen);
   }
+  const asSeen = step.leaseAsSeen ? and(eq(g.maybeAccepted, gen.maybeAccepted), lte(g.nextCheckAt, sql`now()`)) : undefined;
   const [row] = await getDb()
     .update(g)
     .set({ status: step.to, ...step.patch })
-    .where(and(eq(g.id, gen.id), inArray(g.status, predecessorsOf(step.to))))
+    .where(and(eq(g.id, gen.id), inArray(g.status, predecessorsOf(step.to)), asSeen))
     .returning();
   if (!row) return current(gen);
   if (!isLive(row.status)) schedule(() => onTerminal(row));
@@ -381,8 +448,9 @@ async function current(gen: Generation): Promise<Generation> {
   return row ?? gen;
 }
 
-/** A visit does every step the row allows now: send a due pending row, then check a live one. */
+/** A visit does every step the row allows now: send a due pending row, then check a live one. An OpenAI row only ever finalizes. */
 async function settleAs(gen: Generation, reason: SettleReason, schedule: Scheduler): Promise<Visit> {
+  if (isOpenAiRow(gen)) return { row: await settleImage(gen, schedule), submit: "none", check: "none" };
   const submitted = await resubmit(gen, schedule);
   const checked = await refresh(submitted.row, POLICY[reason], schedule);
   return { row: checked.row, submit: submitted.call, check: checked.call };
@@ -523,7 +591,7 @@ async function dueRows(visited: string[]): Promise<Generation[]> {
     .from(g)
     .where(
       and(
-        or(submitDue(), checkDue(), storage.storageEnabled() ? copyDue() : undefined),
+        or(submitDue(), checkDue(), imageLeaseDue(), storage.storageEnabled() ? copyDue() : undefined),
         visited.length > 0 ? notInArray(g.id, visited) : undefined,
       ),
     )
@@ -613,8 +681,217 @@ async function claimCopy(id: string): Promise<Generation | null> {
   return row ?? null;
 }
 
-/** Runs once per terminal move, by the caller that made it: ref cleanup, then the copy for a completed row. */
+/**
+ * An OpenAI image row. OpenAI answers one synchronous request with the image and keeps nothing to ask about later, and
+ * documents no idempotency key, so a request sent twice may be billed twice. The row therefore has exactly one caller
+ * of OpenAI, the runner this function schedules, and nothing ever sends it again:
+ *   inserted   in_progress, maybe_accepted false (unsent), lease = start grace
+ *   claimed    the runner flips maybe_accepted to true (sent) with the call lease, then sends
+ *   answered   stored at images/<id>.<ext> and completed, or ended by what OpenAI said
+ *   abandoned  after the lease, any poll or sweep ends it from the row and Blob alone (settleImage)
+ */
+async function startImage(user: User, plan: ReadyPlan, schedule: Scheduler): Promise<Generation> {
+  const deadline = Date.now() + IMAGE_TIMING.runBudgetMs;
+  const blocked = unavailableFor(plan.family, user);
+  const key = openai.serverKey();
+  if (blocked || !key) throw new HttpError(blocked?.status ?? 503, blocked?.message ?? NO_OPENAI_KEY);
+  const [row] = await getDb()
+    .insert(schema.generations)
+    .values({
+      userId: user.id,
+      modelId: plan.endpoint,
+      prompt: plan.prompt,
+      params: plan.params,
+      requestBody: withSafetyIdentifier(plan.body, user.id),
+      imageRefs: [...plan.imageUrls],
+      videoRefs: [],
+      status: "in_progress",
+      maybeAccepted: false,
+      nextCheckAt: sql`now() + make_interval(secs => ${IMAGE_TIMING.startGraceS})`,
+      durationS: 0,
+      costUsd: plan.costUsd.toFixed(4),
+    })
+    .returning();
+  schedule(() => runImage(row, plan, key, deadline));
+  return row;
+}
+
+/** OpenAI's per-member safety identifier, appended last, so abuse counts against one member instead of the shared key. */
+function withSafetyIdentifier(body: WireBody, userId: number): WireBody {
+  return JSON.stringify({ ...JSON.parse(body), safety_identifier: signToken("openai-safety", String(userId)) }) as WireBody;
+}
+
+/**
+ * The only caller of OpenAI for a row, run once by the POST that inserted it. It sends only after winning the claim,
+ * which a row grants once. Never throws: a row it could not end is ended by the lease.
+ */
+async function runImage(row: Generation, plan: ReadyPlan, key: openai.OpenAiKey, deadline: number): Promise<void> {
+  try {
+    const claimed = await claimImageCall(row.id);
+    if (!claimed?.requestBody) {
+      console.warn(JSON.stringify({ evt: "image_claim_lost", id: row.id }));
+      return;
+    }
+    const started = Date.now();
+    const format = imageFormatOf(claimed);
+    const op = describeModel(claimed.modelId).mode === "r2i" ? "edits" : "generations";
+    const { outcome, attempts } = await callWithinBudget(key, op, claimed.requestBody, format, deadline);
+    const priced = (usage: TokenUsage | null) => (usage ? costUsd({ ...plan.costBasis, usage }, plan.rateUsd) : null);
+    const obs: ImageObservation =
+      outcome.kind === "image"
+        ? await keepImage(claimed.id, outcome.bytes, format, priced(outcome.usage), deadline)
+        : { source: "call", outcome, actualUsd: outcome.kind === "unknown" ? priced(outcome.usage) : null };
+    const usage = outcome.kind === "image" || outcome.kind === "unknown" ? outcome.usage : null;
+    const detail = outcome.kind === "refused" || outcome.kind === "unknown" ? outcome.detail : outcome.kind === "rejected" ? outcome.error : undefined;
+    console.info(JSON.stringify({ evt: "image_call", id: claimed.id, op, outcome: outcome.kind, observed: obs.source, attempts, ms: Date.now() - started, usage, detail }));
+    await apply(claimed, decideImage(claimed, obs, { now: new Date() }), () => {});
+  } catch (e) {
+    console.warn(JSON.stringify({ evt: "image_run_failed", id: row.id, error: e instanceof Error ? e.message : String(e) }));
+  }
+}
+
+/**
+ * The claim: maybe_accepted false → true, pushing the lease to IMAGE_TIMING.callLeaseS. It matches only an unsent
+ * in_progress row, and nothing sets maybe_accepted back, so of any number of callers at most one ever wins it.
+ */
+async function claimImageCall(id: string): Promise<Generation | null> {
+  const g = schema.generations;
+  const [row] = await getDb()
+    .update(g)
+    .set({ maybeAccepted: true, nextCheckAt: sql`now() + make_interval(secs => ${IMAGE_TIMING.callLeaseS})` })
+    .where(and(eq(g.id, id), eq(g.status, "in_progress"), eq(g.maybeAccepted, false)))
+    .returning();
+  return row ?? null;
+}
+
+/**
+ * One send, and another only after OpenAI said it turned the request away before any work (a rate-limit 429 or an
+ * overloaded 503), while a whole call still fits the budget. Every attempt sends the same stored bytes.
+ */
+async function callWithinBudget(
+  key: openai.OpenAiKey,
+  op: openai.ImageOp,
+  body: WireBody,
+  format: ImageFormat,
+  deadline: number,
+): Promise<{ outcome: openai.ImageOutcome; attempts: number }> {
+  for (let attempts = 1; ; attempts++) {
+    const timeoutMs = Math.min(IMAGE_TIMING.callTimeoutMs, deadline - Date.now() - IMAGE_TIMING.storeReserveMs);
+    const outcome = await openai.createImage(key, op, body, { timeoutMs, format });
+    if (outcome.kind !== "refused") return { outcome, attempts };
+    const waitMs = Math.min(20, Math.max(1, outcome.retryAfterS)) * 1000;
+    if (deadline - Date.now() - waitMs - IMAGE_TIMING.storeReserveMs < IMAGE_TIMING.minResendCallMs) return { outcome, attempts };
+    await new Promise((r) => setTimeout(r, waitMs));
+  }
+}
+
+/** At most two puts inside the budget. The key is fixed by the row, so a repeat writes the same bytes to the same key. */
+async function keepImage(id: string, bytes: Uint8Array, format: ImageFormat, actualUsd: number | null, deadline: number): Promise<ImageObservation> {
+  const key = storage.imageKey(id, format);
+  let error = "시간이 모자랐습니다";
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const ms = Math.min(IMAGE_TIMING.storeAttemptMs, deadline - Date.now());
+    if (ms <= 0) break;
+    try {
+      await storage.putImage(key, bytes, format, { abortSignal: AbortSignal.timeout(ms) });
+      return { source: "kept", key, bytes: bytes.byteLength, actualUsd };
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+    }
+  }
+  return { source: "lost", error: `이미지를 받았지만 보관하지 못했습니다(${error}). 요금은 청구됐습니다. 다시 생성하세요`, actualUsd };
+}
+
+/** What a caller learned about an image row. `actualUsd` is OpenAI's usage priced at the plan's rate, when it reported usage. */
+type ImageObservation =
+  | { source: "call"; outcome: Exclude<openai.ImageOutcome, { kind: "image" }>; actualUsd: number | null }
+  | { source: "kept"; key: storage.ObjectKey; bytes: number; actualUsd: number | null }
+  | { source: "lost"; error: string; actualUsd: number | null }
+  | { source: "lease"; kept: { key: storage.ObjectKey; bytes: number } | null };
+
+/**
+ * The image transition table. Pure. A patch without costUsd keeps the estimate written at insert.
+ *   terminal + anything                → none
+ *   call refused (no budget left)      → failed     { error, costUsd 0 }                  turned away before any work
+ *   call rejected moderation           → nsfw       { error, costUsd 0 }
+ *   call rejected key|quota|request    → failed     { error, costUsd 0 }
+ *   call unknown                       → failed     { error "…청구됐을 수 있어…", costUsd usage ?? estimate }
+ *   kept                               → completed  { storagePath, sizeBytes, costUsd usage ?? estimate }
+ *   lost (stored nowhere)              → failed     { error, costUsd usage ?? estimate }    billed, bytes gone
+ *   lease, unsent                      → failed     { error "…청구되지 않았습니다…", costUsd 0 }   as seen
+ *   lease, sent, image in Blob         → completed  { storagePath, sizeBytes }, estimate   as seen
+ *   lease, sent, nothing in Blob       → failed     { error "…청구됐을 수 있어…" }, estimate  as seen
+ * Every end sets completedAt.
+ */
+function decideImage(gen: Generation, obs: ImageObservation, ctx: { now: Date }): Step {
+  if (!isLive(gen.status)) return { kind: "none" };
+  const end = (to: GenerationStatus, patch: LifecyclePatch): Step => ({ kind: "move", to, patch: { completedAt: ctx.now, ...patch } });
+  const billed = (usd: number | null) => (usd === null ? {} : { costUsd: usd.toFixed(4) });
+  switch (obs.source) {
+    case "kept":
+      return end("completed", { storagePath: obs.key, sizeBytes: obs.bytes, error: null, ...billed(obs.actualUsd) });
+    case "lost":
+      return end("failed", { error: obs.error, ...billed(obs.actualUsd) });
+    case "call": {
+      const o = obs.outcome;
+      if (o.kind === "refused") return end("failed", { error: `OpenAI가 지금은 요청을 받지 않았습니다(${o.detail}). 요금은 청구되지 않았습니다. 잠시 후 다시 생성하세요`, costUsd: "0" });
+      if (o.kind === "rejected") return end(o.cause === "moderation" ? "nsfw" : "failed", { error: o.error, costUsd: "0" });
+      return end("failed", { error: `OpenAI 응답을 받지 못했습니다(${o.detail}). 요금이 청구됐을 수 있어 비용을 기록했습니다. ${NO_RESEND}`, ...billed(obs.actualUsd) });
+    }
+    case "lease": {
+      const step = !gen.maybeAccepted
+        ? end("failed", { error: IMAGE_NEVER_SENT, costUsd: "0" })
+        : obs.kept
+          ? end("completed", { storagePath: obs.kept.key, sizeBytes: obs.kept.bytes, error: null })
+          : end("failed", { error: IMAGE_RUNNER_DIED });
+      return step.kind === "move" ? { ...step, leaseAsSeen: true } : step;
+    }
+  }
+}
+
+/**
+ * What a poll, the hook route or the sweep does with an image row: nothing while its lease runs, and never a call to
+ * OpenAI. After the lease, a sent row first asks Blob whether its runner stored the image before dying (or before its
+ * last write failed). A Blob that does not answer leaves the row for the next visit.
+ */
+async function settleImage(gen: Generation, schedule: Scheduler): Promise<Generation> {
+  if (!isLive(gen.status) || gen.nextCheckAt.getTime() > Date.now()) return gen;
+  let kept: { key: storage.ObjectKey; bytes: number } | null = null;
+  if (gen.maybeAccepted) {
+    const key = storage.imageKey(gen.id, imageFormatOf(gen));
+    try {
+      const bytes = await storage.storedSize(key);
+      kept = bytes === null ? null : { key, bytes };
+    } catch (e) {
+      console.warn(JSON.stringify({ evt: "image_lease_check_failed", id: gen.id, error: e instanceof Error ? e.message : String(e) }));
+      return gen;
+    }
+  }
+  return apply(gen, decideImage(gen, { source: "lease", kept }, { now: new Date() }), schedule);
+}
+
+/** A live OpenAI row whose lease ran out. The sweep reads it beside submitDue and checkDue. */
+function imageLeaseDue() {
+  const g = schema.generations;
+  return and(inArray(g.modelId, endpointsOfProvider("openai")), inArray(g.status, LIVE_STATUSES), lte(g.nextCheckAt, sql`now()`));
+}
+
+function isOpenAiRow(gen: Generation): boolean {
+  return describeModel(gen.modelId).provider === "openai";
+}
+
+/** The output_format the row asked for, which is the stored file's format. */
+function imageFormatOf(gen: Generation): ImageFormat {
+  const f = gen.params.output_format;
+  return f === "jpeg" || f === "webp" ? f : "png";
+}
+
+/**
+ * Runs once per terminal move, by the caller that made it: ref cleanup, then the copy for a completed row. An OpenAI
+ * row was stored before it moved, and its references, all in Blob, stay for the drawer's next attempt with them.
+ */
 async function onTerminal(row: Generation): Promise<void> {
+  if (isOpenAiRow(row)) return;
   await cleanupRefs(row);
   if (row.status === "completed") await storeVideo(row);
 }

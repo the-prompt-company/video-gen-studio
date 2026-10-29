@@ -58,7 +58,7 @@ function secretKey(): Buffer {
 }
 
 /** What a token authorizes. Each purpose has its own key, so a token for one never verifies for another. */
-export type TokenPurpose = "hf-hook";
+export type TokenPurpose = "hf-hook" | "openai-safety";
 
 const TOKEN_CHARS = 32;
 

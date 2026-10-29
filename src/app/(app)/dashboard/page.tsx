@@ -27,7 +27,7 @@ export default async function DashboardPage() {
     <PageContainer className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">대시보드</h1>
-        <p className="mt-1 text-sm text-muted">{user.username} 님의 사용량. 비용은 생성을 요청할 때 모델 단가와 Higgsfield 요금 규칙으로 정해지고, 실패·NSFW·취소되면 0으로 돌아갑니다. 진행 중인 건도 합계에 들어갑니다.</p>
+        <p className="mt-1 text-sm text-muted">{user.username} 님의 사용량. 영상 비용은 생성을 요청할 때 모델 단가와 Higgsfield 요금 규칙으로, 이미지 비용은 OpenAI가 알려 준 토큰 사용량으로 정해지고, 실패·NSFW·취소되면 0으로 돌아갑니다. 이미지가 응답 없이 끝나 청구됐을 수 있는 건은 예상 비용을 남깁니다. 진행 중인 건도 합계에 들어갑니다.</p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -90,7 +90,7 @@ export default async function DashboardPage() {
                     <td className="py-2 pr-4"><StatusBadge status={g.status} /></td>
                     <td className="whitespace-nowrap py-2 pr-4 text-foreground-2">{modelLine(g.modelId)}</td>
                     <td className="max-w-[320px] truncate py-2 pr-4 text-foreground-2">{g.prompt || "—"}</td>
-                    <td className="py-2 pr-4 text-right tabular-nums text-muted">{g.durationS}s</td>
+                    <td className="py-2 pr-4 text-right tabular-nums text-muted">{g.durationS > 0 ? `${g.durationS}s` : "—"}</td>
                     <td className="py-2 text-right tabular-nums">{usd(g.costUsd)}</td>
                   </tr>
                 ))}

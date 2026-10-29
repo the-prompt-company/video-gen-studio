@@ -40,7 +40,7 @@ export async function GET(req: Request) {
       const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
       const head = ["created_at", "username", "model", "status", "duration_s", "cost_usd", "prompt", "params", "result_url", "error"];
       const lines = items.map((i) =>
-        [i.createdAt.toISOString(), i.username, i.modelId, i.status, i.durationS, i.costUsd, i.prompt, JSON.stringify(i.params), i.video?.url, i.error]
+        [i.createdAt.toISOString(), i.username, i.modelId, i.status, i.durationS, i.costUsd, i.prompt, JSON.stringify(i.params), (i.video ?? i.image)?.url, i.error]
           .map(esc)
           .join(","),
       );

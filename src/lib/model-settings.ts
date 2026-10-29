@@ -10,14 +10,14 @@ export async function loadModelSettings(): Promise<Record<FamilyId, ModelSetting
   return Object.fromEntries(
     FAMILY_IDS.map((family) => {
       const r = byId.get(family);
-      return [family, { family, rateUsd: r ? Number(r.pricePerSecUsd) : 0, enabled: r ? r.enabled : true, note: r?.note ?? null }];
+      return [family, { family, rateUsd: r ? Number(r.pricePerSecUsd) : FAMILIES[family].rate.defaultUsd, enabled: r ? r.enabled : true, note: r?.note ?? null }];
     }),
   ) as Record<FamilyId, ModelSetting>;
 }
 
 export async function loadModelSetting(family: FamilyId): Promise<ModelSetting> {
   const [r] = await getDb().select().from(schema.models).where(eq(schema.models.modelId, family)).limit(1);
-  return { family, rateUsd: r ? Number(r.pricePerSecUsd) : 0, enabled: r ? r.enabled : true, note: r?.note ?? null };
+  return { family, rateUsd: r ? Number(r.pricePerSecUsd) : FAMILIES[family].rate.defaultUsd, enabled: r ? r.enabled : true, note: r?.note ?? null };
 }
 
 /** Upserts one model's settings. A rate outside 0..100 USD throws RangeError. */

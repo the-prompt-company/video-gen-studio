@@ -126,6 +126,8 @@ export function LogsPanel() {
               <span className="text-xs text-subtle">{open.username} · {fmtDate(open.createdAt)}</span>
             </div>
             {open.video && <video src={open.video.url} controls className="w-full rounded-lg bg-black" />}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            {open.image && <img src={open.image.url} alt="생성된 이미지" className="max-h-[60dvh] w-full rounded-lg bg-black object-contain" />}
             <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs text-muted">
               <dt>모델</dt><dd className="text-foreground-2">{modelLine(open.modelId)} <span className="font-mono text-subtle">{open.modelId}</span></dd>
               <dt>프롬프트</dt><dd className="text-foreground-2">{open.prompt || "—"}</dd>

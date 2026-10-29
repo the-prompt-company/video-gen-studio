@@ -11,7 +11,7 @@ import { loadModelSetting } from "@/lib/model-settings";
 export const maxDuration = 300;
 
 const MAX_IDS = 24;
-const MAX_REFS = 9;
+const MAX_REFS = 16;
 
 /**
  * The database's clock in epoch ms. It wrote created_at, so the playground times live rows by it, not by the member's

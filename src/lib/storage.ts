@@ -3,8 +3,9 @@
  * Rows store an object key, never a URL, so moving to another store or vendor is an env change plus an object copy.
  */
 import { randomUUID } from "node:crypto";
-import { createMultipartUploader, del, getDownloadUrl, put, type Part } from "@vercel/blob";
+import { BlobNotFoundError, createMultipartUploader, del, getDownloadUrl, head, put, type Part } from "@vercel/blob";
 import type { AvatarType } from "./avatar";
+import type { ImageFormat } from "./catalog";
 import { REF_NAME } from "./ref-name";
 
 export type ObjectKey = string & { readonly __brand: "ObjectKey" };
@@ -63,7 +64,7 @@ export function isRefPathname(pathname: string, userId: number): boolean {
 /**
  * Upload public under the exact key, overwriting what an earlier attempt left, with a one-year cache. Keys are
  * immutable, so a repeat writes the same bytes. The token is passed, not left to the SDK's OIDC lookup, so the store
- * written is the store videoUrls points at, and an answer at another URL fails the upload instead of recording a key
+ * written is the store objectUrls points at, and an answer at another URL fails the upload instead of recording a key
  * nobody can play.
  *
  * The body is cut into 8 MB parts as it is read, and at most PARTS_IN_FLIGHT parts upload at once, so a copy holds about
@@ -101,7 +102,7 @@ export async function putVideo(
       : await uploadInParts(key, options, [first.value as Buffer, second.value], parts, stop);
     const derived = publicUrl(c, key);
     if (new URL(url).href !== new URL(derived).href) {
-      throw new Error(`blob URL mismatch: the store answered ${url}, videoUrls derives ${derived}`);
+      throw new Error(`blob URL mismatch: the store answered ${url}, objectUrls derives ${derived}`);
     }
   } catch (e) {
     stop.abort();
@@ -238,11 +239,60 @@ export function byteLimit(max: number, onOver: () => void = () => {}) {
   return { stream, bytes: () => bytes, error: () => over };
 }
 
+const IMAGE_PREFIX = "images/";
+const IMAGE_EXT: Record<ImageFormat, string> = { png: "png", jpeg: "jpg", webp: "webp" };
+
+/** images/<generation id>.<ext>, from the row alone, so a finalizer can look for what a dead runner stored. */
+export function imageKey(generationId: string, format: ImageFormat): ObjectKey {
+  return `${IMAGE_PREFIX}${generationId}.${IMAGE_EXT[format]}` as ObjectKey;
+}
+
+/** The format an image key was written as, or null for any other key. */
+export function imageFormatOf(key: ObjectKey): ImageFormat | null {
+  if (!key.startsWith(IMAGE_PREFIX)) return null;
+  const ext = key.slice(key.lastIndexOf(".") + 1);
+  return (Object.keys(IMAGE_EXT) as ImageFormat[]).find((f) => IMAGE_EXT[f] === ext) ?? null;
+}
+
+/**
+ * One public put under the exact key, overwriting an earlier attempt's (identical) bytes, with a one-year cache. As
+ * with putVideo, an answer at another URL than objectUrls derives fails instead of recording a key nobody can show.
+ */
+export async function putImage(key: ObjectKey, bytes: Uint8Array, format: ImageFormat, opts: { abortSignal: AbortSignal }): Promise<void> {
+  const c = config();
+  if (!c) throw new Error("Vercel Blob is not configured");
+  const { url } = await put(key, Buffer.from(bytes), {
+    access: "public",
+    token: c.token,
+    addRandomSuffix: false,
+    allowOverwrite: true,
+    cacheControlMaxAge: ONE_YEAR_S,
+    contentType: `image/${format}`,
+    abortSignal: opts.abortSignal,
+  });
+  const derived = publicUrl(c, key);
+  if (new URL(url).href !== new URL(derived).href) {
+    throw new Error(`blob URL mismatch: the store answered ${url}, objectUrls derives ${derived}`);
+  }
+}
+
+/** The size of what is stored at `key`, or null when nothing is (or storage is off). Throws when the store does not answer. */
+export async function storedSize(key: ObjectKey): Promise<number | null> {
+  const c = config();
+  if (!c) return null;
+  try {
+    return (await head(publicUrl(c, key), { token: c.token })).size;
+  } catch (e) {
+    if (e instanceof BlobNotFoundError) return null;
+    throw e;
+  }
+}
+
 /**
  * Public URL, plus Blob's ?download=1 one, which the CDN serves as an attachment named after the key's last segment
- * (<generation id>.mp4). Both come from the key alone, with no network call. Null while storage is off.
+ * (<generation id>.mp4 or .png). Both come from the key alone, with no network call. Null while storage is off.
  */
-export function videoUrls(key: ObjectKey): { url: string; downloadUrl: string } | null {
+export function objectUrls(key: ObjectKey): { url: string; downloadUrl: string } | null {
   const c = config();
   if (!c) return null;
   const url = publicUrl(c, key);

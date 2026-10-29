@@ -243,6 +243,7 @@ test("POST /_config statusFailN answers 503 to that many status calls, and dropW
       retryAfterS: 5,
       submitFailN: 0,
       submitDelayMs: 0,
+      openai: { delayMs: 1500, refuseFirstN: 0, overloadedFirstN: 0, retryAfterS: 1, fail: null, usage: true },
     });
     const { body } = await submit(f.base, "k1", { prompt: "a" }, `?hf_webhook=${encodeURIComponent(`${hookBase}/hook`)}`);
     const codes = [];
