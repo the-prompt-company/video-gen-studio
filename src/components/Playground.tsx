@@ -14,6 +14,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 
 type ModelWithPrice = ModelSpec & { pricePerSecUsd: number };
 type Ref = { id: string; url: string; name: string; kind: "image" | "video"; local?: string; w?: number; h?: number };
+type FeedAnswer = { items?: PublicGeneration[]; now?: number };
 
 const ASPECT_LABEL: Record<string, string> = {
   "16:9": "가로 16:9",
@@ -48,6 +49,9 @@ const FEED_LIMIT = 12;
 const POLL_FIRST_MS = 2000;
 const POLL_MAX_MS = 10000;
 const POLL_JITTER_MS = 400;
+// One poll may wait out Higgsfield's 8 s status timeout. A request still unanswered after this is aborted, because one
+// that never answers would otherwise stop polling until a reload.
+const POLL_TIMEOUT_MS = 10_000;
 const STORE_WAIT_MS = 120_000;
 
 async function uploadFile(file: File, largeUploadPrefix: string | null): Promise<string> {
@@ -355,28 +359,41 @@ export function Playground({ models, hasApiKey, largeUploadPrefix, galleryCount 
 
   const [refsOpen, setRefsOpen] = useState(false);
   const refsButtonRef = useRef<HTMLButtonElement>(null);
-  const [items, setItems] = useState<PublicGeneration[]>([]);
+  // The 갤러리 count shares the list's state so one pure update moves both; React may run an updater twice.
+  const [{ items, galleryTotal }, setFeed] = useState({ items: [] as PublicGeneration[], galleryTotal: galleryCount });
   const [loaded, setLoaded] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  // Server clock minus this browser's clock. Rows carry the database's created_at, and a member's computer clock can
+  // be seconds off, so the elapsed times count on the server's clock.
+  const clockOffset = useRef(0);
   const feedRef = useRef<HTMLDivElement>(null);
   const pollDelay = useRef(POLL_FIRST_MS);
 
-  const [galleryTotal, setGalleryTotal] = useState(galleryCount);
-
   function upsert(item: PublicGeneration) {
-    setItems((list) => {
-      const prev = list.find((x) => x.id === item.id);
-      if (item.status === "completed" && prev && prev.status !== "completed") setGalleryTotal((n) => n + 1);
-      return prev ? list.map((x) => (x.id === item.id ? item : x)) : [item, ...list].slice(0, FEED_LIMIT);
+    setFeed(({ items, galleryTotal }) => {
+      const prev = items.find((x) => x.id === item.id);
+      return {
+        items: prev ? items.map((x) => (x.id === item.id ? item : x)) : [item, ...items].slice(0, FEED_LIMIT),
+        galleryTotal: galleryTotal + (item.status === "completed" && prev && prev.status !== "completed" ? 1 : 0),
+      };
     });
   }
 
+  // The answer's `now` is taken as the request's midpoint, so the offset is off by at most half the round trip.
+  function syncClock(sentAt: number, serverNow: number | undefined) {
+    if (serverNow === undefined) return;
+    clockOffset.current = serverNow - (sentAt + Date.now()) / 2;
+    setNow(Date.now() + clockOffset.current);
+  }
+
   useEffect(() => {
+    const sentAt = Date.now();
     fetch(`/api/generations?limit=${FEED_LIMIT}`)
       .then((r) => r.json())
-      .then((b: { items?: PublicGeneration[] }) => {
-        setItems(b.items ?? []);
+      .then((b: FeedAnswer) => {
+        syncClock(sentAt, b.now);
+        setFeed((feed) => ({ ...feed, items: b.items ?? [] }));
         setActiveId(b.items?.[0]?.id ?? null);
       })
       .catch(() => {})
@@ -400,19 +417,22 @@ export function Playground({ models, hasApiKey, largeUploadPrefix, galleryCount 
     if (!liveKey) return;
     let stopped = false;
     let t = 0;
+    let inflight: AbortController | null = null;
     const wait = (ms: number) => {
       t = window.setTimeout(tick, Math.max(0, ms + (Math.random() - 0.5) * POLL_JITTER_MS));
     };
     const tick = async () => {
       const started = Date.now();
-      try {
-        const res = await fetch(`/api/generations?ids=${liveKey}`, { cache: "no-store" });
-        const body = (await res.json()) as { items?: PublicGeneration[] };
-        body.items?.forEach(upsert);
-      } catch {
-        /* retry on next tick */
-      }
+      const request = new AbortController();
+      inflight = request;
+      const timeout = window.setTimeout(() => request.abort(), POLL_TIMEOUT_MS);
+      const body = await fetch(`/api/generations?ids=${liveKey}`, { cache: "no-store", signal: request.signal })
+        .then((res) => res.json() as Promise<FeedAnswer>)
+        .catch(() => null);
+      window.clearTimeout(timeout);
       if (stopped) return;
+      syncClock(started, body?.now);
+      body?.items?.forEach(upsert);
       pollDelay.current = Math.min(POLL_MAX_MS, pollDelay.current * 1.5);
       wait(pollDelay.current - (Date.now() - started));
     };
@@ -420,13 +440,14 @@ export function Playground({ models, hasApiKey, largeUploadPrefix, galleryCount 
     return () => {
       stopped = true;
       window.clearTimeout(t);
+      inflight?.abort();
     };
   }, [liveKey]);
 
   // Elapsed-time clock while anything is live.
   useEffect(() => {
     if (!liveKey) return;
-    const t = window.setInterval(() => setNow(Date.now()), 1000);
+    const t = window.setInterval(() => setNow(Date.now() + clockOffset.current), 1000);
     return () => window.clearInterval(t);
   }, [liveKey]);
 
