@@ -53,7 +53,15 @@ export async function PUT(req: Request) {
       console.error(JSON.stringify({ evt: "avatar_put_failed", key, error: e instanceof Error ? e.message : String(e) }));
       throw new HttpError(502, "사진을 저장소에 올리지 못했습니다. 잠시 뒤 다시 저장하세요");
     }
-    if (!(await swapAvatarKey(u, key))) {
+    let swapped: boolean;
+    try {
+      swapped = await swapAvatarKey(u, key);
+    } catch (e) {
+      // The update may have committed with only its reply lost, so the new object stays: an orphan, never a missing photo.
+      console.error(JSON.stringify({ evt: "avatar_swap_failed", key, previous: u.avatarKey }));
+      throw e;
+    }
+    if (!swapped) {
       await discardAvatar(key, u.id);
       throw new HttpError(409, RACED);
     }
