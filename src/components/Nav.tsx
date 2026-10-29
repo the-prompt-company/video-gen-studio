@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Avatar } from "@/components/Avatar";
 
 const LINKS = [
   { href: "/playground", label: "플레이그라운드" },
@@ -9,8 +10,9 @@ const LINKS = [
   { href: "/dashboard", label: "대시보드" },
 ];
 
-export function Nav({ username, role }: { username: string; role: string }) {
+export function Nav({ username, nickname, avatarUrl, role }: { username: string; nickname: string | null; avatarUrl: string | null; role: string }) {
   const pathname = usePathname();
+  const name = nickname ?? username;
 
   async function logout() {
     try {
@@ -45,21 +47,32 @@ export function Nav({ username, role }: { username: string; role: string }) {
             </Link>
           ))}
         </nav>
-        <div className="ml-auto flex min-w-0 items-center gap-3 text-sm">
-          <span className="flex min-w-0 items-center gap-1.5 text-muted">
-            <span className="truncate text-foreground-2" title={username}>
-              {username}
-            </span>
-            {role === "admin" && (
-              <span className="font-display shrink-0 rounded-sm border border-border px-1.5 pt-0.5 text-[12px] leading-none text-sand">ADMIN</span>
-            )}
-          </span>
+        <div className="ml-auto flex min-w-0 items-center gap-2 text-sm sm:gap-3">
+          <Link
+            href="/settings"
+            aria-current={isActive("/settings") ? "page" : undefined}
+            title={nickname ? `${nickname} (${username})` : username}
+            className={`flex min-h-11 min-w-0 items-center gap-2 rounded-full py-1 pl-1 pr-2 transition sm:min-h-10 sm:pr-3 ${
+              isActive("/settings") ? "bg-white/12 text-foreground" : "text-foreground-2 hover:bg-white/10 hover:text-foreground"
+            }`}
+          >
+            <Avatar name={name} url={avatarUrl} size="sm" />
+            <span className="truncate">{name}</span>
+            <span className="sr-only"> 설정</span>
+          </Link>
+          {role === "admin" && (
+            <span className="font-display shrink-0 rounded-sm border border-border px-1.5 pt-0.5 text-[12px] leading-none text-sand">ADMIN</span>
+          )}
           <button
             type="button"
             onClick={logout}
-            className="inline-flex min-h-9 shrink-0 items-center whitespace-nowrap rounded-full border border-border px-3 text-xs text-foreground-2 transition hover:border-foreground hover:text-foreground"
+            title="로그아웃"
+            className="inline-flex size-9 shrink-0 items-center justify-center whitespace-nowrap rounded-full border border-border text-xs text-foreground-2 transition hover:border-foreground hover:text-foreground sm:w-auto sm:px-3"
           >
-            로그아웃
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="size-4 sm:hidden">
+              <path d="M8 3.5H5.5a1.5 1.5 0 0 0-1.5 1.5v10a1.5 1.5 0 0 0 1.5 1.5H8M12.5 6.5 16 10l-3.5 3.5M16 10H8" />
+            </svg>
+            <span className="sr-only sm:not-sr-only">로그아웃</span>
           </button>
         </div>
       </div>

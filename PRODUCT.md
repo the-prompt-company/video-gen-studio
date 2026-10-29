@@ -34,14 +34,14 @@ Higgsfield 웹사이트를 직접 쓰는 것과 다른 점은 셋이며, 사용�
 - 레퍼런스 업로드: 4 MB 이하는 서버를 거쳐 Higgsfield 업로드 스토리지로. 그보다 큰 mp4는 Vercel Blob이 연결돼 있을 때만 브라우저에서 직접 올리고, 생성이 끝나면 지운다.
 - 결과 보관: 완료 영상은 완료 직후 Vercel Blob 공개 스토어에 `videos/<생성 id>.mp4`로 복사돼 계속 남는다(갤러리 보관 "영구"). Higgsfield는 원본을 7일 뒤 지우므로 복사가 끝나기 전 몇 초 동안만 Higgsfield URL로 재생한다. Blob 토큰이 없는 환경에서는 복사하지 않고 갤러리가 남은 일수를 보여 준다.
 - 비용: 운영자는 지출을 최소로 둔다. Supabase는 Free 플랜으로 DB만 쓴다(Free Storage는 1 GB, 파일당 50 MB라 영상을 담을 수 없다). 영상은 Vercel Blob에 두고, 저장($0.023/GB-월)은 Vercel Pro 월 $20 크레딧에서 나가며 Blob 전송은 Pro의 Flat Rate CDN에 포함된다. 예상은 월 $0~2다(README 비용).
-- 로그인: scrypt 해시 검증, 7일 HttpOnly 세션 쿠키, 10회 실패 시 15분 잠금. ID는 이메일 형식을 허용하고, 이메일 ID는 대소문자를 가리지 않는다. 관리자가 정한 비밀번호(초기값 `oooooooo`)는 임시라 첫 로그인 때 새 비밀번호부터 정한다. 비밀번호는 로그인 화면에서 바꿀 수 있고, 바꾸면 다른 기기의 로그인이 모두 끝난다.
+- 로그인: scrypt 해시 검증, 7일 HttpOnly 세션 쿠키, 10회 실패 시 15분 잠금. ID는 이메일 형식을 허용하고, 이메일 ID는 대소문자를 가리지 않는다. 관리자가 정한 비밀번호(초기값 `oooooooo`)는 임시라 첫 로그인 때 새 비밀번호부터 정한다. 비밀번호는 로그인 화면이나 설정에서 바꿀 수 있고, 바꾸면 다른 기기의 로그인이 모두 끝난다. 회원은 설정에서 프로필 사진과 닉네임을 정하고, 상단 메뉴가 그 사진과 닉네임(없으면 ID)으로 로그인한 사람을 보여 준다.
 - 운영 주체: 소유자 1인이 Vercel 개인 계정과 Supabase 프로젝트를 관리한다. 팀원은 Vercel·DB에 접근하지 않는다.
 - 이 저장소 밖에 같은 목적의 Colab 노트북 + Google Sheets + Apps Script 게이트웨이 버전이 먼저 있었다. 이 웹 사이트가 그것을 대체한다.
 
 ## Capabilities and Constraints
 
 **확정된 기능**
-- 경로: `/`(랜딩), `/login`, `/playground`, `/gallery`, `/dashboard`, `/admin`.
+- 경로: `/`(랜딩), `/login`, `/playground`, `/gallery`, `/dashboard`, `/settings`, `/admin`.
 - 모델 3종과 각 모델의 레퍼런스 규칙·파라미터는 `src/lib/catalog.ts`가 단일 출처다. 클라이언트 폼과 서버 생성 라우트가 같은 정의를 쓴다.
 - 상태 어휘: 제출 대기(pending, Higgsfield가 아직 받지 않아 스스로 다시 제출함), 대기(queued), 생성 중(in_progress), 완료(completed), 실패(failed), NSFW 차단(nsfw), 취소(canceled). 제출 대기·실패·NSFW·취소는 과금하지 않는다.
 - 어드민: 사용자 추가, API 키 할당, 비밀번호·역할·활성 변경, 모델 단가·활성, 전체 로그 필터와 CSV.

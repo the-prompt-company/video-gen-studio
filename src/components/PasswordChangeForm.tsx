@@ -8,7 +8,7 @@ type Status = { kind: "idle" } | { kind: "sending" } | { kind: "failed"; error: 
 type Known = { username?: undefined; currentPassword?: undefined } | { username: string; currentPassword?: string };
 
 export type PasswordChangeFormProps = Known & {
-  onChanged: () => void;
+  onChanged?: () => void;
   autoFocus?: boolean;
 };
 
@@ -46,7 +46,7 @@ export function PasswordChangeForm({ username, currentPassword, onChanged, autoF
     setNext("");
     setConfirm("");
     setStatus({ kind: "changed" });
-    onChanged();
+    onChanged?.();
   }
 
   const asksId = username === undefined;
@@ -88,7 +88,7 @@ export function PasswordChangeForm({ username, currentPassword, onChanged, autoF
       </Field>
       {status.kind === "failed" && <ErrorText>{status.error}</ErrorText>}
       {status.kind === "changed" && (
-        <p role="status" className="text-sm text-foreground-2">
+        <p role="status" className="break-keep text-sm text-foreground-2">
           비밀번호를 바꿨습니다. 다른 기기와 브라우저의 로그인은 모두 끝났습니다.
         </p>
       )}
