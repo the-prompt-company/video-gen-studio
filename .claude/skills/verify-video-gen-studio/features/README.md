@@ -49,4 +49,4 @@ Keep implementation details out of the map. Name only user paths, stable handles
 - [Playground](./playground.md) covers the drawer, model select, aspect pills, parameters, the reference dialog, and the generate gate.
 - [Gallery](./gallery.md) covers the tile grid, the detail dialog with download, and the admin scope toggle.
 - [Dashboard](./dashboard.md) covers the personal usage stats, chart/empty states, and agreement with the generations API.
-- [Admin](./admin.md) covers the users table and edit card, the model price round-trip, and the logs tab.
+- [Admin](./admin.md) covers the users table and its edit, add and import modals (name, focus, Esc, scroll lock), the model price round-trip, and the logs tab.

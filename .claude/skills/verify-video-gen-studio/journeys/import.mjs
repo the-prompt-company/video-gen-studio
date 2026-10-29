@@ -20,16 +20,25 @@ export default async function importJourney({ page, ev, base, webDir, local }) {
     p.on("pageerror", (e) => appErrors.push(String(e)));
   };
   watchErrors(page);
-  const card = page.locator("section").filter({ has: page.getByRole("heading", { level: 2, name: "엑셀로 회원 만들기" }) });
-  const results = card.getByRole("list", { name: "행별 결과" });
+  const opener = page.getByRole("button", { name: "엑셀로 회원 만들기", exact: true });
+  const importer = page.getByRole("dialog", { name: "엑셀로 회원 만들기" });
+  const results = importer.getByRole("list", { name: "행별 결과" });
+  const openImport = async () => {
+    await opener.click();
+    await importer.waitFor({ timeout: 10_000 });
+  };
+  const closeImport = async () => {
+    await importer.getByRole("button", { name: "닫기" }).click();
+    await importer.waitFor({ state: "hidden", timeout: 5_000 });
+  };
 
   const users = async () => (await ev.api("/api/admin/users")).body?.items ?? [];
   const member = async (username) => (await users()).find((u) => u.username === username);
   const pick = async (name) => {
-    await card.locator('input[type="file"]').setInputFiles(files[name]);
+    await importer.locator('input[type="file"]').setInputFiles(files[name]);
   };
   const expectAlert = async (pattern, what) => {
-    const alert = card.getByRole("alert");
+    const alert = importer.getByRole("alert");
     try {
       await alert.filter({ hasText: pattern }).waitFor({ timeout: 30_000 });
     } catch {
@@ -50,14 +59,14 @@ export default async function importJourney({ page, ev, base, webDir, local }) {
     if (!text || !text.includes(label) || (detail && !detail.test(text))) ev.fail(`row ${row}: expected "${label}"${detail ? ` and ${detail}` : ""}, got "${text}"`);
   };
   const confirmCreate = async (count) => {
-    const button = card.getByRole("button", { name: `${count}명 만들기` });
+    const button = importer.getByRole("button", { name: `${count}명 만들기` });
     await button.waitFor({ timeout: 10_000 });
     const [res] = await Promise.all([
       page.waitForResponse((r) => r.url().endsWith("/api/admin/users/import") && r.request().method() === "POST", { timeout: 90_000 }),
       button.click(),
     ]);
     const timing = res.request().timing();
-    await card.getByRole("status").filter({ hasText: `${count}명을 만들었습니다` }).waitFor({ timeout: 30_000 });
+    await importer.getByRole("status").filter({ hasText: `${count}명을 만들었습니다` }).waitFor({ timeout: 30_000 });
     return Math.round(timing.responseEnd);
   };
   const signIn = async (p, id, pw) => {
@@ -70,10 +79,10 @@ export default async function importJourney({ page, ev, base, webDir, local }) {
   try {
     await ev.login("/admin");
     if (!(await page.locator("header").getByText("ADMIN", { exact: true }).isVisible())) ev.fail("run with an admin's VGS_USER/VGS_PASS");
-    await card.waitFor({ timeout: 15_000 });
-    if (!(await card.getByRole("table", { name: "엑셀 형식 예시" }).isVisible())) ev.fail("the card should show the expected format");
-    await card.scrollIntoViewIfNeeded();
-    await ev.shot("import-card");
+    await opener.waitFor({ timeout: 15_000 });
+    await openImport();
+    if (!(await importer.getByRole("table", { name: "엑셀 형식 예시" }).isVisible())) ev.fail("the modal should show the expected format");
+    await ev.shot("import-modal");
 
     await pick("missing-column.xlsx");
     await expectAlert(/email\(또는 이메일\) 열이 없습니다.*찾은 제목: 이름, 메일, nickname/, "missing email column");
@@ -95,13 +104,19 @@ export default async function importJourney({ page, ev, base, webDir, local }) {
     }
     ev.note(`english-headers: 3 created in ${englishMs} ms, each a user with its nickname and mustChangePassword=true`);
     await ev.shot("english-created");
+    await new Promise((r) => setTimeout(r, 1000));
+    if (!(await importer.getByRole("status").filter({ hasText: "3명을 만들었습니다" }).isVisible())) ev.fail("the import result should stay in the modal until it is dismissed");
+    await closeImport();
+    if (!(await opener.evaluate((el) => el === document.activeElement))) ev.fail("closing the import modal should return focus to 엑셀로 회원 만들기");
+    ev.note("the result stayed in the modal a second after creating; 닫기 dismissed it and returned focus to 엑셀로 회원 만들기");
     const row1 = page.getByRole("row").filter({ hasText: email(1) });
     await row1.waitFor({ timeout: 15_000 });
     if (!(await row1.getByText("김민지", { exact: true }).isVisible()) || !(await row1.getByText("임시 비밀번호", { exact: true }).isVisible())) ev.fail("the users table should show the nickname and the 임시 비밀번호 badge");
     await row1.scrollIntoViewIfNeeded();
     await ev.shot("users-table-badge");
 
-    await card.scrollIntoViewIfNeeded();
+    await openImport();
+    if ((await results.count()) || !(await importer.getByText("엑셀 파일 고르기", { exact: true }).isVisible())) ev.fail("reopening the import modal should start from 엑셀 파일 고르기, not the dismissed result");
     await pick("mixed.xlsx");
     const mixed = await outcomes();
     expectOutcome(mixed, "4", "만들 예정", new RegExp(email(4)));
@@ -133,9 +148,26 @@ export default async function importJourney({ page, ev, base, webDir, local }) {
     await pick("two-hundred.xlsx");
     const full = await outcomes();
     if (Object.keys(full).length !== 200) ev.fail(`two-hundred.xlsx should preview 200 rows, got ${Object.keys(full).length}`);
+    const fit = await importer.evaluate((d) => {
+      const body = d.querySelector("footer")?.previousElementSibling;
+      const box = d.getBoundingClientRect();
+      const button = [...d.querySelectorAll("footer button")].find((b) => b.textContent === "200명 만들기")?.getBoundingClientRect();
+      return {
+        scrollsInside: body ? body.scrollHeight > body.clientHeight : false,
+        noSideways: d.scrollWidth <= d.clientWidth && (body ? body.scrollWidth <= body.clientWidth : false),
+        inView: box.top >= 0 && box.bottom <= window.innerHeight && box.right <= window.innerWidth,
+        buttonInView: Boolean(button && button.top >= 0 && button.bottom <= window.innerHeight),
+        width: Math.round(box.width),
+        pageScroll: Math.round(window.scrollY),
+      };
+    });
+    if (!fit.scrollsInside || !fit.noSideways || !fit.inView || !fit.buttonInView) ev.fail(`the 200-row preview should scroll inside a modal that fits the viewport with 200명 만들기 in view: ${JSON.stringify(fit)}`);
+    ev.note(`two-hundred.xlsx preview: the modal (${fit.width}px wide) fits the viewport, its body scrolls inside with no sideways overflow, and 200명 만들기 stays in view`);
+    await ev.shot("two-hundred-preview");
     const fullMs = await confirmCreate(200);
     ev.note(`two-hundred.xlsx: 200 created in one request, ${fullMs} ms from request start to response end`);
     await ev.shot("two-hundred-created");
+    await closeImport();
 
     const memberPage = await ev.newPage();
     watchErrors(memberPage);
@@ -157,7 +189,7 @@ export default async function importJourney({ page, ev, base, webDir, local }) {
     if (await row4.getByText("임시 비밀번호", { exact: true }).isVisible()) ev.fail("the badge should be gone after the member chose a password");
     await new Promise((r) => setTimeout(r, 1100));
     await row4.click();
-    const edit = page.locator("section").filter({ has: page.getByRole("heading", { level: 2, name: `${email(4)} 편집` }) });
+    const edit = page.getByRole("dialog", { name: `${email(4)} 편집` });
     await edit.waitFor({ timeout: 10_000 });
 
     const nickname = edit.getByLabel(/^닉네임/);

@@ -32,7 +32,7 @@ Preconditions:
 
 ## Gotchas
 
-- Ten failures in a row lock the account for 15 minutes (HTTP 423, `실패가 누적되어 잠겼습니다`). Only run one login journey at a time per account; an admin can clear it with 잠금 해제 in the user's edit card.
+- Ten failures in a row lock the account for 15 minutes (HTTP 423, `실패가 누적되어 잠겼습니다`). Only run one login journey at a time per account; an admin can clear it with 잠금 해제 in the user's edit modal.
 - The error text is deliberately the same for an unknown ID and a wrong password. Do not assert on which.
 - Login performs a full page navigation, not a client transition. Wait for the URL, not for a React state.
 - The button reads `확인 중…` while the request is in flight; a hang there means the database pool, not the form (see README).
