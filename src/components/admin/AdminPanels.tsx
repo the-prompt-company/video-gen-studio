@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import { UsersPanel } from "./UsersPanel";
+import { TeamsPanel } from "./TeamsPanel";
 import { ModelsPanel } from "./ModelsPanel";
 import { LogsPanel } from "./LogsPanel";
 
 const TABS = [
   { id: "users", label: "사용자 · API 키" },
+  { id: "teams", label: "팀" },
   { id: "models", label: "모델 · 단가" },
   { id: "logs", label: "로그 · 히스토리" },
 ] as const;
@@ -15,14 +17,15 @@ export function AdminPanels({ adminId }: { adminId: number }) {
   const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("users");
   return (
     <div>
-      <div className="mb-4 flex gap-1 rounded-lg border border-border p-1 text-sm">
+      <div className="mb-4 flex gap-1 overflow-x-auto rounded-lg border border-border p-1 text-sm">
         {TABS.map((t) => (
-          <button key={t.id} type="button" onClick={() => setTab(t.id)} className={`rounded-md px-3 py-1.5 ${tab === t.id ? "bg-white/10 text-white" : "text-muted hover:text-foreground"}`}>
+          <button key={t.id} type="button" onClick={() => setTab(t.id)} className={`min-h-11 shrink-0 whitespace-nowrap rounded-md px-3 py-1.5 sm:min-h-0 ${tab === t.id ? "bg-white/10 text-white" : "text-muted hover:text-foreground"}`}>
             {t.label}
           </button>
         ))}
       </div>
       {tab === "users" && <UsersPanel adminId={adminId} />}
+      {tab === "teams" && <TeamsPanel />}
       {tab === "models" && <ModelsPanel />}
       {tab === "logs" && <LogsPanel />}
     </div>

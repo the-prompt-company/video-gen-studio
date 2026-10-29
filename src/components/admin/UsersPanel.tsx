@@ -4,23 +4,29 @@ import { useCallback, useEffect, useId, useState, type FormEvent } from "react";
 import type { UserUsageRow } from "@/lib/stats";
 import { INITIAL_PASSWORD, loginId } from "@/lib/credentials";
 import { MAX_NICKNAME_LENGTH } from "@/lib/nickname";
+import type { Team, TeamId } from "@/lib/teams";
 import { usd, fmtDate } from "@/lib/format";
 import { Badge, Button, Card, Field, Input, Select, Empty, ErrorText } from "@/components/ui";
 import { Modal } from "@/components/Modal";
 import { api } from "./AdminPanels";
 import { MemberImport } from "./MemberImport";
 
-type Detail = { id: number; username: string; nickname: string | null; role: string; active: boolean; note: string | null; apiKeyMasked: string | null; lockedUntil: string | null; failedAttempts: number; mustChangePassword: boolean };
+type Detail = { id: number; username: string; nickname: string | null; role: string; teamId: TeamId | null; active: boolean; note: string | null; apiKeyMasked: string | null; lockedUntil: string | null; failedAttempts: number; mustChangePassword: boolean };
 
 type Draft = { username: string; password: string; role: string; apiKey: string; note: string };
 
 type Editing = { kind: "edit"; member: Detail; error: string | null };
 
-type Open = { kind: "add"; busy: boolean; error: string | null } | { kind: "import" } | Editing;
+type Open = { kind: "add"; busy: boolean; error: string | null } | { kind: "import" } | { kind: "assign"; busy: boolean; error: string | null } | Editing;
 
 const EMPTY: Draft = { username: "", password: "", role: "user", apiKey: "", note: "" };
 
 const TEMPORARY_TONE = "bg-zinc-500/15 text-foreground-2 ring-zinc-500/30";
+
+const ALL_TEAMS = "";
+const NO_TEAM = "none";
+
+const inFilter = (filter: string) => (r: UserUsageRow) => filter === ALL_TEAMS || (filter === NO_TEAM ? r.teamId === null : String(r.teamId) === filter);
 
 function message(e: unknown) {
   return e instanceof Error ? e.message : String(e);
@@ -31,7 +37,14 @@ export function UsersPanel({ adminId }: { adminId: number }) {
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<Open | null>(null);
   const [draft, setDraft] = useState<Draft>(EMPTY);
-  const [added, setAdded] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [teamFilter, setTeamFilter] = useState(ALL_TEAMS);
+  const [selected, setSelected] = useState<ReadonlySet<number>>(new Set());
+
+  const visible = rows.filter(inFilter(teamFilter));
+  const chosen = visible.filter((r) => selected.has(r.id));
+  const allChosen = visible.length > 0 && chosen.length === visible.length;
 
   const load = useCallback(async () => {
     try {
@@ -45,11 +58,22 @@ export function UsersPanel({ adminId }: { adminId: number }) {
     api<{ items: UserUsageRow[] }>("/api/admin/users")
       .then((b) => setRows(b.items))
       .catch((e) => setError(message(e)));
+    api<{ items: Team[] }>("/api/admin/teams")
+      .then((b) => setTeams(b.items))
+      .catch((e) => setError(message(e)));
   }, []);
 
   function show(next: Open) {
-    setAdded(null);
+    setNotice(null);
     setOpen(next);
+  }
+
+  function toggle(id: number) {
+    setSelected((s) => {
+      const next = new Set(s);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
   }
   const close = () => setOpen(null);
 
@@ -58,12 +82,26 @@ export function UsersPanel({ adminId }: { adminId: number }) {
     setOpen({ kind: "add", busy: true, error: null });
     try {
       await api("/api/admin/users", { method: "POST", body: JSON.stringify(draft) });
-      setAdded(loginId(draft.username));
+      setNotice(`${loginId(draft.username)} 계정을 추가했습니다.`);
       setDraft(EMPTY);
       setOpen((o) => (o?.kind === "add" ? null : o));
       await load();
     } catch (err) {
       setOpen((o) => (o?.kind === "add" ? { kind: "add", busy: false, error: message(err) } : o));
+    }
+  }
+
+  async function assign(teamId: TeamId | null) {
+    setOpen({ kind: "assign", busy: true, error: null });
+    try {
+      const { updated } = await api<{ updated: number }>("/api/admin/users", { method: "PATCH", body: JSON.stringify({ userIds: chosen.map((r) => r.id), teamId }) });
+      const team = teams.find((t) => t.id === teamId);
+      setSelected(new Set());
+      setOpen((o) => (o?.kind === "assign" ? null : o));
+      setNotice(team ? `${updated}명을 ${team.name}에 지정했습니다.` : `${updated}명을 미소속으로 바꿨습니다.`);
+      await load();
+    } catch (err) {
+      setOpen((o) => (o?.kind === "assign" ? { kind: "assign", busy: false, error: message(err) } : o));
     }
   }
 
@@ -99,16 +137,56 @@ export function UsersPanel({ adminId }: { adminId: number }) {
     <>
       <Card title={`사용자 ${rows.length}명`} action={toolbar}>
         {error && <p className="mb-3 rounded-lg bg-rose-500/10 px-3 py-2 text-sm text-rose-300">{error}</p>}
-        {added && <p role="status" className="mb-3 break-all text-sm text-foreground-2">{added} 계정을 추가했습니다.</p>}
-        {rows.length === 0 ? (
-          <Empty>사용자가 없습니다.</Empty>
+        {notice && <p role="status" className="mb-3 break-all text-sm text-foreground-2">{notice}</p>}
+        {rows.length > 0 && (
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <Select
+              aria-label="팀으로 거르기"
+              value={teamFilter}
+              onChange={(e) => {
+                setTeamFilter(e.target.value);
+                setSelected(new Set());
+              }}
+              className="h-11 sm:h-9 sm:max-w-xs"
+            >
+              <option value={ALL_TEAMS}>모든 팀 ({rows.length}명)</option>
+              <option value={NO_TEAM}>미소속 ({rows.filter(inFilter(NO_TEAM)).length}명)</option>
+              {teams.map((t) => (
+                <option key={t.id} value={String(t.id)}>{t.name} ({rows.filter(inFilter(String(t.id))).length}명)</option>
+              ))}
+            </Select>
+            <div className="flex items-center gap-3">
+              <span className="text-xs tabular-nums text-muted">{chosen.length}명 선택</span>
+              <Button size="sm" variant="outline" className="h-11 sm:h-9" aria-haspopup="dialog" disabled={chosen.length === 0} onClick={() => show({ kind: "assign", busy: false, error: null })}>
+                팀 지정
+              </Button>
+            </div>
+          </div>
+        )}
+        {visible.length === 0 ? (
+          <Empty>{rows.length === 0 ? "사용자가 없습니다." : teamFilter === NO_TEAM ? "미소속인 사용자가 없습니다." : "이 팀에 속한 사용자가 없습니다. 모든 팀으로 바꾼 뒤 사람을 골라 팀 지정을 누르세요."}</Empty>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="text-left text-xs uppercase tracking-wider text-subtle">
                 <tr>
+                  <th className="w-8 py-0 pr-2 font-medium">
+                    <label className="flex min-h-11 w-full min-w-11 cursor-pointer items-center sm:min-h-9 sm:min-w-0">
+                      <input
+                        type="checkbox"
+                        aria-label="보이는 사용자 모두 선택"
+                        checked={allChosen}
+                        ref={(el) => {
+                          if (el) el.indeterminate = chosen.length > 0 && !allChosen;
+                        }}
+                        onChange={() => setSelected(allChosen ? new Set() : new Set(visible.map((r) => r.id)))}
+                        className="h-4 w-4 cursor-pointer"
+                      />
+                    </label>
+                  </th>
                   <th className="py-2 pr-3 font-medium">ID</th>
                   <th className="whitespace-nowrap py-2 pr-3 font-medium">닉네임</th>
+                  <th className="py-2 pr-3 font-medium">팀</th>
                   <th className="py-2 pr-3 font-medium">역할</th>
                   <th className="py-2 pr-3 font-medium">키</th>
                   <th className="py-2 pr-3 text-right font-medium">생성</th>
@@ -118,7 +196,7 @@ export function UsersPanel({ adminId }: { adminId: number }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {rows.map((r) => (
+                {visible.map((r) => (
                   <tr
                     key={r.id}
                     // The whole row is the pointer target. The ID button is the keyboard one and where focus returns when the editor closes.
@@ -126,8 +204,13 @@ export function UsersPanel({ adminId }: { adminId: number }) {
                       e.currentTarget.querySelector("button")?.focus();
                       edit(r.id);
                     }}
-                    className="cursor-pointer hover:bg-white/5"
+                    className={`cursor-pointer hover:bg-white/5 ${selected.has(r.id) ? "bg-white/5" : ""}`}
                   >
+                    <td className="py-0 pr-2" onClick={(e) => e.stopPropagation()}>
+                      <label className="flex min-h-11 w-full min-w-11 cursor-pointer items-center sm:min-h-9 sm:min-w-0">
+                        <input type="checkbox" aria-label={`${r.username} 선택`} checked={selected.has(r.id)} onChange={() => toggle(r.id)} className="h-4 w-4 cursor-pointer" />
+                      </label>
+                    </td>
                     <td className="py-2 pr-3 text-foreground">
                       <button type="button" aria-haspopup="dialog" className="text-left underline-offset-4 hover:underline">
                         {r.username}
@@ -136,6 +219,7 @@ export function UsersPanel({ adminId }: { adminId: number }) {
                       {r.note && <span className="ml-2 text-xs text-subtle">{r.note}</span>}
                     </td>
                     <td className="whitespace-nowrap py-2 pr-3 text-foreground-2">{r.nickname ?? <span className="text-subtle">—</span>}</td>
+                    <td className="whitespace-nowrap py-2 pr-3 text-foreground-2">{r.teamName ?? <span className="text-subtle">미소속</span>}</td>
                     <td className="py-2 pr-3 text-muted">{r.role}</td>
                     <td className="py-2 pr-3">{r.hasApiKey ? <span className="text-emerald-300">할당</span> : <span className="text-amber-300">없음</span>}</td>
                     <td className="py-2 pr-3 text-right tabular-nums">{r.generations}<span className="text-subtle"> / {r.completed}</span></td>
@@ -155,7 +239,8 @@ export function UsersPanel({ adminId }: { adminId: number }) {
 
       {open?.kind === "add" && <AddMember draft={draft} onChange={setDraft} busy={open.busy} error={open.error} onSubmit={create} onClose={close} />}
       {open?.kind === "import" && <MemberImport onCreated={load} onClose={close} />}
-      {open?.kind === "edit" && <MemberEditor key={open.member.id} member={open.member} error={open.error} adminId={adminId} onPatch={(body) => patch(open.member.id, body)} onClose={close} />}
+      {open?.kind === "assign" && <AssignTeam members={chosen} teams={teams} busy={open.busy} error={open.error} onAssign={assign} onClose={close} />}
+      {open?.kind === "edit" && <MemberEditor key={open.member.id} member={open.member} teams={teams} error={open.error} adminId={adminId} onPatch={(body) => patch(open.member.id, body)} onClose={close} />}
     </>
   );
 }
@@ -187,12 +272,68 @@ function AddMember({ draft, onChange, busy, error, onSubmit, onClose }: { draft:
   );
 }
 
-function MemberEditor({ member, error, adminId, onPatch, onClose }: { member: Detail; error: string | null; adminId: number; onPatch: (body: Record<string, unknown>) => Promise<void>; onClose: () => void }) {
+function AssignTeam({ members, teams, busy, error, onAssign, onClose }: { members: UserUsageRow[]; teams: Team[]; busy: boolean; error: string | null; onAssign: (teamId: TeamId | null) => void; onClose: () => void }) {
+  const formId = useId();
+  const [choice, setChoice] = useState("");
+  return (
+    <Modal
+      title="팀 지정"
+      onClose={onClose}
+      footer={
+        <Button type="submit" form={formId} className="h-11 w-full sm:h-10" disabled={busy || choice === "" || members.length === 0}>
+          {busy ? "지정하는 중…" : `${members.length}명 지정`}
+        </Button>
+      }
+    >
+      <form
+        id={formId}
+        onSubmit={(e) => {
+          e.preventDefault();
+          onAssign(choice === NO_TEAM ? null : (Number(choice) as TeamId));
+        }}
+        className="space-y-4 text-sm"
+      >
+        {error && <ErrorText>{error}</ErrorText>}
+        <Field label="팀" hint="한 사람은 한 팀에만 속합니다">
+          <Select data-autofocus value={choice} onChange={(e) => setChoice(e.target.value)} required>
+            <option value="" disabled>팀을 고르세요</option>
+            {teams.map((t) => (
+              <option key={t.id} value={String(t.id)}>{t.name}</option>
+            ))}
+            <option value={NO_TEAM}>미소속</option>
+          </Select>
+        </Field>
+        {teams.length === 0 && <p className="break-keep text-xs text-muted">아직 팀이 없습니다. 팀 탭에서 팀을 만든 뒤 다시 여세요.</p>}
+        <section aria-label="고른 사용자">
+          <h3 className="text-xs font-medium text-muted">고른 사용자 {members.length}명</h3>
+          <ul className="mt-1.5 divide-y divide-border rounded-md border border-border">
+            {members.map((m) => (
+              <li key={m.id} className="flex items-baseline justify-between gap-3 px-3 py-2">
+                <span className="min-w-0 truncate text-foreground-2" title={m.username}>{m.username}</span>
+                <span className="shrink-0 text-xs text-subtle">{m.teamName ?? "미소속"}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      </form>
+    </Modal>
+  );
+}
+
+function MemberEditor({ member, teams, error, adminId, onPatch, onClose }: { member: Detail; teams: Team[]; error: string | null; adminId: number; onPatch: (body: Record<string, unknown>) => Promise<void>; onClose: () => void }) {
   return (
     <Modal title={`${member.username} 편집`} onClose={onClose}>
       <div className="space-y-3 text-sm">
         {error && <ErrorText>{error}</ErrorText>}
         <NicknameForm current={member.nickname} onSave={(n) => onPatch({ nickname: n })} />
+        <Field label="팀">
+          <Select value={member.teamId ?? ""} onChange={(e) => onPatch({ teamId: e.target.value ? Number(e.target.value) : null })}>
+            <option value="">미소속</option>
+            {teams.map((t) => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </Select>
+        </Field>
         <div className="flex items-center justify-between">
           <span className="text-muted">API 키</span>
           <span className="font-mono text-foreground-2">{member.apiKeyMasked ?? "없음"}</span>

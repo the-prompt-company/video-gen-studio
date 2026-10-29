@@ -11,7 +11,7 @@ A signed-in member opens 설정 from their photo and name at the right of the he
 - `settings-photo-off` with no Blob store the photo buttons are disabled under a status saying 사진 저장소(Vercel Blob)가 연결되지 않아…, and `PUT`/`DELETE /api/me/avatar` answer 503.
 - `settings-photo-guard` no request a member can send deletes another member's photo, a video or a reference, even when the member's own row names another member's key.
 - `settings-nickname` 닉네임 is trimmed, NFC, at most 30 characters, without control characters, and need not be unique (the rule the admin edit and import use too). Saving updates the header without a reload; an empty save clears it and the header shows the ID.
-- `settings-account` 계정 shows the ID once, as text; the password form keeps it only as a hidden username field for password managers.
+- `settings-account` 계정 shows the ID once, as text, and 팀 under it (the team's name, or 미소속; see [teams.md](./teams.md)); the password form keeps the ID only as a hidden username field for password managers.
 - `settings-password` 비밀번호 asks for 현재 비밀번호, 새 비밀번호 and 확인 with the ID fixed. Success stays on `/settings` and says 비밀번호를 바꿨습니다. 다른 기기와 브라우저의 로그인은 모두 끝났습니다; another browser signed in as the member lands on the login form at its next page load.
 
 ## How to get to it (user POV)
@@ -28,7 +28,7 @@ Preconditions:
 
 - **Protection.** A browser with no session opens `/settings` and lands on `/login?next=%2Fsettings` (note).
 - **Members.** The admin API creates `vgs-set-<stamp>-a@example.test` and `-b`; member A sets a password through 새 비밀번호 정하기.
-- **Nav.** A's header shows the ID and a letter, no `<img>` (`01`); clicking it opens `/settings` with the link `aria-current="page"`, 계정 shows the ID as text and the 비밀번호 region has no visible ID field (`02`).
+- **Nav.** A's header shows the ID and a letter, no `<img>` (`01`); clicking it opens `/settings` with the link `aria-current="page"`, 계정 shows the ID as text and 팀 as 미소속, and the 비밀번호 region has no visible ID field (`02`).
 - **Photo.** A ~5 MB 3200×2400 JPEG goes through the real file chooser (`03` preview); 사진 저장 sends about 2 KB, `users.avatar_key` becomes `avatars/<id>/<hex>.webp`, the header `<img>` points at it, and the stored object decodes to 256×256 (`04`, full page). A 1200×400 PNG of red, green and blue bands replaces it: the stored square is all green (center crop), the old URL answers 404 and the fake's `deleteUrls` holds its canonical URL (`05`, `06`). 사진 삭제 clears the key and the object answers 404 (`07`).
 - **Nickname.** 31 characters show `닉네임은 30자까지입니다 (지금 31자)`; the API refuses a line break and 31 characters with 400 (`08`). `  설정 테스터 ` is saved trimmed and the header changes without a reload (`09`, full page) and stays on `/dashboard` (`10`). An empty save brings the ID back (`11`).
 - **Guard.** Member B uploads a photo. A sends DELETE with B's key in query and body, and PATCH with `avatarKey`. A's PUTs of HTML declared as PNG, an SVG, and JPEG bytes declared as PNG answer 415, and 600 KB answers 413, with `avatar_key` still null. Then A's row is set to B's key and A sends DELETE and PUT. B's photo still answers 200, B's row still names it and `del()` never received it (`12`, B's settings).

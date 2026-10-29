@@ -1,5 +1,6 @@
 import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
+import { DrizzleQueryError } from "drizzle-orm/errors";
 import * as schema from "./schema";
 
 /** Every warm server instance holds up to this many of the pooler's client slots (200 on Supabase Free). */
@@ -51,3 +52,11 @@ export function getDb() {
 }
 
 export { schema };
+
+export const UNIQUE_VIOLATION = "23505";
+export const FOREIGN_KEY_VIOLATION = "23503";
+
+export function pgErrorCode(e: unknown): string | undefined {
+  const code = e instanceof DrizzleQueryError ? (e.cause as { code?: unknown } | undefined)?.code : undefined;
+  return typeof code === "string" ? code : undefined;
+}
