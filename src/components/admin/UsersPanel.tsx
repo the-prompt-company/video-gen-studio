@@ -147,7 +147,7 @@ export function UsersPanel({ adminId }: { adminId: number }) {
                 setTeamFilter(e.target.value);
                 setSelected(new Set());
               }}
-              className="h-11 w-auto max-w-full sm:h-9"
+              className="h-11 sm:h-9 sm:max-w-xs"
             >
               <option value={ALL_TEAMS}>모든 팀 ({rows.length}명)</option>
               <option value={NO_TEAM}>미소속 ({rows.filter(inFilter(NO_TEAM)).length}명)</option>

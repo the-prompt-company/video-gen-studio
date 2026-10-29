@@ -92,7 +92,7 @@ export function TeamsPanel() {
             <table className="w-full text-sm">
               <thead className="text-left text-xs uppercase tracking-wider text-subtle">
                 <tr>
-                  <th className="py-2 pr-3 font-medium">팀</th>
+                  <th className="w-1/3 py-2 pr-3 font-medium">팀</th>
                   <th className="whitespace-nowrap py-2 pr-3 text-right font-medium">인원</th>
                   <th className="py-2 font-medium">팀원</th>
                 </tr>
