@@ -1,0 +1,1 @@
+ALTER TABLE "generations" ADD COLUMN "maybe_accepted" boolean DEFAULT false NOT NULL;
