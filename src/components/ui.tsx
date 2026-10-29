@@ -53,7 +53,7 @@ export function Card({ className, children, title, action }: { className?: strin
   return (
     <section className={cx("rounded-xl border border-border bg-surface p-5", className)}>
       {(title || action) && (
-        <header className="mb-4 flex items-center justify-between gap-3">
+        <header className="mb-4 flex flex-wrap items-center justify-between gap-3">
           {title && <h2 className="text-sm font-semibold tracking-wide text-foreground-2">{title}</h2>}
           {action}
         </header>

@@ -89,7 +89,7 @@ export function UsersPanel({ adminId }: { adminId: number }) {
   }
 
   const toolbar = (
-    <div className="flex flex-wrap justify-end gap-2">
+    <div className="flex flex-wrap gap-2">
       <Button size="sm" variant="outline" className="h-11 sm:h-9" aria-haspopup="dialog" onClick={() => show({ kind: "import" })}>엑셀로 회원 만들기</Button>
       <Button size="sm" className="h-11 sm:h-9" aria-haspopup="dialog" onClick={() => show({ kind: "add", busy: false, error: null })}>사용자 추가</Button>
     </div>
