@@ -1,25 +1,20 @@
-import { getDb, schema } from "@/db";
 import { requireAdmin, errorResponse, HttpError } from "@/lib/auth";
-import { CATALOG } from "@/lib/catalog";
+import { FAMILIES, FAMILY_IDS, isFamilyId } from "@/lib/catalog";
+import { loadModelSettings, saveModelSetting } from "@/lib/model-settings";
 
-/** GET /api/admin/models — catalog merged with stored price/enabled. */
+/** GET /api/admin/models — the catalog's models with their stored base rate and enabled flag. */
 export async function GET() {
   try {
     await requireAdmin();
-    const db = getDb();
-    const rows = await db.select().from(schema.models);
-    const byId = new Map(rows.map((r) => [r.modelId, r]));
-    const items = CATALOG.map((m) => {
-      const r = byId.get(m.id);
-      return {
-        modelId: m.id,
-        name: m.name,
-        vendor: m.vendor,
-        pricePerSecUsd: r ? Number(r.pricePerSecUsd) : 0,
-        enabled: r ? r.enabled : true,
-        note: r?.note ?? null,
-      };
-    });
+    const settings = await loadModelSettings();
+    const items = FAMILY_IDS.map((id) => ({
+      modelId: id,
+      name: FAMILIES[id].name,
+      vendor: FAMILIES[id].vendor,
+      pricePerSecUsd: settings[id].rateUsd,
+      enabled: settings[id].enabled,
+      note: settings[id].note,
+    }));
     return Response.json({ items });
   } catch (e) {
     return errorResponse(e);
@@ -28,28 +23,24 @@ export async function GET() {
 
 type Body = { modelId?: string; pricePerSecUsd?: number | string; enabled?: boolean; note?: string | null };
 
-/** PATCH /api/admin/models — upsert price / enabled / note for one model. */
+/** PATCH /api/admin/models — set one model's base rate (USD per second of its reference format), enabled flag or note. */
 export async function PATCH(req: Request) {
   try {
     await requireAdmin();
     const b = (await req.json().catch(() => ({}))) as Body;
-    const spec = CATALOG.find((m) => m.id === b.modelId);
-    if (!spec) throw new HttpError(400, "알 수 없는 모델");
-
-    const set: Partial<typeof schema.models.$inferInsert> = {};
-    if (b.pricePerSecUsd !== undefined) {
-      const p = Number(b.pricePerSecUsd);
-      if (!Number.isFinite(p) || p < 0 || p > 100) throw new HttpError(400, "초당 단가는 0~100 USD");
-      set.pricePerSecUsd = p.toFixed(4);
+    const family = String(b.modelId ?? "");
+    if (!isFamilyId(family)) throw new HttpError(400, "알 수 없는 모델");
+    const patch: Parameters<typeof saveModelSetting>[1] = {};
+    if (b.pricePerSecUsd !== undefined) patch.rateUsd = Number(b.pricePerSecUsd);
+    if (b.enabled !== undefined) patch.enabled = Boolean(b.enabled);
+    if (b.note !== undefined) patch.note = b.note ? String(b.note) : null;
+    if (Object.keys(patch).length === 0) throw new HttpError(400, "바꿀 값이 없습니다");
+    try {
+      await saveModelSetting(family, patch);
+    } catch (e) {
+      if (e instanceof RangeError) throw new HttpError(400, e.message);
+      throw e;
     }
-    if (b.enabled !== undefined) set.enabled = Boolean(b.enabled);
-    if (b.note !== undefined) set.note = b.note ? String(b.note) : null;
-
-    const db = getDb();
-    await db
-      .insert(schema.models)
-      .values({ modelId: spec.id, name: spec.name, ...set })
-      .onConflictDoUpdate({ target: schema.models.modelId, set });
     return Response.json({ ok: true });
   } catch (e) {
     return errorResponse(e);

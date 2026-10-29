@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { PublicGeneration, PublicVideo } from "@/lib/generations";
-import { findModel } from "@/lib/catalog";
-import { usd, fmtDate, fmtRelative, shortModel } from "@/lib/format";
+import { describeModel, modelLine } from "@/lib/catalog";
+import { usd, fmtDate, fmtRelative } from "@/lib/format";
 import { STATUS_LABEL } from "@/lib/generation-status";
 import { Button, Empty } from "@/components/ui";
 
@@ -41,12 +41,8 @@ function orientationWord(label: string | null) {
   return a > b ? "가로" : a < b ? "세로" : "정사각";
 }
 
-function modelName(id: string) {
-  return findModel(id)?.name ?? shortModel(id);
-}
-
 function paramLabel(modelId: string, key: string) {
-  return findModel(modelId)?.params.find((p) => p.key === key)?.label ?? key;
+  return describeModel(modelId).paramLabel(key);
 }
 
 /* One tile: the video is contained, never cropped, so a 9:16 result reads as 9:16 inside the 16:9 frame. */
@@ -111,7 +107,7 @@ function Tile({ g, onOpen }: { g: PublicGeneration; onOpen: () => void }) {
         <p className="line-clamp-2 text-sm text-foreground-2">{g.prompt || "(프롬프트 없음)"}</p>
         <div className="flex items-center justify-between gap-2 text-[11px] text-subtle">
           <span className="truncate">
-            {modelName(g.modelId)} · <span className="tabular-nums">{usd(g.costUsd)}</span>
+            {modelLine(g.modelId)} · <span className="tabular-nums">{usd(g.costUsd)}</span>
           </span>
           <span className="shrink-0">{g.username ? `${g.username} · ` : ""}{fmtRelative(g.createdAt)}</span>
         </div>
@@ -150,7 +146,7 @@ function Detail({ g, onClose }: { g: PublicGeneration; onClose: () => void }) {
           <div className="min-w-0 space-y-4">
             <div>
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs text-muted">
-                <span className="text-foreground-2">{modelName(g.modelId)}</span>
+                <span className="text-foreground-2">{modelLine(g.modelId)}</span>
                 {label && (
                   <span className="font-display text-[15px] text-sand">
                     {label}

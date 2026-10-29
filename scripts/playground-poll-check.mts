@@ -105,7 +105,7 @@ try {
   const stage = page.getByRole("region", { name: "결과 무대" });
   const galleryCounter = stage.locator('div:has(> a[aria-label="갤러리"]) > span').first();
   const galleryBefore = await galleryCounter.textContent();
-  await page.getByLabel("모델").selectOption("minimax/hailuo-2.3/standard/image-to-video");
+  await page.getByLabel("모델").selectOption("minimax/h3");
   await page.getByRole("button", { name: "레퍼런스 추가" }).click();
   const dialog = page.getByRole("dialog", { name: "레퍼런스 추가" });
   await dialog.locator('input[type=file][accept^="image/"]').setInputFiles("public/mock/ref-landscape-1.jpg");

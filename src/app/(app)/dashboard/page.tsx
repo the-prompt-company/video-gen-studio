@@ -2,7 +2,8 @@ import { desc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { getCurrentUser } from "@/lib/auth";
 import { usageFor } from "@/lib/stats";
-import { usd, fmtDate, shortModel } from "@/lib/format";
+import { modelLine } from "@/lib/catalog";
+import { usd, fmtDate } from "@/lib/format";
 import { Card, Stat, Empty, PageContainer } from "@/components/ui";
 import { StatusBadge } from "@/components/StatusBadge";
 import { UsageChart } from "@/components/UsageChart";
@@ -26,7 +27,7 @@ export default async function DashboardPage() {
     <PageContainer className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">대시보드</h1>
-        <p className="mt-1 text-sm text-muted">{user.username} 님의 사용량. 비용은 모델 단가 × 영상 길이로 계산되며 실패·NSFW·취소 건은 과금되지 않습니다.</p>
+        <p className="mt-1 text-sm text-muted">{user.username} 님의 사용량. 비용은 생성을 요청할 때 모델 단가와 Higgsfield 요금 규칙으로 정해지고, 실패·NSFW·취소되면 0으로 돌아갑니다. 진행 중인 건도 합계에 들어갑니다.</p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -48,9 +49,9 @@ export default async function DashboardPage() {
               {usage.byModel.map((m) => {
                 const pct = usage.totalCostUsd > 0 ? (m.costUsd / usage.totalCostUsd) * 100 : 0;
                 return (
-                  <li key={m.modelId}>
+                  <li key={m.group}>
                     <div className="flex justify-between text-sm">
-                      <span className="text-foreground-2">{shortModel(m.modelId)}</span>
+                      <span className="text-foreground-2">{m.name}</span>
                       <span className="text-muted">
                         {m.count}회 · {usd(m.costUsd)}
                       </span>
@@ -87,7 +88,7 @@ export default async function DashboardPage() {
                   <tr key={g.id}>
                     <td className="whitespace-nowrap py-2 pr-4 text-muted">{fmtDate(g.createdAt)}</td>
                     <td className="py-2 pr-4"><StatusBadge status={g.status} /></td>
-                    <td className="whitespace-nowrap py-2 pr-4 text-foreground-2">{shortModel(g.modelId)}</td>
+                    <td className="whitespace-nowrap py-2 pr-4 text-foreground-2">{modelLine(g.modelId)}</td>
                     <td className="max-w-[320px] truncate py-2 pr-4 text-foreground-2">{g.prompt || "—"}</td>
                     <td className="py-2 pr-4 text-right tabular-nums text-muted">{g.durationS}s</td>
                     <td className="py-2 text-right tabular-nums">{usd(g.costUsd)}</td>

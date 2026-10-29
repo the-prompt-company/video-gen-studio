@@ -2,7 +2,7 @@ import { and, eq, getTableColumns, gt, inArray, isNotNull, isNull, lte, notInArr
 import { getDb, schema } from "@/db";
 import type { Generation, User } from "@/db/schema";
 import { HttpError } from "@/lib/auth";
-import { buildArguments, findModel, type ModelSpec } from "@/lib/catalog";
+import { resendRequest, type ReadyPlan } from "@/lib/catalog";
 import { decrypt, signToken, verifyToken } from "@/lib/crypto";
 import { isLive, LIVE_STATUSES, predecessorsOf, RANK, type GenerationStatus } from "@/lib/generation-status";
 import * as hf from "@/lib/higgsfield";
@@ -10,14 +10,6 @@ import * as storage from "@/lib/storage";
 
 /** Runs slow follow-up work after the caller has its answer. Routes pass `after` from next/server. */
 export type Scheduler = (task: () => Promise<void>) => void;
-
-export type GenerationRequest = {
-  spec: ModelSpec;
-  prompt: string;
-  params: Record<string, unknown>;
-  imageUrls: string[];
-  videoUrls: string[];
-};
 
 /** Where the browser plays the result from. `storing` says a copy into our bucket is still expected. */
 export type PublicVideo =
@@ -58,38 +50,28 @@ export function apiKeyFor(user: User): hf.ApiKey {
   return key;
 }
 
-export async function priceFor(modelId: string): Promise<number> {
-  const db = getDb();
-  const [m] = await db.select().from(schema.models).where(eq(schema.models.modelId, modelId)).limit(1);
-  return m ? Number(m.pricePerSecUsd) : 0;
-}
-
 /**
- * Insert the row as pending, holding its submit lease, then submit once. Returns it queued (accepted), failed
+ * Insert the planned row as pending, holding its submit lease, then submit once. Returns it queued (accepted), failed
  * (rejected), or still pending (deferred by a 429, 5xx, network error or timeout). A pending row is sent again by the
- * next poll, webhook or sweep, with the same Idempotency-Key and the same body.
+ * next poll, webhook or sweep, with the same Idempotency-Key, endpoint and body. The plan's estimate is the row's cost
+ * from now on: completion keeps it, every other end sets it to 0.
  */
-export async function submitGeneration(user: User, req: GenerationRequest, schedule: Scheduler): Promise<Generation> {
-  const { spec, prompt, params, imageUrls, videoUrls } = req;
+export async function submitGeneration(user: User, plan: ReadyPlan, schedule: Scheduler): Promise<Generation> {
   const key = apiKeyFor(user);
-  try {
-    buildArguments(spec, prompt, params, imageUrls, videoUrls);
-  } catch (e) {
-    throw new HttpError(400, e instanceof Error ? e.message : String(e));
-  }
   const [row] = await getDb()
     .insert(schema.generations)
     .values({
       userId: user.id,
-      modelId: spec.id,
-      prompt,
-      params,
-      imageRefs: imageUrls,
-      videoRefs: videoUrls,
+      modelId: plan.endpoint,
+      prompt: plan.prompt,
+      params: plan.params,
+      requestBody: plan.body,
+      imageRefs: [...plan.imageUrls],
+      videoRefs: [...plan.videoUrls],
       status: "pending",
       nextCheckAt: sql`now() + make_interval(secs => ${SUBMIT_LEASE_S})`,
-      durationS: Number(params[spec.durationKey] ?? 0),
-      costUsd: "0",
+      durationS: plan.durationS,
+      costUsd: plan.costUsd.toFixed(4),
     })
     .returning();
   return (await send(row, key, schedule)).row;
@@ -124,7 +106,7 @@ export async function cancelGeneration(gen: Generation, schedule: Scheduler): Pr
     if (e instanceof hf.ProviderUnavailable) throw new HttpError(502, e.message);
     throw e;
   }
-  if (answer === "canceled") return apply(gen, decide(gen, { source: "cancel" }, { now: new Date(), pricePerSecUsd: 0 }), schedule);
+  if (answer === "canceled") return apply(gen, decide(gen, { source: "cancel" }, { now: new Date() }), schedule);
   const look = await refresh(gen, { forceCheck: true }, schedule);
   return look.call === "answered" ? look.row : current(gen);
 }
@@ -320,17 +302,17 @@ type Step =
  *   pending maybe accepted + no key    → wait 60 s with the reason "API 키…", until the deadline (DB clock)
  *   pending + no key                   → move failed     { error "API 키…", completedAt, costUsd 0 }
  *   live + running(s)                  → move s, only when s ranks above the row
- *   live + completed(url)              → move completed  { resultUrl, expiresAt, completedAt, costUsd = price × durationS }
+ *   live + completed(url)              → move completed  { resultUrl, expiresAt, completedAt }, cost_usd keeps the quote
  *   live + ended(s, error)             → move s          { error, expiresAt, completedAt, costUsd 0 }
  *   live + missing                     → move failed     { error "request not found", completedAt, costUsd 0 }
  *   live + cancel                      → move canceled   { completedAt, costUsd 0 }
  */
-function decide(gen: Generation, obs: Observation, ctx: { now: Date; pricePerSecUsd: number }): Step {
+function decide(gen: Generation, obs: Observation, ctx: { now: Date }): Step {
   if (!isLive(gen.status)) return { kind: "none" };
   const end = (to: GenerationStatus, patch: LifecyclePatch): Step => ({
     kind: "move",
     to,
-    patch: { completedAt: ctx.now, costUsd: "0", ...patch },
+    patch: { completedAt: ctx.now, ...(to !== "completed" && { costUsd: "0" }), ...patch },
   });
   if ((obs.source === "cancel" || obs.source === "clock") && gen.status === "pending" && gen.maybeAccepted) return { kind: "none" };
   if (obs.source === "cancel") return end("canceled", {});
@@ -353,12 +335,7 @@ function decide(gen: Generation, obs: Observation, ctx: { now: Date; pricePerSec
     case "running":
       return RANK[s.status] > RANK[gen.status] ? { kind: "move", to: s.status, patch: {} } : { kind: "none" };
     case "completed":
-      return end("completed", {
-        resultUrl: s.videoUrl,
-        expiresAt: s.expiresAt,
-        costUsd: (ctx.pricePerSecUsd * gen.durationS).toFixed(4),
-        error: null,
-      });
+      return end("completed", { resultUrl: s.videoUrl, expiresAt: s.expiresAt, error: null });
     case "ended":
       return end(s.status, { error: s.error, expiresAt: s.expiresAt });
     case "missing":
@@ -436,25 +413,25 @@ async function resubmit(gen: Generation, schedule: Scheduler, intent: "send" | "
   const claim = await claimSubmit(gen.id, intent === "cancel" ? notSubmitting() : submitDue());
   if (!claim) return { row: gen, call: "none" };
   const obs: Observation = intent === "cancel" ? { source: "cancel" } : { source: "clock", late: claim.late };
-  const stop = decide(claim.row, obs, { now: new Date(), pricePerSecUsd: 0 });
+  const stop = decide(claim.row, obs, { now: new Date() });
   if (stop.kind !== "none") return { row: await apply(claim.row, stop, schedule), call: "none" };
   const key = await ownerKey(claim.row.userId);
   if (key) return send(claim.row, key, schedule);
   console.warn(JSON.stringify({ evt: "submit_skipped", id: claim.row.id, reason: "owner has no api key", maybeAccepted: claim.row.maybeAccepted }));
-  const step = decide(claim.row, { source: "noKey", late: claim.late }, { now: new Date(), pricePerSecUsd: 0 });
+  const step = decide(claim.row, { source: "noKey", late: claim.late }, { now: new Date() });
   return { row: await apply(claim.row, step, schedule), call: "none" };
 }
 
 /**
- * One submit attempt for a row whose submit lease this caller holds. Idempotency-Key is the row id and the body is
- * rebuilt from the stored row, so every attempt is the same request and Higgsfield returns the original request id
- * for one it already accepted. A changed body gets 422, which fails the row.
+ * One submit attempt for a row whose submit lease this caller holds. Idempotency-Key is the row id, and the endpoint
+ * and body are the ones stored at insert, so every attempt is the same request and Higgsfield returns the original
+ * request id for one it already accepted. A changed body gets 422, which fails the row.
  */
 async function send(gen: Generation, key: hf.ApiKey, schedule: Scheduler): Promise<Look> {
   const outcome = await submitRow(gen, key);
   const detail = outcome.kind === "deferred" ? outcome.detail : outcome.kind === "rejected" ? outcome.error : undefined;
   console.info(JSON.stringify({ evt: "generation_submit", id: gen.id, outcome: outcome.kind, detail }));
-  const row = await apply(gen, decide(gen, { source: "submit", outcome }, { now: new Date(), pricePerSecUsd: 0 }), schedule);
+  const row = await apply(gen, decide(gen, { source: "submit", outcome }, { now: new Date() }), schedule);
   if (outcome.kind === "accepted" && row.requestId !== outcome.requestId) {
     console.warn(JSON.stringify({ evt: "submit_unrecorded", id: gen.id, requestId: outcome.requestId, status: row.status }));
   }
@@ -462,15 +439,9 @@ async function send(gen: Generation, key: hf.ApiKey, schedule: Scheduler): Promi
 }
 
 async function submitRow(gen: Generation, key: hf.ApiKey): Promise<hf.SubmitOutcome> {
-  const spec = findModel(gen.modelId);
-  if (!spec) return { kind: "rejected", error: `카탈로그에 없는 모델입니다: ${gen.modelId}` };
-  let args: Record<string, unknown>;
-  try {
-    args = buildArguments(spec, gen.prompt, gen.params, gen.imageRefs, gen.videoRefs);
-  } catch (e) {
-    return { kind: "rejected", error: e instanceof Error ? e.message : String(e) };
-  }
-  return hf.submit(key, spec.id, args, { idempotencyKey: gen.id, webhookUrl: hookUrl(gen.id) });
+  const request = resendRequest(gen);
+  if (!request) return { kind: "rejected", error: `보낼 요청 본문이 없는 모델입니다: ${gen.modelId}` };
+  return hf.submit(key, request.endpoint, request.body, { idempotencyKey: gen.id, webhookUrl: hookUrl(gen.id) });
 }
 
 /** Ask Higgsfield about a live row, but only if this caller wins the row's check claim. Pending rows have nothing to ask. */
@@ -491,8 +462,7 @@ async function refresh(gen: Generation, policy: Policy, schedule: Scheduler): Pr
     console.warn(JSON.stringify({ evt: "status_unavailable", id: gen.id, error: e.message }));
     return { row: gen, call: "unavailable" };
   }
-  const pricePerSecUsd = state.kind === "completed" ? await priceFor(gen.modelId) : 0;
-  const row = await apply(gen, decide(gen, { source: "status", state }, { now: new Date(), pricePerSecUsd }), schedule);
+  const row = await apply(gen, decide(gen, { source: "status", state }, { now: new Date() }), schedule);
   return { row, call: "answered" };
 }
 

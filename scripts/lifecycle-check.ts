@@ -17,13 +17,15 @@
  * The reference cleanup check also creates an inactive user named refcheck-<random>, who owns no rows, and deletes it
  * before the check returns.
  * The stalled-copy check waits out the 240 s copy timeout, so a full run takes about seven minutes.
- * If the test model's price is 0 it sets 0.0123 USD/s for the cost check and restores the stored price afterwards.
+ * Its rows use MiniMax H3 reference-to-video. If that model's rate is 0, the cost checks set 0.0123 USD/s and put the
+ * stored row back afterwards (deleting it when there was none).
  *
  * The submit checks (--submits runs only those) drive pending rows: a lost accept, 429s, the deadline, cancel during
  * and after a submit, cancel and the deadline after an answer was lost or a submitter died, an owner whose key was
  * removed (a temporary keyless user, deleted with its rows afterwards), a 422 body mismatch, and
  * a submitter killed after the fake accepted (a child process of this script, started with --submit-once, killed by
- * the proxy's tap). --only runs the named submit checks and nothing else.
+ * the proxy's tap), and a row from before request_body whose resend must match the old code's bytes. --only runs the
+ * named submit checks and nothing else.
  *
  * The webhook and sweep checks (--triggers runs only those) point PUBLIC_BASE_URL at a receiver inside this process
  * that answers like src/app/api/hooks/higgsfield/route.ts, so the fake's webhooks reach the owner without a server.
@@ -54,7 +56,8 @@ import { put } from "@vercel/blob";
 import { and, count, desc, eq, gt, inArray, isNotNull, isNull, like, notInArray, or, sql, type SQL } from "drizzle-orm";
 import { getDb, schema } from "../src/db";
 import type { Generation, User } from "../src/db/schema";
-import { buildArguments, coerceParams, findModel } from "../src/lib/catalog";
+import { describeModel, estimateCostUsd, planGeneration, resendRequest, type FamilyId, type ReadyPlan } from "../src/lib/catalog";
+import { loadModelSetting, saveModelSetting } from "../src/lib/model-settings";
 import { encrypt, hashPassword, signToken } from "../src/lib/crypto";
 import { isLive, LIVE_STATUSES } from "../src/lib/generation-status";
 import { videoKey } from "../src/lib/storage";
@@ -65,6 +68,7 @@ type Proxy = ReturnType<typeof startProxy>;
 type Hooks = ReturnType<typeof startHookReceiver>;
 type Stats = {
   accepted: { byIdempotencyKey: Record<string, number> };
+  submits: { endpoint: string; idempotencyKey: string | null; body: Record<string, unknown>; status: number }[];
   rejected: { 429: number; 422: number; 503: number };
   statusPolls: { byRequest: Record<string, { total: number; perSecondMax: number }>; byApiKey: Record<string, number> };
   webhooks: { sent: number; dropped: number; failed: number; retried: number; byRequest: Record<string, number[]> };
@@ -107,7 +111,8 @@ type Chromium = {
 const TAG = "GP-6 ";
 const SWEEP_BUDGET_MS = 240_000;
 const HOOK_HTTP = { done: 204, unauthorized: 401, retry: 503 } as const;
-const MODEL = "minimax/hailuo-2.3/standard/image-to-video";
+const FAMILY: FamilyId = "minimax/h3";
+const MODEL = "minimax/h3/reference-to-video";
 const CHECK_GAP_MS = 15_000;
 const MIRROR_LEASE_S = 360;
 const SUBMIT_LEASE_S = 30;
@@ -219,20 +224,27 @@ function recorder() {
 }
 
 /**
- * price × duration proves nothing at price 0, and the shared models table starts at 0 for every model. When the
- * model's price is 0, run with TEST_PRICE and put the stored value back afterwards.
+ * A quote proves nothing at rate 0, and a model's rate is 0 until an admin sets one. When FAMILY's rate is 0, run with
+ * TEST_PRICE and put the stored row back afterwards, or delete it when there was none.
  */
-async function withKnownPrice<T>(modelId: string, run: () => Promise<T>): Promise<T> {
+async function withKnownPrice<T>(run: () => Promise<T>): Promise<T> {
   const m = schema.models;
-  const [row] = await getDb().select().from(m).where(eq(m.modelId, modelId)).limit(1);
-  if (!row) throw new Error(`FAIL models row for ${modelId} missing; run npm run db:seed`);
-  if (Number(row.pricePerSecUsd) > 0) return run();
-  await getDb().update(m).set({ pricePerSecUsd: TEST_PRICE }).where(eq(m.modelId, modelId));
+  const [row] = await getDb().select().from(m).where(eq(m.modelId, FAMILY)).limit(1);
+  if (row && Number(row.pricePerSecUsd) > 0) return run();
+  await saveModelSetting(FAMILY, { rateUsd: Number(TEST_PRICE) });
   try {
     return await run();
   } finally {
-    await getDb().update(m).set({ pricePerSecUsd: row.pricePerSecUsd }).where(eq(m.modelId, modelId));
+    if (row) await saveModelSetting(FAMILY, { rateUsd: Number(row.pricePerSecUsd) });
+    else await getDb().delete(m).where(eq(m.modelId, FAMILY));
   }
+}
+
+/** The quote a stored row should hold at `rate`, from the same function the route used. */
+function quoteOf(row: Generation, rate: number): string {
+  const mode = describeModel(row.modelId).mode;
+  if (!mode) throw new Error(`FAIL ${row.modelId} is not a catalog endpoint`);
+  return estimateCostUsd({ family: FAMILY, mode, params: row.params, inputVideoS: 0 }, rate).toFixed(4);
 }
 
 async function stats(upstream: string): Promise<Stats> {
@@ -296,16 +308,19 @@ async function adminUser(): Promise<User> {
   return u;
 }
 
+/** What the route plans for an H3 request with these images, at FAMILY's stored rate. */
+function plan(label: string, imageUrls: string[], rate: number): ReadyPlan {
+  const p = planGeneration(
+    { family: FAMILY, mode: imageUrls.length > 0 ? "r2v" : "t2v", prompt: `${TAG}${label}`, params: {}, images: imageUrls, videos: [], startFromImage: false },
+    rate,
+  );
+  if (!p.ready) throw new Error(`FAIL setup: ${p.blocker}`);
+  return p;
+}
+
 async function submit(owner: Owner, admin: User, label: string, imageUrls = [REF]): Promise<Generation> {
-  const spec = findModel(MODEL);
-  if (!spec) throw new Error(`FAIL ${MODEL} missing from the catalog`);
-  const row = await owner.submitGeneration(admin, {
-    spec,
-    prompt: `${TAG}${label}`,
-    params: coerceParams(spec, {}),
-    imageUrls,
-    videoUrls: [],
-  }, (task) => void task());
+  const rate = (await loadModelSetting(FAMILY)).rateUsd;
+  const row = await owner.submitGeneration(admin, plan(label, imageUrls, rate), (task) => void task());
   created.push(row.id);
   return row;
 }
@@ -316,11 +331,20 @@ async function insertRow(
   label: string,
   extra: { status: Generation["status"]; nextCheckAt?: SQL; error?: string; createdAt?: SQL },
 ): Promise<Generation> {
-  const spec = findModel(MODEL);
-  if (!spec) throw new Error(`FAIL ${MODEL} missing from the catalog`);
+  const p = plan(label, [REF], 0);
   const [row] = await getDb()
     .insert(schema.generations)
-    .values({ userId: admin.id, modelId: MODEL, prompt: `${TAG}${label}`, params: coerceParams(spec, {}), imageRefs: [REF], durationS: 6, costUsd: "0", ...extra })
+    .values({
+      userId: admin.id,
+      modelId: p.endpoint,
+      prompt: p.prompt,
+      params: p.params,
+      requestBody: p.body,
+      imageRefs: [REF],
+      durationS: p.durationS,
+      costUsd: "0",
+      ...extra,
+    })
     .returning();
   created.push(row.id);
   return row;
@@ -357,9 +381,13 @@ async function fiftyCallers(owner: Owner, admin: User, upstream: string) {
   check(polls.total >= 1 && polls.total <= allowed && polls.perSecondMax === 1, "the fake saw at most one status call per 15 s for that row", `${polls.total} calls in ${(elapsed / 1000).toFixed(1)} s, allowed ${allowed}`);
   const stamps = new Set([...seen, final].filter((g) => g.status === "completed").map((g) => g.completedAt?.toISOString()));
   const costs = new Set([...seen, final].filter((g) => g.status === "completed").map((g) => g.costUsd));
-  const price = await owner.priceFor(final.modelId);
+  const rate = (await loadModelSetting(FAMILY)).rateUsd;
   check(stamps.size === 1, "completed_at was written once", [...stamps].join(","));
-  check(price > 0 && costs.size === 1 && final.costUsd === (price * final.durationS).toFixed(4), "cost_usd was written once as a non-zero price × duration", `${final.costUsd} = ${price} × ${final.durationS}`);
+  check(
+    rate > 0 && costs.size === 1 && Number(final.costUsd) > 0 && final.costUsd === quoteOf(final, rate) && row.costUsd === final.costUsd,
+    "cost_usd is the non-zero quote written at submit, kept once completed",
+    `${final.costUsd} at ${rate}/s for ${final.durationS} s`,
+  );
   await Promise.all(rec.tasks);
   check(rec.tasks.length === 1, "the terminal follow-up was scheduled once", `${rec.tasks.length}`);
 }
@@ -757,7 +785,7 @@ async function oneWebhookNoPoll(owner: Owner, admin: User, upstream: string, hoo
   const codes = await deliveries(upstream, row.requestId ?? "", 1, 20_000);
   await Promise.all(hooks.rec.tasks);
   const final = await readRow(row.id);
-  const price = await owner.priceFor(final.modelId);
+  const rate = (await loadModelSetting(FAMILY)).rateUsd;
   check(
     codes.join() === "204" && final.status === "completed" && final.storagePath === videoKey(row.id),
     "with no poll at all, one webhook completes the row and its after() copy stores it",
@@ -767,7 +795,7 @@ async function oneWebhookNoPoll(owner: Owner, admin: User, upstream: string, hoo
     statusCalls(await stats(upstream), row.requestId) === 1 && hooks.rec.tasks.length - before === 1,
     "the fake saw only the hook's one status call, and the follow-up was scheduled once",
   );
-  check(price > 0 && final.costUsd === (price * final.durationS).toFixed(4), "the webhook recorded cost_usd as price × duration", `${final.costUsd}`);
+  check(rate > 0 && Number(final.costUsd) > 0 && final.costUsd === quoteOf(final, rate), "the row completed by the webhook keeps the quote written at submit", `${final.costUsd}`);
 }
 
 async function duplicateWebhooks(owner: Owner, admin: User, upstream: string, hooks: Hooks) {
@@ -1100,7 +1128,7 @@ async function bodyMismatch(owner: Owner, admin: User, upstream: string) {
   const other = await fetch(`${upstream}/${MODEL}`, {
     method: "POST",
     headers: { Authorization: "Key gp6-probe", "Content-Type": "application/json", "Idempotency-Key": row.id },
-    body: JSON.stringify({ prompt: "다른 본문" }),
+    body: JSON.stringify({ prompt: "다른 본문", image_urls: [REF] }),
   });
   if (!other.ok) throw new Error(`FAIL setup: the probe submit got ${other.status}`);
   const before = (await stats(upstream)).rejected[422];
@@ -1202,13 +1230,13 @@ async function deadlineOnDatabaseClock(owner: Owner, admin: User, upstream: stri
 }
 
 /** The fake accepts the row's exact submit with its Idempotency-Key, as a submit whose answer never came back would. */
-async function acceptedAtFake(upstream: string, row: Generation): Promise<string> {
-  const spec = findModel(row.modelId);
-  if (!spec) throw new Error(`FAIL ${row.modelId} missing from the catalog`);
-  const res = await fetch(`${upstream}/${row.modelId}`, {
+async function acceptedAtFake(upstream: string, row: Generation, body?: string): Promise<string> {
+  const request = resendRequest(row);
+  if (!request) throw new Error(`FAIL ${row.modelId} has no body to send`);
+  const res = await fetch(`${upstream}/${request.endpoint}`, {
     method: "POST",
     headers: { Authorization: "Key gp6-probe", "Content-Type": "application/json", "Idempotency-Key": row.id },
-    body: JSON.stringify(buildArguments(spec, row.prompt, row.params, row.imageRefs, row.videoRefs)),
+    body: body ?? request.body,
   });
   const requestId = ((await res.json()) as { request_id?: unknown }).request_id;
   if (!res.ok || typeof requestId !== "string") throw new Error(`FAIL setup: the fake answered the probe submit with ${res.status}`);
@@ -1309,6 +1337,43 @@ async function cancelAfterDeadSubmitter(owner: Owner, admin: User, upstream: str
   await Promise.all(rec.tasks);
 }
 
+/**
+ * A row the code before request_body inserted, for an endpoint the catalog no longer offers, after a submitter died
+ * holding its lease. The fake accepted the old code's body, written out here so the check cannot agree with itself.
+ * The resend must post the same bytes to the same endpoint and get the same request id back.
+ */
+async function rowFromBeforeRequestBody(owner: Owner, admin: User, upstream: string) {
+  const rec = recorder();
+  const hailuo = "minimax/hailuo-2.3/standard/image-to-video";
+  const [row] = await getDb()
+    .insert(schema.generations)
+    .values({
+      userId: admin.id,
+      modelId: hailuo,
+      prompt: `${TAG}0007 전의 Hailuo 행`,
+      params: { duration: 6, prompt_optimizer: true },
+      imageRefs: [REF],
+      status: "pending",
+      nextCheckAt: sql`now()`,
+      durationS: 6,
+      costUsd: "0",
+    })
+    .returning();
+  created.push(row.id);
+  const oldBytes = `{"duration":6,"prompt_optimizer":true,"prompt":"${TAG}0007 전의 Hailuo 행","image_url":"${REF}"}`;
+  const requestId = await acceptedAtFake(upstream, row, oldBytes);
+  const resent = await owner.settle(await readRow(row.id), rec.schedule);
+  const sent = (await stats(upstream)).submits.filter((s) => s.idempotencyKey === row.id);
+  check(
+    resent.requestId === requestId && sent.length === 2 && sent.every((s) => s.endpoint === hailuo && s.status === 200 && JSON.stringify(s.body) === oldBytes),
+    "a row from before request_body resends the old code's bytes to its retired endpoint and finds the job Higgsfield holds",
+    `${resent.status}, ${sent.length} submits: ${sent.map((s) => `${s.endpoint} ${s.status}`).join("; ")}`,
+  );
+  const end = await endsTracked(owner, upstream, row.id, requestId, rec.schedule);
+  check(end.ok, "the row then tracks that job to the end", end.detail);
+  await Promise.all(rec.tasks);
+}
+
 /** The deadline must not fail a row whose last answer was lost: the job may exist, and only a resend can tell. */
 async function deadlineAfterLostAnswer(owner: Owner, admin: User, upstream: string, proxy: Proxy) {
   const rec = recorder();
@@ -1402,6 +1467,7 @@ async function submitChecks(owner: Owner, admin: User, upstream: string, proxy: 
     ["cancelWhileResendFails", () => cancelWhileResendFails(owner, admin, upstream, proxy)],
     ["cancelAfterDeadSubmitter", () => cancelAfterDeadSubmitter(owner, admin, upstream)],
     ["bodyMismatch", () => bodyMismatch(owner, admin, upstream)],
+    ["rowFromBeforeRequestBody", () => rowFromBeforeRequestBody(owner, admin, upstream)],
     ["deadlineAfterLostAnswer", () => deadlineAfterLostAnswer(owner, admin, upstream, proxy)],
     ["noKeyWaitsWhileMaybeAccepted", () => noKeyWaitsWhileMaybeAccepted(owner, upstream, proxy)],
     ["deadlineOnDatabaseClock", () => deadlineOnDatabaseClock(owner, admin, upstream)],
@@ -1537,7 +1603,7 @@ async function replayedHooks(owner: Owner, admin: User, upstream: string) {
 async function triggerChecks(owner: Owner, admin: User, upstream: string, proxy: Proxy, hooks: Hooks) {
   await hookRefusals(owner, admin, proxy);
   await replayedHooks(owner, admin, upstream);
-  await withKnownPrice(MODEL, () => oneWebhookNoPoll(owner, admin, upstream, hooks));
+  await withKnownPrice(() => oneWebhookNoPoll(owner, admin, upstream, hooks));
   await duplicateWebhooks(owner, admin, upstream, hooks);
   await hookAfterAnotherCallerFinished(owner, admin, upstream);
   await redeliveryAfter503(owner, admin, upstream, hooks);
@@ -1715,7 +1781,7 @@ async function main() {
       const triggers = process.argv.includes("--triggers");
       const submits = process.argv.includes("--submits") || only !== null;
       if (!triggers && !submits) {
-        await withKnownPrice(MODEL, () => fiftyCallers(owner, admin, upstream));
+        await withKnownPrice(() => fiftyCallers(owner, admin, upstream));
         await reversedObservations(owner, admin, upstream, proxy);
         await cancelRaces(owner, admin, upstream);
         await cancelAfterAnotherCallerFinished(owner, admin, upstream);

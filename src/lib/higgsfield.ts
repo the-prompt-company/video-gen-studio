@@ -8,6 +8,8 @@
  * Outputs are deleted 7 days after the request finishes (`expires_at`).
  */
 
+import type { WireBody } from "@/lib/catalog";
+
 const REAL_BASE = "https://api.higgsfield.ai";
 const BASE = process.env.HIGGSFIELD_BASE_URL || REAL_BASE;
 const SUBMIT_TIMEOUT_MS = 20_000;
@@ -103,20 +105,21 @@ function message(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
+/** POSTs the stored body text as it is, so every attempt for one Idempotency-Key carries the same bytes. */
 export async function submit(
   apiKey: ApiKey,
-  modelId: string,
-  args: Record<string, unknown>,
+  endpoint: string,
+  body: WireBody,
   opts: { idempotencyKey: string; webhookUrl: string | null },
 ): Promise<SubmitOutcome> {
-  const url = new URL(`${BASE}/${modelId}`);
+  const url = new URL(`${BASE}/${endpoint}`);
   if (opts.webhookUrl) url.searchParams.set("hf_webhook", opts.webhookUrl);
   let reply: Reply;
   try {
     const res = await fetch(url, {
       method: "POST",
       headers: headers(apiKey, { "Idempotency-Key": opts.idempotencyKey }),
-      body: JSON.stringify(args),
+      body,
       signal: AbortSignal.timeout(SUBMIT_TIMEOUT_MS),
     });
     reply = await read(res);

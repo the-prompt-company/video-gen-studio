@@ -6,15 +6,15 @@ import { eq } from "drizzle-orm";
 import { getDb, schema } from "../src/db";
 import { loginId } from "../src/lib/credentials";
 import { hashPassword } from "../src/lib/crypto";
-import { CATALOG } from "../src/lib/catalog";
+import { FAMILIES, FAMILY_IDS } from "../src/lib/catalog";
 
 async function main() {
   const db = getDb();
 
-  for (const m of CATALOG) {
-    await db.insert(schema.models).values({ modelId: m.id, name: m.name, note: m.blurb }).onConflictDoNothing();
+  for (const id of FAMILY_IDS) {
+    await db.insert(schema.models).values({ modelId: id, name: FAMILIES[id].name, note: FAMILIES[id].blurb }).onConflictDoNothing();
   }
-  console.log(`models: ${CATALOG.length} rows ensured`);
+  console.log(`models: ${FAMILY_IDS.length} rows ensured`);
 
   const username = loginId(process.env.ADMIN_USERNAME ?? "");
   const password = process.env.ADMIN_PASSWORD;
