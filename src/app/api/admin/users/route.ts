@@ -1,8 +1,10 @@
-import { getDb, schema } from "@/db";
+import { inArray } from "drizzle-orm";
+import { FOREIGN_KEY_VIOLATION, getDb, pgErrorCode, schema } from "@/db";
 import { requireAdmin, errorResponse, HttpError } from "@/lib/auth";
 import { loginId, MIN_PASSWORD_LENGTH } from "@/lib/credentials";
 import { hashPassword, encrypt } from "@/lib/crypto";
 import { usageByUser } from "@/lib/stats";
+import { NO_SUCH_TEAM, parseTeamId, parseUserIds } from "@/lib/teams";
 
 /** GET /api/admin/users — every user with usage totals. */
 export async function GET() {
@@ -44,6 +46,30 @@ export async function POST(req: Request) {
       .returning({ id: schema.users.id });
     if (!row) throw new HttpError(409, "이미 있는 ID입니다");
     return Response.json({ id: row.id }, { status: 201 });
+  } catch (e) {
+    return errorResponse(e);
+  }
+}
+
+/** PATCH /api/admin/users — { userIds, teamId } puts the selected users in one team, or 미소속 with `teamId: null`. */
+export async function PATCH(req: Request) {
+  try {
+    await requireAdmin();
+    const b = (await req.json().catch(() => null)) as { userIds?: unknown; teamId?: unknown } | null;
+    const selected = parseUserIds(b?.userIds);
+    if (!selected.ok) throw new HttpError(400, selected.reason);
+    const team = parseTeamId(b?.teamId);
+    if (!team.ok) throw new HttpError(400, team.reason);
+    const users = schema.users;
+    const updated = await getDb()
+      .update(users)
+      .set({ teamId: team.teamId })
+      .where(inArray(users.id, selected.userIds))
+      .returning({ id: users.id })
+      .catch((e: unknown) => {
+        throw pgErrorCode(e) === FOREIGN_KEY_VIOLATION ? new HttpError(400, NO_SUCH_TEAM) : e;
+      });
+    return Response.json({ updated: updated.length });
   } catch (e) {
     return errorResponse(e);
   }

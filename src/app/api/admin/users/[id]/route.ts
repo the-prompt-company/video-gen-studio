@@ -1,15 +1,17 @@
 import { eq } from "drizzle-orm";
-import { getDb, schema } from "@/db";
+import { FOREIGN_KEY_VIOLATION, getDb, pgErrorCode, schema } from "@/db";
 import { requireAdmin, errorResponse, HttpError, setSessionCookie } from "@/lib/auth";
 import { MIN_PASSWORD_LENGTH } from "@/lib/credentials";
 import { hashPassword, encrypt, decrypt, maskApiKey } from "@/lib/crypto";
 import { parseNickname } from "@/lib/nickname";
+import { NO_SUCH_TEAM, parseTeamId } from "@/lib/teams";
 
 type Ctx = { params: Promise<{ id: string }> };
 type Body = {
   nickname?: string | null;
   password?: string;
   role?: "user" | "admin";
+  teamId?: unknown;
   active?: boolean;
   apiKey?: string | null;
   note?: string | null;
@@ -29,6 +31,7 @@ export async function GET(_req: Request, { params }: Ctx) {
       username: u.username,
       nickname: u.nickname,
       role: u.role,
+      teamId: u.teamId,
       active: u.active,
       note: u.note,
       apiKeyMasked: u.apiKeyEnc ? maskApiKey(decrypt(u.apiKeyEnc)) : null,
@@ -41,7 +44,7 @@ export async function GET(_req: Request, { params }: Ctx) {
   }
 }
 
-/** PATCH /api/admin/users/:id — nickname / role / active / api key / password / note / unlock. */
+/** PATCH /api/admin/users/:id — nickname / role / team / active / api key / password / note / unlock. */
 export async function PATCH(req: Request, { params }: Ctx) {
   try {
     const admin = await requireAdmin();
@@ -63,6 +66,11 @@ export async function PATCH(req: Request, { params }: Ctx) {
       if (b.role !== "user" && b.role !== "admin") throw new HttpError(400, "role은 user|admin");
       if (id === admin.id && b.role !== "admin") throw new HttpError(400, "자기 자신의 관리자 권한은 뺄 수 없습니다");
       patch.role = b.role;
+    }
+    if (b.teamId !== undefined) {
+      const team = parseTeamId(b.teamId);
+      if (!team.ok) throw new HttpError(400, team.reason);
+      patch.teamId = team.teamId;
     }
     if (b.active !== undefined) {
       if (id === admin.id && !b.active) throw new HttpError(400, "자기 자신을 비활성화할 수 없습니다");
@@ -87,7 +95,14 @@ export async function PATCH(req: Request, { params }: Ctx) {
     if (Object.keys(patch).length === 0) throw new HttpError(400, "바꿀 내용이 없습니다");
 
     const db = getDb();
-    const [row] = await db.update(schema.users).set(patch).where(eq(schema.users.id, id)).returning({ id: schema.users.id });
+    const [row] = await db
+      .update(schema.users)
+      .set(patch)
+      .where(eq(schema.users.id, id))
+      .returning({ id: schema.users.id })
+      .catch((e: unknown) => {
+        throw pgErrorCode(e) === FOREIGN_KEY_VIOLATION ? new HttpError(400, NO_SUCH_TEAM) : e;
+      });
     if (!row) throw new HttpError(404, "없는 사용자");
     const revokedOwnSession = id === admin.id && patch.passwordChangedAt !== undefined;
     if (revokedOwnSession) await setSessionCookie(admin);

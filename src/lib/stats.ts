@@ -1,5 +1,6 @@
 import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
+import type { TeamId } from "@/lib/teams";
 
 export type UsageSummary = {
   generations: number;
@@ -74,6 +75,8 @@ export type UserUsageRow = {
   nickname: string | null;
   mustChangePassword: boolean;
   role: string;
+  teamId: TeamId | null;
+  teamName: string | null;
   active: boolean;
   hasApiKey: boolean;
   note: string | null;
@@ -88,6 +91,7 @@ export type UserUsageRow = {
 export async function usageByUser(): Promise<UserUsageRow[]> {
   const db = getDb();
   const u = schema.users;
+  const t = schema.teams;
   const g = schema.generations;
   return db
     .select({
@@ -96,6 +100,8 @@ export async function usageByUser(): Promise<UserUsageRow[]> {
       nickname: u.nickname,
       mustChangePassword: u.mustChangePassword,
       role: u.role,
+      teamId: u.teamId,
+      teamName: t.name,
       active: u.active,
       hasApiKey: sql<boolean>`${u.apiKeyEnc} is not null`,
       note: u.note,
@@ -107,7 +113,8 @@ export async function usageByUser(): Promise<UserUsageRow[]> {
       lastUsedAt: sql<Date | null>`max(${g.createdAt})`,
     })
     .from(u)
+    .leftJoin(t, eq(t.id, u.teamId))
     .leftJoin(g, eq(g.userId, u.id))
-    .groupBy(u.id)
+    .groupBy(u.id, t.id)
     .orderBy(u.id);
 }
