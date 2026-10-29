@@ -22,8 +22,8 @@ async function fake(overrides: Partial<Config> = {}) {
   return { base, close: () => server.close() };
 }
 
-async function submit(base: string, idempotencyKey: string, body: unknown, query = "") {
-  const res = await fetch(`${base}/bytedance/seedance-2.0/reference-to-video${query}`, {
+async function submit(base: string, idempotencyKey: string, body: unknown, query = "", endpoint = "bytedance/seedance-2.0/text-to-video") {
+  const res = await fetch(`${base}/${endpoint}${query}`, {
     method: "POST",
     headers: { Authorization: `Key ${KEY}`, "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
     body: JSON.stringify(body),
@@ -39,7 +39,8 @@ async function statusOf(base: string, id: string) {
 async function stats(base: string) {
   return (await (await fetch(`${base}/_stats`)).json()) as {
     accepted: { total: number; byIdempotencyKey: Record<string, number> };
-    rejected: { 429: number; 422: number; 503: number };
+    rejected: { 429: number; 422: number; 503: number; invalid: number; unknownEndpoint: number };
+    submits: { endpoint: string; idempotencyKey: string | null; body: Record<string, unknown>; status: number }[];
     webhooks: { sent: number; dropped: number; failed: number; retried: number; byRequest: Record<string, number[]> };
     media: { downloads: number };
   };
@@ -70,6 +71,48 @@ test("same Idempotency-Key with a different body is 422", async () => {
     const b = await submit(f.base, "k1", { prompt: "b", duration: 5 });
     assert.equal(b.status, 422);
     assert.equal((await stats(f.base)).rejected[422], 1);
+  } finally {
+    f.close();
+  }
+});
+
+test("an unknown endpoint is 404 and a body outside the endpoint's schema is 422, like Higgsfield", async () => {
+  const f = await fake();
+  try {
+    assert.equal((await submit(f.base, "k1", { prompt: "a" }, "", "minimax/h3/text-to-videoo")).status, 404);
+    const aspectOnImage = await submit(f.base, "k2", { image_url: "https://x.test/a.jpg", aspect_ratio: "16:9" }, "", "bytedance/seedance-2.0/image-to-video");
+    assert.equal(aspectOnImage.status, 422, "seedance image-to-video takes no aspect_ratio");
+    assert.equal((await submit(f.base, "k3", { image_urls: ["https://x.test/a.jpg"] }, "", "minimax/h3/reference-to-video")).status, 422, "h3 needs a prompt");
+    assert.equal((await submit(f.base, "k4", { prompt: "a" }, "", "bytedance/seedance-2.0/reference-to-video")).status, 422, "reference needs images or videos");
+    assert.equal((await submit(f.base, "k5", { prompt: "a", duration: 4 }, "", "minimax/h3/text-to-video")).status, 422, "h3 starts at 5 s");
+    const s = await stats(f.base);
+    assert.equal(s.rejected.unknownEndpoint, 1);
+    assert.equal(s.rejected.invalid, 4);
+    assert.equal(s.accepted.total, 0);
+  } finally {
+    f.close();
+  }
+});
+
+test("_stats lists every submit with its endpoint, Idempotency-Key, body and answer, and a key reused on another endpoint is 422", async () => {
+  const f = await fake();
+  try {
+    const body = { prompt: "a", duration: 10, aspect_ratio: "auto" };
+    await submit(f.base, "k1", body, "", "minimax/h3/text-to-video");
+    const again = await submit(f.base, "k1", body, "", "minimax/h3/text-to-video");
+    assert.equal(again.status, 200, "the same endpoint and body is the same request");
+    const other = await submit(f.base, "k1", { prompt: "a" }, "", "bytedance/seedance-2.0/text-to-video");
+    assert.equal(other.status, 422);
+    const s = await stats(f.base);
+    assert.deepEqual(
+      s.submits.map((x) => [x.endpoint, x.idempotencyKey, x.status]),
+      [
+        ["minimax/h3/text-to-video", "k1", 200],
+        ["minimax/h3/text-to-video", "k1", 200],
+        ["bytedance/seedance-2.0/text-to-video", "k1", 422],
+      ],
+    );
+    assert.deepEqual(s.submits[0].body, body);
   } finally {
     f.close();
   }
