@@ -24,7 +24,7 @@ function retention(v: PublicVideo | null): string | null {
 /** "16:9" from params when the model exposes it, otherwise from the loaded video's pixels. */
 function aspectLabel(g: PublicGeneration, w?: number, h?: number): string | null {
   const p = (g.params as Record<string, unknown>)?.aspect_ratio;
-  if (typeof p === "string" && p !== "adaptive") return p;
+  if (typeof p === "string" && /^\d+:\d+$/.test(p)) return p;
   if (!w || !h) return null;
   const r = w / h;
   if (Math.abs(r - 16 / 9) < 0.05) return "16:9";

@@ -238,8 +238,8 @@ function FeedItem({ g, index, total, active, now, modelName }: { g: PublicGenera
           <span className="text-foreground-2">{modelName}</span>
           {live && <span className="ml-2">예상</span>}
           <span className={`font-display text-sm text-sand ${live ? "ml-1" : "ml-2"}`}>{g.durationS}S · {usd(g.costUsd)}</span>
-          {typeof (g.params as Record<string, unknown>)?.aspect_ratio === "string" && (
-            <span className="font-display ml-2 text-sm text-sand">{String((g.params as Record<string, unknown>).aspect_ratio).toUpperCase()}</span>
+          {/^\d+:\d+$/.test(String((g.params as Record<string, unknown>)?.aspect_ratio)) && (
+            <span className="font-display ml-2 text-sm text-sand">{String((g.params as Record<string, unknown>).aspect_ratio)}</span>
           )}
         </div>
         <div className="mt-1 flex items-center gap-2 text-sm text-foreground">
@@ -729,7 +729,7 @@ export function Playground({ offers, hasApiKey, largeUploadPrefix, galleryCount 
                   <li
                     key={m}
                     aria-current={m === mode ? "step" : undefined}
-                    className={`inline-flex min-h-8 items-center rounded-full border px-3 text-xs ${m === mode ? "border-foreground bg-foreground text-background" : "border-border text-subtle"}`}
+                    className={`inline-flex min-h-8 items-center rounded-full px-3 text-xs ${m === mode ? "bg-foreground font-medium text-background" : "text-subtle"}`}
                   >
                     {MODE_LABEL[m]}
                   </li>

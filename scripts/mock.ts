@@ -68,6 +68,20 @@ function rows(userId: number): Row[] {
       resultUrl: "/mock/result-cinema.webm", durationS: 10, costUsd: "0.6000", ...at(d(2), 95_000),
     },
     {
+      userId, modelId: "minimax/h3/text-to-video", status: "completed",
+      prompt: `${TAG} 레퍼런스 없이: 새벽 시장의 김이 오르는 국숫집, 천천히 들어가는 카메라`,
+      params: { duration: 10, aspect_ratio: "16:9", aigc_watermark: false },
+      imageRefs: [], videoRefs: [],
+      resultUrl: "/mock/result-landscape.webm", durationS: 10, costUsd: "0.6500", ...at(d(1) + h(8), 88_000),
+    },
+    {
+      userId, modelId: "bytedance/seedance-2.0/image-to-video", status: "completed",
+      prompt: `${TAG} 첫 프레임에서 시작: 창가의 화분, 커튼이 바람에 흔들림`,
+      params: { duration: 5, resolution: "720p", generate_audio: false },
+      imageRefs: ["/mock/ref-portrait-1.jpg"], videoRefs: [],
+      resultUrl: "/mock/result-portrait.webm", durationS: 5, costUsd: "1.0658", ...at(d(1) + h(10), 61_000),
+    },
+    {
       userId, modelId: "minimax/hailuo-2.3/standard/image-to-video", status: "failed",
       prompt: `${TAG} 군중 속 인물 클로즈업, 얼굴 교체`,
       params: { duration: 6, prompt_optimizer: true },
