@@ -4,15 +4,15 @@ Dates and times read in Seoul time in each language's short pattern (`26. 10. 29
 
 ## Sub-features
 
-- `fmt-dashboard` the recent table's 시각 column uses the language's date pattern and its 비용 column `$0.2250`; 누적 비용 reads `$…`.
-- `fmt-gallery` a tile made three minutes ago reads the language's "3 minutes ago" and `$0.2250`; its `gallery.openDetail` button opens dialog `gallery.detail.title`, whose created and finished times (생성, 완료) use the date pattern.
+- `fmt-dashboard` the recent table's `dashboard.table.time` column uses the language's date pattern and its `dashboard.table.cost` column `$0.2250`; `dashboard.stats.totalSpend` reads `$…`.
+- `fmt-gallery` a tile made three minutes ago reads the language's "3 minutes ago" and `$0.2250`; its `gallery.openDetail` button opens dialog `gallery.detail.title`, whose created and finished times (`gallery.detail.created`, `gallery.detail.completed`) use the date pattern.
 - `fmt-playground` in the drawer `playground.drawer`, with GPT Image 2 picked in `playground.model` and a `playground.prompt` typed, the cost bar reads a `$0.xxxx` estimate.
-- `fmt-admin` the users table's cost and last-used date, and the logs table's 시각 and 비용, use the same formats.
+- `fmt-admin` the users table's `members.table.cost` and `members.table.lastUsed`, and the `admin.tabs.logs` table's `logs.field.time` and `logs.field.cost`, use the same formats.
 - `fmt-hydration` none of these pages logs a hydration warning or a page error.
 
 ## How to get to it (user POV)
 
-- Header nav 대시보드, 갤러리, 플레이그라운드, and 어드민 (users and 로그 · 히스토리 tabs).
+- Header nav `pages.dashboard`, `pages.gallery`, `pages.playground`, and `pages.admin` (tabs `admin.tabs.users` and `admin.tabs.logs`).
 
 ## Driving it with vgs
 
@@ -27,4 +27,4 @@ Preconditions:
 ## Gotchas
 
 - Relative times count from the time the page was rendered, so a tile reads the same text until the page loads again.
-- The gallery's 보관 line ("N일 남음") is still the gallery's own Korean text until the gallery's i18n PR.
+- Every run rewrites its review images under `.impeccable/review/i18n-2/`. When a run is not meant to refresh them, restore them with `git checkout -- .impeccable/review/i18n-2`.
