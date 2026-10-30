@@ -77,3 +77,6 @@ Each language button in the picker shows its own name (`한국어`, `English`, `
 | OpenAI 편집 | OpenAI editing | OpenAI 编辑 | The edits endpoint, used when references are attached |
 | 정가 | List price | 原价 | A provider's published price before a discount |
 | 사용 불가 | Unavailable | 不可用 | A model the server cannot run |
+| 엑셀 통합 문서 | Excel workbook | Excel 工作簿 | The .xlsx format |
+| 제목 줄 | header row | 标题行 | The sheet row that names the columns |
+| 히스토리 | History | 历史记录 | The logs tab's list |

@@ -14,7 +14,12 @@ import { api } from "./AdminPanels";
 
 type UserOpt = { id: number; username: string };
 
+const CSV_ROWS = 500;
+
 export function LogsPanel() {
+  const t = useTranslations("logs");
+  const tCommon = useTranslations("common");
+  const tGeneration = useTranslations("generation");
   const tStatus = useTranslations("status");
   const tMode = useTranslations("mode");
   const modeName = (m: Mode) => tMode(m);
@@ -60,28 +65,28 @@ export function LogsPanel() {
 
   return (
     <Card
-      title={`히스토리 ${total}건`}
+      title={t("title", { count: total })}
       action={
-        <a href={`/api/admin/generations?${qs({ format: "csv", limit: "500" })}`} className="text-xs text-accent-soft hover:underline">
-          CSV 내보내기 (최근 500)
+        <a href={`/api/admin/generations?${qs({ format: "csv", limit: String(CSV_ROWS) })}`} className="text-xs text-accent-soft hover:underline">
+          {t("csv", { count: CSV_ROWS })}
         </a>
       }
     >
       <div className="mb-4 grid gap-2 sm:grid-cols-3">
         <Select value={f.userId} onChange={(e) => setF({ ...f, userId: e.target.value })}>
-          <option value="">모든 사용자</option>
+          <option value="">{t("filter.allMembers")}</option>
           {users.map((u) => (
             <option key={u.id} value={u.id}>{u.username}</option>
           ))}
         </Select>
         <Select value={f.modelId} onChange={(e) => setF({ ...f, modelId: e.target.value })}>
-          <option value="">모든 모델</option>
+          <option value="">{t("filter.allModels")}</option>
           {FAMILY_IDS.map((id) => (
             <option key={id} value={id}>{FAMILIES[id].name}</option>
           ))}
         </Select>
         <Select value={f.status} onChange={(e) => setF({ ...f, status: e.target.value })}>
-          <option value="">모든 상태</option>
+          <option value="">{t("filter.allStatuses")}</option>
           {GENERATION_STATUSES.map((s) => (
             <option key={s} value={s}>{tStatus(s)}</option>
           ))}
@@ -89,19 +94,19 @@ export function LogsPanel() {
       </div>
       {error && <p className="mb-3 rounded-lg bg-rose-500/10 px-3 py-2 text-sm text-rose-300">{errorText(error)}</p>}
       {items.length === 0 ? (
-        <Empty>조건에 맞는 기록이 없습니다.</Empty>
+        <Empty>{t("empty")}</Empty>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="text-left text-xs uppercase tracking-wider text-subtle">
               <tr>
-                <th className="py-2 pr-3 font-medium">시각</th>
-                <th className="py-2 pr-3 font-medium">사용자</th>
-                <th className="py-2 pr-3 font-medium">상태</th>
-                <th className="py-2 pr-3 font-medium">모델</th>
-                <th className="py-2 pr-3 font-medium">프롬프트</th>
-                <th className="py-2 pr-3 text-right font-medium">길이</th>
-                <th className="py-2 text-right font-medium">비용</th>
+                <th className="py-2 pr-3 font-medium">{t("field.time")}</th>
+                <th className="py-2 pr-3 font-medium">{t("field.member")}</th>
+                <th className="py-2 pr-3 font-medium">{t("field.status")}</th>
+                <th className="py-2 pr-3 font-medium">{t("field.model")}</th>
+                <th className="py-2 pr-3 font-medium">{t("field.prompt")}</th>
+                <th className="py-2 pr-3 text-right font-medium">{t("field.duration")}</th>
+                <th className="py-2 text-right font-medium">{t("field.cost")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -120,7 +125,7 @@ export function LogsPanel() {
           </table>
           {items.length < total && (
             <div className="mt-3 text-center">
-              <Button variant="outline" size="sm" onClick={more}>더 보기</Button>
+              <Button variant="outline" size="sm" onClick={more}>{t("more")}</Button>
             </div>
           )}
         </div>
@@ -135,17 +140,17 @@ export function LogsPanel() {
             </div>
             {open.video && <video src={open.video.url} controls className="w-full rounded-lg bg-black" />}
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            {open.image && <img src={open.image.url} alt="생성된 이미지" className="max-h-[60dvh] w-full rounded-lg bg-black object-contain" />}
+            {open.image && <img src={open.image.url} alt={tGeneration("image")} className="max-h-[60dvh] w-full rounded-lg bg-black object-contain" />}
             <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs text-muted">
-              <dt>모델</dt><dd className="text-foreground-2">{modelLine(open.modelId, modeName)} <span className="font-mono text-subtle">{open.modelId}</span></dd>
-              <dt>프롬프트</dt><dd className="text-foreground-2">{open.prompt || "—"}</dd>
-              <dt>파라미터</dt><dd className="font-mono text-foreground-2">{JSON.stringify(open.params)}</dd>
-              <dt>이미지</dt><dd className="break-all text-foreground-2">{open.imageRefs.join(", ") || "—"}</dd>
-              <dt>영상</dt><dd className="break-all text-foreground-2">{open.videoRefs.join(", ") || "—"}</dd>
-              <dt>비용</dt><dd className="text-foreground-2">{usd(format, open.costUsd)} ({open.durationS}s)</dd>
-              {open.reason && (<><dt>오류</dt><dd className="text-rose-300">{errorText(open.reason)}</dd></>)}
+              <dt>{t("field.model")}</dt><dd className="text-foreground-2">{modelLine(open.modelId, modeName)} <span className="font-mono text-subtle">{open.modelId}</span></dd>
+              <dt>{t("field.prompt")}</dt><dd className="text-foreground-2">{open.prompt || "—"}</dd>
+              <dt>{t("field.params")}</dt><dd className="font-mono text-foreground-2">{JSON.stringify(open.params)}</dd>
+              <dt>{t("field.images")}</dt><dd className="break-all text-foreground-2">{open.imageRefs.join(", ") || "—"}</dd>
+              <dt>{t("field.videos")}</dt><dd className="break-all text-foreground-2">{open.videoRefs.join(", ") || "—"}</dd>
+              <dt>{t("field.cost")}</dt><dd className="text-foreground-2">{usd(format, open.costUsd)} ({open.durationS}s)</dd>
+              {open.reason && (<><dt>{t("field.error")}</dt><dd className="text-rose-300">{errorText(open.reason)}</dd></>)}
             </dl>
-            <div className="text-right"><Button variant="outline" size="sm" onClick={() => setOpen(null)}>닫기</Button></div>
+            <div className="text-right"><Button variant="outline" size="sm" onClick={() => setOpen(null)}>{tCommon("close")}</Button></div>
           </div>
         </div>
       )}

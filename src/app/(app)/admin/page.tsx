@@ -13,7 +13,7 @@ export const generateMetadata = pageTitle("admin");
 export default async function AdminPage() {
   const user = await getCurrentUser();
   if (!user || user.role !== "admin") return null;
-  const [all, format, messages] = await Promise.all([usageFor(null), getFormatter(), pageMessages(["mode", "prices"])]);
+  const [all, format, messages] = await Promise.all([usageFor(null), getFormatter(), pageMessages(["mode", "prices", "generation", "import", "models", "logs"])]);
 
   return (
     <PageContainer className="space-y-6">

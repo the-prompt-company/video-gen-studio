@@ -14,12 +14,8 @@ const I18N_PENDING = [
   "src/app/(app)/settings/page.tsx",
   "src/components/ProfileEditor.tsx",
   "src/components/admin/AdminPanels.tsx",
-  "src/components/admin/LogsPanel.tsx",
-  "src/components/admin/MemberImport.tsx",
-  "src/components/admin/ModelsPanel.tsx",
   "src/components/admin/TeamsPanel.tsx",
   "src/components/admin/UsersPanel.tsx",
-  "src/lib/member-sheet.ts",
 ];
 
 const eslintConfig = defineConfig([

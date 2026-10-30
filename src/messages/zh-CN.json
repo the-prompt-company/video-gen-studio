@@ -11,7 +11,9 @@
     "settings": "设置"
   },
   "common": {
-    "close": "关闭"
+    "close": "关闭",
+    "save": "保存",
+    "cancel": "取消"
   },
   "nav": {
     "label": "主菜单",
@@ -411,5 +413,80 @@
       "h3": "10 秒",
       "gptImage2": "1 张 1024×1024 中等质量图片"
     }
+  },
+  "import": {
+    "title": "通过 Excel 创建成员",
+    "intro": "读取第一个工作表中第一个有内容的行作为标题行。邮箱将作为成员的登录 ID，成员首次使用初始密码 <pw>{password}</pw> 登录后需设置新密码。",
+    "pick": {
+      "first": "选择 Excel 文件",
+      "another": "选择其他文件"
+    },
+    "working": "{doing, select, reading {正在读取 <name>{file}</name>…} checking {正在检查 <name>{file}</name>…} creating {正在根据 <name>{file}</name> 创建成员…} other {}}",
+    "failure": {
+      "notXlsx": "只能读取 Excel 工作簿（.xlsx）。请在 Excel 中通过“另存为”→“Excel 工作簿（.xlsx）”保存后，重新选择文件。",
+      "unreadable": "无法读取该文件。请确认它能在 Excel 中打开；如设有密码，请先取消密码并重新保存为 .xlsx，再选择该文件。",
+      "empty": "工作表为空。请在第一行写上标题 {nickname} 和 {email}（或 {nicknameAlias} 和 {emailAlias}），并在下方每行填写一名成员。",
+      "missingColumns": "已将第 {row} 行读作标题行，但其中没有 {missing, select, nickname {{nickname}（或 {nicknameAlias}）} email {{email}（或 {emailAlias}）} both {{nickname}（或 {nicknameAlias}）和 {email}（或 {emailAlias}）} other {}}列（找到的标题：{found}）。请修改标题后重新选择文件。"
+    },
+    "example": {
+      "label": "Excel 格式示例",
+      "nickname": "金敏智",
+      "caption": "也可以使用韩文标题 {nicknameAlias} 和 {emailAlias}。其他列不会读取，每次最多创建 {max, plural, other {# 名成员}}。"
+    },
+    "rowCount": "{count, plural, other {# 行}}",
+    "done": "{count, plural, =0 {没有新建成员。} other {已创建 # 名成员。成员列表会将其标记为临时密码。}}",
+    "summary": "结果摘要",
+    "rows": "逐行结果",
+    "outcome": {
+      "invalid": "需修改",
+      "duplicate": "文件内重复",
+      "exists": "已存在",
+      "create": "待创建",
+      "created": "已创建"
+    },
+    "row": "第 {row} 行",
+    "noEmail": "无邮箱",
+    "detail": {
+      "nickname": "昵称：{nickname}",
+      "exists": "此邮箱的 ID 已存在。",
+      "duplicate": "与第 {row} 行的邮箱相同。只创建第一行。"
+    },
+    "nothingToCreate": "没有可创建的行。请修改文件后重新选择。",
+    "submit": "{count, plural, other {创建 # 名成员}}"
+  },
+  "models": {
+    "title": "模型单价",
+    "lead": "Higgsfield 的响应不含费用，因此视频在发起生成请求时，会按此单价和 Higgsfield 的计费规则（分辨率、画面比例、时长、参考视频时长）计算费用并记录。GPT Image 2 则将 OpenAI 在响应中返回的 token 数乘以此单价（每百万图片输出 token）和 OpenAI 的输入单价比例（文本 5/30，图片 8/30）后记录；如果没有返回 token 数，则记录预计费用。修改单价后从下一次请求开始生效，实际扣费金额以各服务商的发票为准。",
+    "list": "模型",
+    "unit": "{per}（USD，{basis}）",
+    "rateLabel": "{model} 单价",
+    "fill": "填入单价：{label} {rate}",
+    "example": "示例：{example}，费用 {cost}",
+    "exampleEmpty": "输入单价后显示示例费用",
+    "toggle": "{enabled, select, yes {使用中 · 停用} other {已停用 · 启用}}"
+  },
+  "logs": {
+    "title": "历史记录（{count, plural, other {# 条}}）",
+    "csv": "导出 CSV（最近 {count, plural, other {# 条}}）",
+    "filter": {
+      "allMembers": "全部成员",
+      "allModels": "全部模型",
+      "allStatuses": "全部状态"
+    },
+    "field": {
+      "time": "时间",
+      "member": "成员",
+      "status": "状态",
+      "model": "模型",
+      "prompt": "提示词",
+      "duration": "时长",
+      "cost": "费用",
+      "params": "参数",
+      "images": "参考图",
+      "videos": "参考视频",
+      "error": "错误"
+    },
+    "empty": "没有符合条件的记录。",
+    "more": "加载更多"
   }
 }
