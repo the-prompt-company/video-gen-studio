@@ -30,36 +30,38 @@ import { usd } from "@/i18n/format";
 
 /**
  * `unavailable` 503: the server cannot run the model at all, so it is listed but cannot be picked. 403: this member
- * has no key for it, and the drawer says so while 생성하기 stays off.
+ * has no key for it, and the drawer says so while the Generate button stays off.
  */
 type Offer = { family: FamilyId; rateUsd: number; unavailable: Unavailable | null };
 type Ref = { id: string; url: string; name: string; kind: "image" | "video"; local?: string; w?: number; h?: number; seconds?: number };
 type FeedAnswer = { items?: PublicGeneration[]; now?: number };
+type Shape = "landscape" | "portrait" | "square";
+type PlaygroundText = ReturnType<typeof useTranslations<"playground">>;
 
-const ASPECT_LABEL: Record<string, string> = {
-  "16:9": "가로 16:9",
-  "3:2": "가로 3:2",
-  "21:9": "가로 21:9",
-  "4:3": "가로 4:3",
-  "9:16": "세로 9:16",
-  "3:4": "세로 3:4",
-  "2:3": "세로 2:3",
-  "1:1": "정사각 1:1",
-  auto: "자동",
-};
-
-function modeSentence(mode: Mode, images: number, videos: number) {
-  if (mode === "t2v" || mode === "t2i") return "레퍼런스 없이 프롬프트만으로 만듭니다.";
-  if (mode === "i2v") return "1번 이미지를 첫 프레임으로 씁니다.";
-  if (mode === "r2i") return `이미지 ${images}장을 레퍼런스로 OpenAI 편집에 보냅니다.`;
-  const parts = [images > 0 && `이미지 ${images}장`, videos > 0 && `영상 ${videos}개`].filter(Boolean);
-  return `${parts.join(" · ")}${videos > 0 ? "를" : "을"} 레퍼런스로 씁니다.`;
+function modeSentence(t: PlaygroundText, mode: Mode, images: number, videos: number) {
+  switch (mode) {
+    case "t2v":
+    case "t2i":
+      return t("modeSentence.text");
+    case "i2v":
+      return t("modeSentence.firstFrame");
+    case "r2i":
+      return t("modeSentence.edit", { images });
+    case "r2v":
+      return t("modeSentence.reference", { refs: images > 0 && videos > 0 ? "both" : images > 0 ? "images" : "videos", images, videos });
+  }
 }
 
-function orientation(w?: number, h?: number) {
+function shapeOf(w?: number, h?: number): Shape | null {
   if (!w || !h) return null;
   const r = w / h;
-  return r > 1.05 ? "가로" : r < 0.95 ? "세로" : "정사각";
+  return r > 1.05 ? "landscape" : r < 0.95 ? "portrait" : "square";
+}
+
+/** "16:9" is landscape. "auto" and anything else that is not a ratio has no shape. */
+function ratioShape(ratio: string): Shape | null {
+  const m = /^(\d+):(\d+)$/.exec(ratio);
+  return m ? shapeOf(Number(m[1]), Number(m[2])) : null;
 }
 
 function readImageSize(file: File): Promise<{ w: number; h: number } | null> {
@@ -91,6 +93,7 @@ function readVideoSeconds(file: File): Promise<number | null> {
   });
 }
 
+const DRAWER_ID = "generation-settings";
 const SMALL = 4 * 1024 * 1024;
 const ONE_DECIMAL = { minimumFractionDigits: 1, maximumFractionDigits: 1 };
 const FEED_LIMIT = 12;
@@ -103,11 +106,12 @@ const POLL_TIMEOUT_MS = 10_000;
 const STORE_WAIT_MS = 120_000;
 
 /**
- * Small files go through the server to Higgsfield's storage with the member's key. An OpenAI model's references always
- * go straight to Blob (`viaBlob`), so no Higgsfield key is involved.
+ * With no `blobPrefix`, the file goes through the server to Higgsfield's storage with the member's key. With one, it
+ * goes straight to Blob: an OpenAI model's references always do, so no Higgsfield key is involved, and so does any
+ * file over 4 MB.
  */
-async function uploadFile(file: File, largeUploadPrefix: string | null, viaBlob: boolean): Promise<string> {
-  if (file.size <= SMALL && !viaBlob) {
+async function uploadFile(file: File, blobPrefix: string | null): Promise<string> {
+  if (blobPrefix === null) {
     const fd = new FormData();
     fd.append("file", file);
     const res = await fetch("/api/uploads", { method: "POST", body: fd });
@@ -117,9 +121,8 @@ async function uploadFile(file: File, largeUploadPrefix: string | null, viaBlob:
     // Vercel answers a body over its 4.5 MB limit itself, with no error code.
     throw new ApiError(error.code === "httpStatus" && res.status === 413 ? appError("uploadTooLarge", { mb: SMALL / 1024 / 1024 }) : error);
   }
-  if (largeUploadPrefix === null) throw new Error(viaBlob ? "이미지 레퍼런스는 Blob 스토어가 연결돼야 올릴 수 있습니다" : "4 MB를 넘는 파일은 Blob 스토어가 연결돼야 올릴 수 있습니다");
   const { upload: blobUpload } = await import("@vercel/blob/client");
-  const blob = await blobUpload(`${largeUploadPrefix}${refUploadName(file.name)}`, file, { access: "public", handleUploadUrl: "/api/uploads/blob", multipart: true });
+  const blob = await blobUpload(`${blobPrefix}${refUploadName(file.name)}`, file, { access: "public", handleUploadUrl: "/api/uploads/blob", multipart: true });
   return blob.url;
 }
 
@@ -216,6 +219,8 @@ const I = {
 };
 
 function FeedItem({ g, index, total, active, now, modelName }: { g: PublicGeneration; index: number; total: number; active: boolean; now: number; modelName: string }) {
+  const t = useTranslations("playground");
+  const tGeneration = useTranslations("generation");
   const tStatus = useTranslations("status");
   const format = useFormatter();
   const errorText = useErrorText();
@@ -225,24 +230,24 @@ function FeedItem({ g, index, total, active, now, modelName }: { g: PublicGenera
   const took = g.completedAt ? new Date(g.completedAt).getTime() - started : now - started;
   const label = tStatus(g.status);
   return (
-    <article data-id={g.id} aria-current={active ? "true" : undefined} aria-label={`${index + 1}번째 결과: ${label}`} className="relative flex h-[calc(100%_-_72px)] w-full flex-col overflow-hidden bg-surface lg:block">
+    <article data-id={g.id} aria-current={active ? "true" : undefined} aria-label={t("feed.item", { n: String(index + 1), status: label })} className="relative flex h-[calc(100%_-_72px)] w-full flex-col overflow-hidden bg-surface lg:block">
       {/* Peek strip: what shows when this item waits one snap below. */}
       <div className="scrim-top absolute inset-x-0 top-0 z-10 flex h-[72px] items-start justify-between gap-4 px-5 pt-3 text-xs text-muted">
         <span className="min-w-0 truncate">
           <span className="font-display mr-2 text-sm text-sand">{String(index + 1).padStart(2, "0")} / {String(total).padStart(2, "0")}</span>
-          {g.prompt || "(프롬프트 없음)"}
+          {g.prompt || tGeneration("noPrompt")}
         </span>
         <StatusBadge status={g.status} />
       </div>
 
       {g.video ? (
         <div className="min-h-0 flex-1 pt-[72px] lg:h-full lg:pt-0">
-          <video src={g.video.url} controls={active} autoPlay={active} loop muted playsInline preload={active ? "auto" : "metadata"} className="h-full w-full object-contain" aria-label="생성된 영상" />
+          <video src={g.video.url} controls={active} autoPlay={active} loop muted playsInline preload={active ? "auto" : "metadata"} className="h-full w-full object-contain" aria-label={tGeneration("video")} />
         </div>
       ) : g.image ? (
         <div className="min-h-0 flex-1 pt-[72px] lg:h-full lg:pt-0">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={g.image.url} alt="생성된 이미지" loading={active ? "eager" : "lazy"} className="h-full w-full object-contain" />
+          <img src={g.image.url} alt={tGeneration("image")} loading={active ? "eager" : "lazy"} className="h-full w-full object-contain" />
         </div>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-6 pt-[72px] text-center lg:h-full lg:pt-0">
@@ -250,9 +255,9 @@ function FeedItem({ g, index, total, active, now, modelName }: { g: PublicGenera
             <>
               <span aria-hidden className="h-14 w-14 animate-spin rounded-full border-2 border-foreground border-t-transparent [animation-duration:1.4s]" />
               <span className="font-display text-7xl leading-none text-foreground sm:text-8xl" aria-live="polite">{fmtElapsed(took)}</span>
-              <span className="text-sm text-muted">{label} · 경과 시간</span>
-              {g.status === "pending" && <span className="max-w-xs text-xs text-muted">Higgsfield가 요청을 받는 대로 자동으로 시작합니다</span>}
-              {isImage && <span className="max-w-xs text-xs text-muted">OpenAI가 이미지를 만드는 중입니다. 보통 수십 초에서 2분 걸립니다</span>}
+              <span className="text-sm text-muted">{t("feed.elapsed", { status: label })}</span>
+              {g.status === "pending" && <span className="max-w-xs text-xs text-muted">{t("feed.pendingNote")}</span>}
+              {isImage && <span className="max-w-xs text-xs text-muted">{t("feed.imageNote")}</span>}
             </>
           ) : (
             <>
@@ -267,7 +272,7 @@ function FeedItem({ g, index, total, active, now, modelName }: { g: PublicGenera
       <div className={`pointer-events-none shrink-0 bg-surface px-4 pb-4 pt-3 lg:scrim lg:absolute lg:inset-x-0 lg:bottom-0 lg:z-10 lg:bg-transparent lg:px-5 lg:pt-24 ${g.video && active ? "lg:pb-16" : "lg:pb-5"}`}>
         <div className="text-xs text-muted">
           <span className="text-foreground-2">{modelName}</span>
-          {live && <span className="ml-2">예상</span>}
+          {live && <span className="ml-2">{t("feed.estimated")}</span>}
           <span className={`font-display text-sm text-sand ${live ? "ml-1" : "ml-2"}`}>{isImage ? usd(format, g.costUsd) : `${g.durationS}S · ${usd(format, g.costUsd)}`}</span>
           {/^\d+:\d+$/.test(String((g.params as Record<string, unknown>)?.aspect_ratio)) && (
             <span className="font-display ml-2 text-sm text-sand">{String((g.params as Record<string, unknown>).aspect_ratio)}</span>
@@ -275,12 +280,12 @@ function FeedItem({ g, index, total, active, now, modelName }: { g: PublicGenera
         </div>
         <div className="mt-1 flex items-center gap-2 text-sm text-foreground">
           <span className="font-medium">{label}</span>
-          {!live && g.completedAt && <span className="text-muted">· {fmtElapsed(took)} 걸림</span>}
+          {!live && g.completedAt && <span className="text-muted">· {t("feed.took", { elapsed: fmtElapsed(took) })}</span>}
           {live && <span className="text-muted" aria-hidden>· {fmtElapsed(took)}</span>}
         </div>
-        <p className="mt-1 line-clamp-2 max-w-2xl break-words text-sm leading-relaxed text-foreground-2">{g.prompt || "(프롬프트 없음)"}</p>
+        <p className="mt-1 line-clamp-2 max-w-2xl break-words text-sm leading-relaxed text-foreground-2">{g.prompt || tGeneration("noPrompt")}</p>
         {(g.imageRefs.length > 0 || g.videoRefs.length > 0) && (
-          <ul className="mt-2 flex items-center gap-1.5" aria-label={`레퍼런스 이미지 ${g.imageRefs.length}장, 영상 ${g.videoRefs.length}개`}>
+          <ul className="mt-2 flex items-center gap-1.5" aria-label={t("feed.refsLabel", { images: g.imageRefs.length, videos: g.videoRefs.length })}>
             {g.imageRefs.slice(0, 6).map((u, i) => (
               <li key={u} className="relative h-10 overflow-hidden rounded-sm border border-white/20 bg-background/60">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -294,11 +299,11 @@ function FeedItem({ g, index, total, active, now, modelName }: { g: PublicGenera
                 <span aria-hidden className="font-display absolute left-0.5 top-0 text-[11px] text-foreground drop-shadow">V{i + 1}</span>
               </li>
             ))}
-            <li className="ml-1 text-[11px] text-muted">레퍼런스 {g.imageRefs.length + g.videoRefs.length}</li>
+            <li className="ml-1 text-[11px] text-muted">{t("feed.refsCount", { count: g.imageRefs.length + g.videoRefs.length })}</li>
           </ul>
         )}
         {live && (
-          <div className="mt-3 h-0.5 w-full overflow-hidden bg-white/15" role="progressbar" aria-label="생성 진행 중" aria-valuetext="진행률을 알 수 없음">
+          <div className="mt-3 h-0.5 w-full overflow-hidden bg-white/15" role="progressbar" aria-label={t("feed.progress")} aria-valuetext={t("feed.progressUnknown")}>
             <div className="travel h-full w-1/4 bg-foreground" />
           </div>
         )}
@@ -308,11 +313,15 @@ function FeedItem({ g, index, total, active, now, modelName }: { g: PublicGenera
 }
 
 function RefThumbs({ refs, images, videos, onRemove, size = "w-28" }: { refs: Ref[]; images: Ref[]; videos: Ref[]; onRemove: (id: string) => void; size?: string }) {
+  const t = useTranslations("playground");
+  const tGeneration = useTranslations("generation");
+  const format = useFormatter();
   return (
-    <ul className="flex flex-wrap gap-2" aria-label="첨부한 레퍼런스">
+    <ul className="flex flex-wrap gap-2" aria-label={t("refs.attached")}>
       {refs.map((r) => {
         const i = (r.kind === "image" ? images : videos).findIndex((x) => x.id === r.id);
         const tag = r.kind === "image" ? String(i + 1) : `V${i + 1}`;
+        const shape = shapeOf(r.w, r.h);
         return (
           <li key={r.id} className={`group relative aspect-video ${size} overflow-hidden rounded-md border border-border bg-background`}>
             {r.kind === "image" ? (
@@ -322,10 +331,10 @@ function RefThumbs({ refs, images, videos, onRemove, size = "w-28" }: { refs: Re
               <video src={r.local ?? r.url} className="h-full w-full object-contain" muted playsInline aria-label={r.name} />
             )}
             <span aria-hidden className="font-display absolute left-1.5 top-1 text-[14px] text-foreground drop-shadow">{tag}</span>
-            {r.w && r.h && <span aria-hidden className="absolute bottom-1 right-1.5 text-[11px] tabular-nums text-foreground-2 drop-shadow">{orientation(r.w, r.h)}</span>}
-            {r.seconds !== undefined && <span aria-hidden className="absolute bottom-1 right-1.5 text-[11px] tabular-nums text-foreground-2 drop-shadow">{r.seconds.toFixed(1)}s</span>}
-            <button type="button" aria-label={`${r.kind === "image" ? "이미지" : "영상"} 레퍼런스 ${tag} ${r.name} 제거`} onClick={() => onRemove(r.id)} className="absolute inset-x-0 bottom-0 min-h-7 bg-background/80 text-[11px] text-rose-300 opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100">
-              제거
+            {shape && <span aria-hidden className="absolute bottom-1 right-1.5 text-[11px] tabular-nums text-foreground-2 drop-shadow">{tGeneration("shape", { shape })}</span>}
+            {r.seconds !== undefined && <span aria-hidden className="absolute bottom-1 right-1.5 text-[11px] tabular-nums text-foreground-2 drop-shadow">{t("refs.seconds", { seconds: format.number(r.seconds, ONE_DECIMAL) })}</span>}
+            <button type="button" aria-label={t("refs.removeLabel", { kind: r.kind, tag, name: r.name })} onClick={() => onRemove(r.id)} className="absolute inset-x-0 bottom-0 min-h-7 bg-background/80 text-[11px] text-rose-300 opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100">
+              {t("refs.remove")}
             </button>
           </li>
         );
@@ -336,9 +345,9 @@ function RefThumbs({ refs, images, videos, onRemove, size = "w-28" }: { refs: Re
 
 /* Drop zone: click opens the picker, files can also be dragged in. */
 function DropZone({ kind, max, count, disabled, uploading, hint, accept, onFiles }: { kind: "image" | "video"; max: number; count: number; disabled: boolean; uploading: boolean; hint: string; accept: string; onFiles: (files: FileList | null) => void }) {
+  const t = useTranslations("playground");
   const [over, setOver] = useState(false);
   const full = count >= max;
-  const label = kind === "image" ? "이미지" : "영상";
   return (
     <label
       onDragOver={(e) => { if (!disabled && !full) { e.preventDefault(); setOver(true); } }}
@@ -349,9 +358,9 @@ function DropZone({ kind, max, count, disabled, uploading, hint, accept, onFiles
       }`}
     >
       <span className="font-display text-2xl leading-none text-sand">{count}/{max}</span>
-      <span className="text-sm text-foreground-2">{disabled ? `${label} 레퍼런스를 받지 않는 모델` : uploading ? "업로드 중…" : full ? `${label} ${max}개 모두 추가됨` : `${label} 파일을 끌어다 놓거나 클릭해서 선택`}</span>
+      <span className="text-sm text-foreground-2">{disabled ? t("drop.off", { kind }) : uploading ? t("uploading") : full ? t("drop.full", { kind, max }) : t("drop.pick", { kind })}</span>
       <span className="text-[11px] text-subtle">{hint}</span>
-      <input type="file" accept={accept} multiple={kind === "image"} className="sr-only" aria-label={`${label} 레퍼런스 추가`} disabled={disabled || uploading || full} onChange={(e) => { onFiles(e.target.files); e.target.value = ""; }} />
+      <input type="file" accept={accept} multiple={kind === "image"} className="sr-only" aria-label={t("drop.add", { kind })} disabled={disabled || uploading || full} onChange={(e) => { onFiles(e.target.files); e.target.value = ""; }} />
     </label>
   );
 }
@@ -360,6 +369,8 @@ function RefDialog({ modelName, refNote, imageHint, imageAccept, refs, images, v
   modelName: string; refNote: string; imageHint: string; imageAccept: string; refs: Ref[]; images: Ref[]; videos: Ref[]; imageMax: number; videoMax: number; uploading: boolean; largeUploads: boolean; error: string | null;
   onAdd: (files: FileList | null, kind: "image" | "video") => void; onRemove: (id: string) => void; onClose: () => void;
 }) {
+  const t = useTranslations("playground");
+  const tCommon = useTranslations("common");
   const panel = useRef<HTMLDivElement>(null);
   useEffect(() => {
     panel.current?.focus();
@@ -372,16 +383,16 @@ function RefDialog({ modelName, refNote, imageHint, imageAccept, refs, images, v
       <div ref={panel} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="ref-dialog-title" className="flex max-h-[92dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-xl border border-border bg-surface focus:outline-none sm:rounded-xl" onClick={(e) => e.stopPropagation()}>
         <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-3">
           <div>
-            <h2 id="ref-dialog-title" className="text-base font-semibold">레퍼런스 추가</h2>
-            <p className="text-xs text-muted">{modelName} · 이미지 최대 {imageMax}장{videoMax > 0 && ` · 영상 최대 ${videoMax}개`} · 선택</p>
+            <h2 id="ref-dialog-title" className="text-base font-semibold">{t("refs.add")}</h2>
+            <p className="text-xs text-muted">{t("refs.limits", { model: modelName, images: imageMax, videos: videoMax })}</p>
           </div>
-          <Button variant="ghost" size="sm" onClick={onClose} aria-label="닫기">닫기</Button>
+          <Button variant="ghost" size="sm" onClick={onClose} aria-label={tCommon("close")}>{tCommon("close")}</Button>
         </header>
 
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
           <div className="grid gap-3 sm:grid-cols-2">
             <DropZone kind="image" max={imageMax} count={images.length} disabled={false} uploading={uploading} hint={imageHint} accept={imageAccept} onFiles={(f) => onAdd(f, "image")} />
-            <DropZone kind="video" max={videoMax} count={videos.length} disabled={videoMax === 0} uploading={uploading} hint={largeUploads ? "mp4 · 최대 200 MB" : "mp4 · 4 MB 이하"} accept="video/mp4" onFiles={(f) => onAdd(f, "video")} />
+            <DropZone kind="video" max={videoMax} count={videos.length} disabled={videoMax === 0} uploading={uploading} hint={t("refs.fileHint", { types: "mp4", mb: largeUploads ? "200" : "4" })} accept="video/mp4" onFiles={(f) => onAdd(f, "video")} />
           </div>
 
           <p className="text-xs leading-relaxed text-muted">{refNote}</p>
@@ -390,16 +401,16 @@ function RefDialog({ modelName, refNote, imageHint, imageAccept, refs, images, v
 
           {refs.length > 0 ? (
             <div>
-              <h3 className="mb-2 text-xs font-medium text-muted">첨부됨 · 이미지 {images.length} · 영상 {videos.length}</h3>
+              <h3 className="mb-2 text-xs font-medium text-muted">{t("refs.attachedCount", { images: images.length, videos: videos.length })}</h3>
               <RefThumbs refs={refs} images={images} videos={videos} onRemove={onRemove} size="w-36" />
             </div>
           ) : (
-            <p className="text-xs text-subtle">아직 첨부한 레퍼런스가 없습니다.</p>
+            <p className="text-xs text-subtle">{t("refs.none")}</p>
           )}
         </div>
 
         <footer className="flex items-center justify-end gap-2 border-t border-border px-5 py-3">
-          <Button onClick={onClose} disabled={uploading}>{uploading ? "업로드 중…" : "완료"}</Button>
+          <Button onClick={onClose} disabled={uploading}>{uploading ? t("uploading") : t("refs.done")}</Button>
         </footer>
       </div>
     </div>
@@ -408,9 +419,11 @@ function RefDialog({ modelName, refNote, imageHint, imageAccept, refs, images, v
 
 export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers: Offer[]; largeUploadPrefix: string | null; galleryCount: number }) {
   const t = useTranslations("playground");
+  const tGeneration = useTranslations("generation");
   const tMode = useTranslations("mode");
   const tFamilies = useTranslations("families");
   const tPrices = useTranslations("prices");
+  const tPages = useTranslations("pages");
   const format = useFormatter();
   const errorText = useErrorText();
   const modeName = (m: Mode) => tMode(m);
@@ -438,7 +451,7 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
 
   const [refsOpen, setRefsOpen] = useState(false);
   const refsButtonRef = useRef<HTMLButtonElement>(null);
-  // The 갤러리 count shares the list's state so one pure update moves both; React may run an updater twice.
+  // The gallery count shares the list's state so one pure update moves both; React may run an updater twice.
   const [{ items, galleryTotal }, setFeed] = useState({ items: [] as PublicGeneration[], galleryTotal: galleryCount });
   const [loaded, setLoaded] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -570,7 +583,7 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
     const room = kind === "image" ? imageMax - images.length : videoMax - videos.length;
     const picked = Array.from(files).slice(0, Math.max(0, room));
     if (picked.length === 0) {
-      setError(kind === "image" ? `이미지는 최대 ${imageMax}장` : `영상은 최대 ${videoMax}개`);
+      setError(t("upload.tooMany", { kind, max: kind === "image" ? imageMax : videoMax }));
       return;
     }
     setUploading(true);
@@ -578,11 +591,14 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
     try {
       for (const f of picked) {
         const { types, maxBytes } = family.refImages;
-        if (kind === "image" && !types.includes(f.type === "image/jpg" ? "image/jpeg" : f.type)) throw new Error(`${f.name}: ${family.name}이(가) 받지 않는 형식입니다. ${typeList(types)}인 파일로 올려 주세요`);
-        if (kind === "image" && maxBytes !== null && f.size > maxBytes) throw new Error(`${f.name}: ${Math.round(maxBytes / 1024 / 1024)} MB를 넘습니다. 줄여서 다시 올려 주세요`);
+        const openai = family.provider === "openai";
+        if (kind === "image" && !types.includes(f.type === "image/jpg" ? "image/jpeg" : f.type)) throw new Error(t("upload.badType", { file: f.name, model: family.name, types: typeList(types) }));
+        if (kind === "image" && maxBytes !== null && f.size > maxBytes) throw new Error(t("upload.tooBig", { file: f.name, mb: String(Math.round(maxBytes / 1024 / 1024)) }));
         const seconds = kind === "video" ? await readVideoSeconds(f) : undefined;
-        if (seconds === null) throw new Error(`${f.name}: 영상 길이를 읽지 못했습니다. 다른 mp4로 올려 주세요`);
-        const url = await uploadFile(f, largeUploadPrefix, family.provider === "openai");
+        if (seconds === null) throw new Error(t("upload.noLength", { file: f.name }));
+        const viaBlob = openai || f.size > SMALL;
+        if (viaBlob && largeUploadPrefix === null) throw new Error(openai ? t("upload.blobForImages") : t("upload.blobForLarge", { mb: String(SMALL / 1024 / 1024) }));
+        const url = await uploadFile(f, viaBlob ? largeUploadPrefix : null);
         const size = kind === "image" ? await readImageSize(f) : null;
         setRefs((r) => [...r, { id: crypto.randomUUID(), url, name: f.name, kind, local: URL.createObjectURL(f), w: size?.w, h: size?.h, seconds }]);
       }
@@ -655,15 +671,13 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
     document.getElementById("prompt")?.focus();
   }
 
-  if (!offer || !family || !plan) return <div className="p-8 text-center text-sm text-subtle">사용할 수 있는 모델이 없습니다. 관리자에게 문의하세요.</div>;
+  if (!offer || !family || !plan) return <div className="p-8 text-center text-sm text-subtle">{t("noModels")}</div>;
 
   const specs = paramsFor(family.id, mode);
   const aspectSpec = specs.find((p): p is Extract<ParamSpec, { type: "enum" }> => p.key === "aspect_ratio" && p.type === "enum");
+  const aspectShape = aspectSpec ? ratioShape(String(params[aspectSpec.key])) : null;
   const firstImage = images[0];
-  const currentAspect: [number?, number?] = (() => {
-    const m = /^(\d+):(\d+)$/.exec(aspectSpec ? String(params[aspectSpec.key]) : "");
-    return m ? [Number(m[1]), Number(m[2])] : [undefined, undefined];
-  })();
+  const firstShape = shapeOf(firstImage?.w, firstImage?.h);
   const priced = offer.rateUsd > 0;
   const rate = tPrices("rate", { usd: usd(format, offer.rateUsd), unit: family.rate.unit });
   const facts = plan.facts.map(factText);
@@ -683,34 +697,35 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
   return (
     <div className="flex flex-1 flex-col lg:h-[calc(100dvh_-_3.5rem)] lg:flex-none lg:flex-row lg:overflow-hidden">
       {/* STAGE: one result owns it; the next waits one snap below. */}
-      <section aria-label="결과 무대" className="order-1 flex h-[72dvh] min-h-[480px] min-w-0 shrink-0 flex-col bg-background lg:order-2 lg:h-full lg:flex-1 lg:shrink lg:flex-row">
+      <section aria-label={t("stage")} className="order-1 flex h-[72dvh] min-h-[480px] min-w-0 shrink-0 flex-col bg-background lg:order-2 lg:h-full lg:flex-1 lg:shrink lg:flex-row">
         <div ref={feedRef} className="feed relative h-full min-h-0 flex-1 overflow-y-auto" tabIndex={-1}>
           {items.length === 0 ? (
             <div className="flex h-full w-full flex-col items-center justify-center gap-4 px-6 text-center">
               {loaded ? (
                 <>
-                  <p className="text-xl font-semibold text-foreground sm:text-2xl">첫 영상을 만들어 보세요</p>
+                  <p className="text-xl font-semibold text-foreground sm:text-2xl">{t("empty.title")}</p>
                   <p className="max-w-sm text-sm text-muted">
-                    <span className="hidden lg:inline">왼쪽 서랍</span>
-                    <span className="lg:hidden">아래</span>
-                    에서 프롬프트를 적고 모델을 고른 뒤 생성하면 결과가 이 무대에 올라옵니다.
+                    {t.rich("empty.lead", {
+                      wide: (chunks) => <span className="hidden lg:inline">{chunks}</span>,
+                      narrow: (chunks) => <span className="lg:hidden">{chunks}</span>,
+                    })}
                   </p>
-                  <Button variant="outline" size="sm" className="lg:hidden" onClick={() => document.querySelector('aside[aria-label="생성 설정"]')?.scrollIntoView({ block: "start", behavior: prefersReducedMotion() ? "auto" : "smooth" })}>
-                    생성 설정으로 이동
+                  <Button variant="outline" size="sm" className="lg:hidden" onClick={() => document.getElementById(DRAWER_ID)?.scrollIntoView({ block: "start", behavior: prefersReducedMotion() ? "auto" : "smooth" })}>
+                    {t("empty.toSettings")}
                   </Button>
                 </>
               ) : (
-                <p className="text-sm text-muted">최근 생성을 불러오는 중</p>
+                <p className="text-sm text-muted">{t("loading")}</p>
               )}
             </div>
           ) : (
             items.map((g, i) => <FeedItem key={g.id} g={g} index={i} total={items.length} active={g.id === active?.id} now={now} modelName={modelLine(g.modelId, modeName)} />)
           )}
         </div>
-        <div aria-label="결과 동작" className="flex shrink-0 items-center justify-center gap-3 border-t border-border px-2 py-3 sm:gap-5 lg:w-24 lg:flex-col lg:gap-4 lg:border-t-0 lg:border-l lg:py-4">
+        <div aria-label={t("rail.label")} className="flex shrink-0 items-center justify-center gap-3 border-t border-border px-2 py-3 sm:gap-5 lg:w-24 lg:flex-col lg:gap-4 lg:border-t-0 lg:border-l lg:py-4">
           {items.length > 1 && (
-            <div className="flex flex-col items-center gap-0.5 lg:gap-1" aria-label="결과 위치">
-              <button type="button" aria-label="이전 결과" disabled={activeIndex <= 0} onClick={() => goTo(activeIndex - 1)} className="grid h-9 w-9 place-items-center rounded-full text-foreground-2 transition hover:bg-white/15 hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent">
+            <div className="flex flex-col items-center gap-0.5 lg:gap-1" aria-label={t("rail.position")}>
+              <button type="button" aria-label={t("rail.previous")} disabled={activeIndex <= 0} onClick={() => goTo(activeIndex - 1)} className="grid h-9 w-9 place-items-center rounded-full text-foreground-2 transition hover:bg-white/15 hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent">
                 {I.up}
               </button>
               <ol className="hidden flex-col items-center gap-1.5 py-1 lg:flex" aria-hidden>
@@ -718,23 +733,23 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
                   <li key={g.id} className={`h-1.5 w-1.5 rounded-full ${i === activeIndex ? "bg-foreground" : "bg-foreground/30"}`} />
                 ))}
               </ol>
-              <button type="button" aria-label="다음 결과" disabled={activeIndex >= items.length - 1} onClick={() => goTo(activeIndex + 1)} className="grid h-9 w-9 place-items-center rounded-full text-foreground-2 transition hover:bg-white/15 hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent">
+              <button type="button" aria-label={t("rail.next")} disabled={activeIndex >= items.length - 1} onClick={() => goTo(activeIndex + 1)} className="grid h-9 w-9 place-items-center rounded-full text-foreground-2 transition hover:bg-white/15 hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent">
                 {I.downChevron}
               </button>
             </div>
           )}
-          <Glyph label="생성" counter={priced && plan.ready ? usd(format, plan.costUsd) : "—"} icon={I.play} active={canGenerate} disabled={!canGenerate} onClick={generate} />
-          <Glyph label="취소" counter={canCancel ? fmtElapsed(now - activeStarted) : "—"} icon={I.x} disabled={!canCancel} onClick={() => active && cancel(active)} />
-          <Glyph label="다운로드" counter={active?.video ? "MP4" : active?.image ? active.image.format.toUpperCase() : "—"} icon={I.down} disabled={!active?.video && !active?.image} href={(active?.video ?? active?.image)?.downloadUrl} download />
-          <Glyph label="갤러리" counter={galleryTotal > 0 ? String(galleryTotal) : "—"} icon={I.grid} href="/gallery" />
-          <Glyph label="다시" counter={active ? `×${reuseCount}` : "—"} icon={I.redo} disabled={!active} onClick={() => active && reuse(active)} />
+          <Glyph label={t("rail.generate")} counter={priced && plan.ready ? usd(format, plan.costUsd) : "—"} icon={I.play} active={canGenerate} disabled={!canGenerate} onClick={generate} />
+          <Glyph label={t("rail.cancel")} counter={canCancel ? fmtElapsed(now - activeStarted) : "—"} icon={I.x} disabled={!canCancel} onClick={() => active && cancel(active)} />
+          <Glyph label={tGeneration("download")} counter={active?.video ? "MP4" : active?.image ? active.image.format.toUpperCase() : "—"} icon={I.down} disabled={!active?.video && !active?.image} href={(active?.video ?? active?.image)?.downloadUrl} download />
+          <Glyph label={tPages("gallery")} counter={galleryTotal > 0 ? String(galleryTotal) : "—"} icon={I.grid} href="/gallery" />
+          <Glyph label={t("rail.reuse")} counter={active ? `×${reuseCount}` : "—"} icon={I.redo} disabled={!active} onClick={() => active && reuse(active)} />
         </div>
       </section>
 
       {/* DRAWER: the form that puts the next item on the stage. */}
-      <aside aria-label="생성 설정" className="order-2 flex w-full flex-col border-t border-border bg-background lg:order-1 lg:h-full lg:w-[480px] lg:shrink-0 lg:border-r lg:border-t-0">
+      <aside id={DRAWER_ID} aria-label={t("drawer")} className="order-2 flex w-full flex-col border-t border-border bg-background lg:order-1 lg:h-full lg:w-[480px] lg:shrink-0 lg:border-r lg:border-t-0">
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-5">
-          <h1 className="text-base font-semibold">플레이그라운드</h1>
+          <h1 className="text-base font-semibold">{tPages("playground")}</h1>
 
           {offer.unavailable && (
             <div role="status" className="flex items-start gap-2.5 rounded-md border border-border bg-surface px-3 py-2 text-xs leading-relaxed text-foreground-2">
@@ -744,37 +759,37 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
           )}
 
           <section className="space-y-3">
-            <h2 className="text-xs font-semibold tracking-wider text-muted">1 · 프롬프트와 레퍼런스</h2>
-            <Field label="프롬프트" hint={prompt.length > 0 ? `${prompt.length}자` : undefined}>
-              <Textarea id="prompt" rows={3} placeholder="장면, 카메라 움직임, 분위기를 적어 주세요…" value={prompt} onChange={(e) => setPrompt(e.target.value)} />
+            <h2 className="text-xs font-semibold tracking-wider text-muted">{t("section.prompt")}</h2>
+            <Field label={t("prompt")} hint={prompt.length > 0 ? t("promptLength", { count: prompt.length }) : undefined}>
+              <Textarea id="prompt" rows={3} placeholder={t("promptPlaceholder")} value={prompt} onChange={(e) => setPrompt(e.target.value)} />
             </Field>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
               <Button ref={refsButtonRef} variant="outline" size="sm" onClick={() => setRefsOpen(true)} disabled={uploading} aria-haspopup="dialog" aria-expanded={refsOpen}>
-                {uploading ? "업로드 중…" : "레퍼런스 추가"}
+                {uploading ? t("uploading") : t("refs.add")}
               </Button>
               <span className="text-xs tabular-nums text-muted">
-                이미지 {images.length}/{imageMax}
+                {t("refs.imageCount", { count: String(images.length), max: String(imageMax) })}
                 {videoMax > 0 && (
                   <>
                     <span className="mx-1.5 text-subtle">·</span>
-                    영상 {videos.length}/{videoMax}
+                    {t("refs.videoCount", { count: String(videos.length), max: String(videoMax) })}
                   </>
                 )}
                 <span className="mx-1.5 text-subtle">·</span>
-                <span className="text-subtle">선택</span>
+                <span className="text-subtle">{t("refs.optional")}</span>
               </span>
             </div>
             {refs.length > 0 && <RefThumbs refs={refs} images={images} videos={videos} onRemove={(id) => setRefs((list) => list.filter((x) => x.id !== id))} />}
             {plan.offersStartFromImage && (
               <label className="flex min-h-11 items-center gap-2 text-sm text-foreground-2 lg:min-h-10">
                 <input type="checkbox" checked={startFromImage} onChange={(e) => setStartFromImage(e.target.checked)} className="h-4 w-4" />
-                이 이미지로 시작
-                <span className="text-xs text-subtle">1번 이미지를 첫 프레임으로</span>
+                {t("startFromImage")}
+                <span className="text-xs text-subtle">{t("startFromImageHint")}</span>
               </label>
             )}
             <div className="space-y-1.5">
-              <div className="text-xs font-medium text-muted">생성 방식</div>
-              <ol aria-label="생성 방식" className="flex flex-wrap gap-1.5">
+              <div className="text-xs font-medium text-muted">{t("modes")}</div>
+              <ol aria-label={t("modes")} className="flex flex-wrap gap-1.5">
                 {modesOf(family.id).map((m) => (
                   <li
                     key={m}
@@ -785,13 +800,13 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
                   </li>
                 ))}
               </ol>
-              <p aria-live="polite" className="text-xs text-muted">{modeSentence(mode, images.length, videos.length)}</p>
+              <p aria-live="polite" className="text-xs text-muted">{modeSentence(t, mode, images.length, videos.length)}</p>
             </div>
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-xs font-semibold tracking-wider text-muted">2 · 모델과 하이퍼파라미터</h2>
-            <Field label="모델" hint={priced ? t("rateHint", { basis: tPrices(`basis.${family.key}`), rate }) : t("rateUnset")}>
+            <h2 className="text-xs font-semibold tracking-wider text-muted">{t("section.model")}</h2>
+            <Field label={t("model")} hint={priced ? t("rateHint", { basis: tPrices(`basis.${family.key}`), rate }) : t("rateUnset")}>
               <Select
                 value={family.id}
                 onChange={(e) => {
@@ -803,13 +818,13 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
                   const group = offers.filter((o) => FAMILIES[o.family].modes.output === output);
                   if (group.length === 0) return null;
                   return (
-                    <optgroup key={output} label={output === "video" ? "영상" : "이미지"}>
+                    <optgroup key={output} label={t("output", { output })}>
                       {group.map((o) => {
                         const f = FAMILIES[o.family];
                         const off = o.unavailable?.status === 503;
                         return (
                           <option key={o.family} value={o.family} disabled={off}>
-                            {f.name} · {f.vendor}{off ? " · 사용 불가" : o.rateUsd > 0 ? ` · ${tPrices("rate", { usd: usd(format, o.rateUsd), unit: f.rate.unit })}` : ""}
+                            {f.name} · {f.vendor}{off ? ` · ${t("unavailable")}` : o.rateUsd > 0 ? ` · ${tPrices("rate", { usd: usd(format, o.rateUsd), unit: f.rate.unit })}` : ""}
                           </option>
                         );
                       })}
@@ -822,7 +837,11 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
               <p key={o.family} role="status" className="flex items-start gap-2 text-xs leading-relaxed text-foreground-2">
                 <span aria-hidden className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" />
                 <span>
-                  <span className="text-foreground">{FAMILIES[o.family].name}</span> 사용 불가 · {o.unavailable && errorText(o.unavailable.error)}
+                  {t.rich("offline", {
+                    name: FAMILIES[o.family].name,
+                    reason: o.unavailable ? errorText(o.unavailable.error) : "",
+                    model: (chunks) => <span className="text-foreground">{chunks}</span>,
+                  })}
                 </span>
               </p>
             ))}
@@ -832,33 +851,35 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
             </p>
             <div className="space-y-1">
               <div className="flex items-baseline justify-between gap-3 text-xs font-medium text-muted">
-                <span>출력 화면비</span>
+                <span>{t("aspect.label")}</span>
                 {aspectSpec ? (
-                  <span className="font-normal text-subtle">{orientation(...currentAspect) ?? ""}</span>
+                  <span className="font-normal text-subtle">{aspectShape ? tGeneration("shape", { shape: aspectShape }) : ""}</span>
                 ) : (
-                  <span className="font-normal text-subtle">첫 프레임 이미지 비율을 따름</span>
+                  <span className="font-normal text-subtle">{t("aspect.followsImage")}</span>
                 )}
               </div>
               {aspectSpec ? (
-                <div role="group" aria-label="출력 화면비" className="flex flex-wrap gap-1.5">
+                <div role="group" aria-label={t("aspect.label")} className="flex flex-wrap gap-1.5">
                   {aspectSpec.options.map((o) => {
                     const on = String(params[aspectSpec.key]) === o;
+                    const shape = ratioShape(o);
                     return (
                       <button key={o} type="button" aria-pressed={on} onClick={() => setParams((st) => ({ ...st, [aspectSpec.key]: o }))} className={`inline-flex min-h-9 items-center rounded-full border px-3 text-xs transition focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background ${on ? "border-foreground bg-foreground text-background" : "border-border text-foreground-2 hover:border-foreground/60"}`}>
-                        {ASPECT_LABEL[o] ?? o}
+                        {o === "auto" ? t("aspect.auto") : shape ? t("aspect.pill", { shape: tGeneration("shape", { shape }), ratio: o }) : o}
                       </button>
                     );
                   })}
                 </div>
               ) : (
                 <p className="rounded-md border border-border bg-surface px-3 py-1.5 text-xs leading-relaxed text-foreground-2">
-                  {firstImage?.w && firstImage.h ? (
-                    <>
-                      1번 이미지가 <span className="tabular-nums">{firstImage.w}×{firstImage.h}</span>({orientation(firstImage.w, firstImage.h)})이라 영상도 <span className="font-medium text-foreground">{orientation(firstImage.w, firstImage.h)}</span>로 나옵니다. 가로 영상이 필요하면 가로 이미지를 올리세요.
-                    </>
-                  ) : (
-                    <>이미지→영상은 화면비를 따로 고르지 않고 첫 프레임 이미지의 비율을 따릅니다.</>
-                  )}
+                  {firstImage && firstShape
+                    ? t.rich("aspect.firstFrameNote", {
+                        size: `${firstImage.w}×${firstImage.h}`,
+                        shape: firstShape,
+                        num: (chunks) => <span className="tabular-nums">{chunks}</span>,
+                        em: (chunks) => <span className="font-medium text-foreground">{chunks}</span>,
+                      })
+                    : t("aspect.firstFrameRule")}
                 </p>
               )}
             </div>
@@ -881,11 +902,11 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
           <div className="flex items-center justify-between gap-4">
             <div className="min-w-0 text-sm text-muted">
               <div className="flex items-baseline gap-2">
-                <span>예상 비용</span>
+                <span>{t("cost.label")}</span>
                 {priced && plan.ready ? (
                   <span className="font-display text-2xl leading-none text-sand">{usd(format, plan.costUsd)}</span>
                 ) : (
-                  <span className="font-semibold text-foreground">{priced ? "—" : "미정"}</span>
+                  <span className="font-semibold text-foreground">{priced ? "—" : t("cost.unset")}</span>
                 )}
                 <span className="text-xs text-subtle">{tMode(mode)}</span>
               </div>
@@ -894,7 +915,7 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
               </div>
             </div>
             <Button size="lg" onClick={generate} disabled={!canGenerate}>
-              {submitting ? "제출 중…" : "생성하기"}
+              {submitting ? t("submitting") : t("generate")}
             </Button>
           </div>
         </div>
