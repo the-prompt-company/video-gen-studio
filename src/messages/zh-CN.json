@@ -125,6 +125,7 @@
     "modelDisabled": "管理员已停用 {model}。",
     "noSuchGeneration": "该生成任务不存在。",
     "notYourGeneration": "只能取消自己的生成任务。",
+    "noSuchThread": "该会话不存在或已被删除。请从列表中选择其他会话，或新建会话。",
     "alreadyStarted": "生成已开始，无法取消。",
     "noKey": "尚未为您分配 API 密钥。请联系管理员。",
     "submitting": "正在提交。请几秒后再取消。",

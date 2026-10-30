@@ -125,6 +125,7 @@
     "modelDisabled": "관리자가 {model} 모델을 껐습니다",
     "noSuchGeneration": "없는 생성 건입니다",
     "notYourGeneration": "본인 생성 건만 취소할 수 있습니다",
+    "noSuchThread": "없거나 삭제된 스레드입니다. 목록에서 다른 스레드를 고르거나 새 스레드를 시작하세요",
     "alreadyStarted": "이미 생성이 시작돼 취소할 수 없습니다",
     "noKey": "API 키가 아직 할당되지 않았습니다. 관리자에게 문의하세요",
     "submitting": "제출 중입니다. 몇 초 뒤 다시 취소하세요",

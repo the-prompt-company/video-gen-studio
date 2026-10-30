@@ -20,6 +20,7 @@ import { isLive, LIVE_STATUSES, predecessorsOf, RANK, type GenerationStatus } fr
 import * as hf from "@/lib/higgsfield";
 import * as openai from "@/lib/openai";
 import * as storage from "@/lib/storage";
+import type { ThreadId } from "@/lib/threads";
 
 /** Runs slow follow-up work after the caller has its answer. Routes pass `after` from next/server. */
 export type Scheduler = (task: () => Promise<void>) => void;
@@ -104,14 +105,16 @@ export function unavailableFor(family: FamilyId, user: Pick<User, "apiKeyEnc">):
  * (accepted), failed (rejected), or still pending (deferred by a 429, 5xx, network error or timeout). A pending row is
  * sent again by the next poll, webhook or sweep, with the same Idempotency-Key, endpoint and body. The plan's estimate
  * is the row's cost from now on: completion keeps it, every other end sets it to 0. OpenAI: see startImage.
+ * `threadId` comes from claimThread; null puts the row in the member's earlier history.
  */
-export async function submitGeneration(user: User, plan: ReadyPlan, schedule: Scheduler): Promise<Generation> {
-  if (FAMILIES[plan.family].provider === "openai") return startImage(user, plan, schedule);
+export async function submitGeneration(user: User, plan: ReadyPlan, schedule: Scheduler, threadId: ThreadId | null = null): Promise<Generation> {
+  if (FAMILIES[plan.family].provider === "openai") return startImage(user, plan, schedule, threadId);
   const key = apiKeyFor(user);
   const [row] = await getDb()
     .insert(schema.generations)
     .values({
       userId: user.id,
+      threadId,
       modelId: plan.endpoint,
       prompt: plan.prompt,
       params: plan.params,
@@ -705,7 +708,7 @@ async function claimCopy(id: string): Promise<Generation | null> {
  *   answered   stored at images/<id>.<ext> and completed, or ended by what OpenAI said
  *   abandoned  after the lease, any poll or sweep ends it from the row and Blob alone (settleImage)
  */
-async function startImage(user: User, plan: ReadyPlan, schedule: Scheduler): Promise<Generation> {
+async function startImage(user: User, plan: ReadyPlan, schedule: Scheduler, threadId: ThreadId | null): Promise<Generation> {
   const deadline = Date.now() + IMAGE_TIMING.runBudgetMs;
   const blocked = unavailableFor(plan.family, user);
   const key = openai.serverKey();
@@ -715,6 +718,7 @@ async function startImage(user: User, plan: ReadyPlan, schedule: Scheduler): Pro
     .insert(schema.generations)
     .values({
       userId: user.id,
+      threadId,
       modelId: plan.endpoint,
       prompt: plan.prompt,
       params: plan.params,
