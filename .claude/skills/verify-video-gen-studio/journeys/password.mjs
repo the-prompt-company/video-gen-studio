@@ -23,15 +23,16 @@ export default async function password({ page, ev, base, creds, webDir, local })
   const signIn = async (p, id, pw) => {
     await p.goto(`${base}/login`, { waitUntil: "networkidle" });
     await p.getByLabel("ID").fill(id);
-    await p.getByLabel("비밀번호").fill(pw);
-    await p.getByRole("button", { name: "로그인", exact: true }).click();
+    await p.getByLabel(await ev.t("auth.password", undefined, p)).fill(pw);
+    await p.getByRole("button", { name: await ev.t("auth.signIn", undefined, p), exact: true }).click();
   };
   const fillChange = async (p, { id, current, next, confirm = next }) => {
     if (id !== undefined) await p.getByLabel("ID").fill(id);
-    if (current !== undefined) await p.getByLabel("현재 비밀번호").fill(current);
-    await p.getByLabel(/^새 비밀번호(?! 확인)/).fill(next);
-    await p.getByLabel("새 비밀번호 확인").fill(confirm);
-    await p.getByRole("button", { name: "비밀번호 변경", exact: true }).click();
+    if (current !== undefined) await p.getByLabel(await ev.t("auth.currentPassword", undefined, p)).fill(current);
+    // The confirm label contains the new-password label in every language; the new-password field comes first.
+    await p.getByLabel(await ev.t("auth.newPassword", undefined, p)).first().fill(next);
+    await p.getByLabel(await ev.t("auth.confirmPassword", undefined, p)).fill(confirm);
+    await p.getByRole("button", { name: await ev.t("auth.changePassword", undefined, p), exact: true }).click();
   };
   const submitChangeForStatus = async (p, fields) => {
     const [res] = await Promise.all([
@@ -48,7 +49,7 @@ export default async function password({ page, ev, base, creds, webDir, local })
   const expectSignedOut = async (p, path, what) => {
     await p.goto(`${base}${path}`, { waitUntil: "networkidle" });
     if (!new URL(p.url()).pathname.startsWith("/login")) ev.fail(`${what}: ${path} should end on /login, got ${p.url()}`);
-    if (!(await p.getByRole("heading", { level: 1, name: "로그인" }).isVisible())) ev.fail(`${what}: /login did not render its form`);
+    if (!(await p.getByRole("heading", { level: 1, name: await ev.t("auth.heading.login.title", undefined, p) }).isVisible())) ev.fail(`${what}: /login did not render its form`);
   };
   const member = async () => {
     const list = await ev.api("/api/admin/users", undefined, admin);
@@ -75,15 +76,15 @@ export default async function password({ page, ev, base, creds, webDir, local })
     await page.goto(`${base}/login`, { waitUntil: "networkidle" });
     await ev.shot("login-form");
     await signIn(page, typedId, INITIAL);
-    await page.getByRole("heading", { level: 1, name: "새 비밀번호 정하기" }).waitFor({ timeout: 20_000 });
+    await page.getByRole("heading", { level: 1, name: await ev.t("auth.heading.temporary.title") }).waitFor({ timeout: 20_000 });
     if ((await page.context().cookies()).some((c) => c.name === "vgs_session")) ev.fail("a temporary-password sign-in must not set a session cookie");
     if ((await page.getByLabel("ID").inputValue()) !== typedId) ev.fail("the change form should keep the ID from the sign-in");
-    if (await page.getByLabel("현재 비밀번호").count()) ev.fail("the forced change must not ask for the current password again");
+    if (await page.getByLabel(await ev.t("auth.currentPassword")).count()) ev.fail("the forced change must not ask for the current password again");
     ev.note("temporary password: change form shown, no vgs_session cookie");
     await ev.shot("temporary");
 
     await fillChange(page, { next: first, confirm: first + "x" });
-    await expectAlert(page, /확인이 다릅니다/, "mismatched confirmation");
+    await expectAlert(page, await ev.t("auth.mismatch"), "mismatched confirmation");
     await ev.shot("temporary-mismatch");
     if ((await submitChangeForStatus(page, { next: INITIAL })) !== 400) ev.fail("the initial password as the new one should be a 400");
     await expectAlert(page, /임시 비밀번호/, "initial password as the new one");
@@ -93,7 +94,7 @@ export default async function password({ page, ev, base, creds, webDir, local })
     if ((await member()).mustChangePassword !== false) ev.fail("mustChangePassword should be false after the change");
     await ev.shot("forced-change-signed-in");
 
-    await page.getByRole("button", { name: "로그아웃" }).click();
+    await page.getByRole("button", { name: await ev.t("nav.logout") }).click();
     await page.waitForURL("**/login", { timeout: 20_000 });
     await signIn(page, typedId, INITIAL);
     await expectAlert(page, /맞지 않습니다/, "old password after the change");
@@ -105,8 +106,8 @@ export default async function password({ page, ev, base, creds, webDir, local })
     await ev.shot("mixed-case-id-signed-in");
 
     await other.goto(`${base}/login`, { waitUntil: "networkidle" });
-    await other.getByRole("button", { name: "비밀번호 변경", exact: true }).click();
-    await other.getByRole("heading", { level: 1, name: "비밀번호 변경" }).waitFor({ timeout: 10_000 });
+    await other.getByRole("button", { name: await ev.t("auth.changePassword", undefined, other), exact: true }).click();
+    await other.getByRole("heading", { level: 1, name: await ev.t("auth.heading.change.title", undefined, other) }).waitFor({ timeout: 10_000 });
     await ev.shot("change-form", { page: other });
     if ((await submitChangeForStatus(other, { id: typedId, current: first, next: first })) !== 400) ev.fail("the current password as the new one should be a 400");
     await expectAlert(other, /현재 비밀번호와 같/, "new password equal to the current one");
@@ -133,12 +134,12 @@ export default async function password({ page, ev, base, creds, webDir, local })
     await ev.shot("admin-reset", { page: admin });
     await expectSignedOut(other, "/playground", "session from before the admin reset");
     await signIn(other, storedId, INITIAL);
-    await other.getByRole("heading", { level: 1, name: "새 비밀번호 정하기" }).waitFor({ timeout: 20_000 });
+    await other.getByRole("heading", { level: 1, name: await ev.t("auth.heading.temporary.title", undefined, other) }).waitFor({ timeout: 20_000 });
     ev.note("after the admin reset the member's session ended and the reset password asks for a change");
     await ev.shot("reset-forces-change", { page: other });
 
     await page.goto(`${base}/login`, { waitUntil: "networkidle" });
-    await page.getByRole("button", { name: "비밀번호 변경", exact: true }).click();
+    await page.getByRole("button", { name: await ev.t("auth.changePassword"), exact: true }).click();
     for (let attempt = 1; attempt <= 10; attempt++) {
       const status = await submitChangeForStatus(page, { id: typedId, current: `wrong-${attempt}-pw`, next: second });
       if (status !== 401) ev.fail(`wrong current password #${attempt} should be a 401, got ${status}`);

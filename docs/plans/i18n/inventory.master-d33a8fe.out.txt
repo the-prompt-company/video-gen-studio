@@ -1,0 +1,156 @@
+119 files scanned · 1270 Korean strings
+
+User-visible strings (src/, not tests, not console): 669 occurrences, 521 unique texts, 5698 Hangul syllables in the unique texts, across 48 files.
+
+By kind (user-visible):
+    200  code-string
+    184  jsx-text
+     66  jsx-expression
+     61  attr:other-prop
+     39  http-error
+     38  attr:aria-label
+     29  ui-message
+     18  attr:title
+      9  thrown-error
+      7  metadata
+      6  attr:alt
+      6  attr:placeholder
+      4  api-response
+      2  type-literal
+
+By area (user-visible):
+    418  client-component
+    139  lib
+     68  server-component
+     44  api-route
+
+By surface (user-visible occurrences, unique texts, files):
+    219  admin        173 unique  11 files
+    188  playground   167 unique  3 files
+     77  server        70 unique  16 files
+     51  settings      46 unique  4 files
+     43  auth          36 unique  6 files
+     42  gallery       35 unique  2 files
+     28  dashboard     25 unique  2 files
+     21  shell         19 unique  4 files
+
+Tags (user-visible, a string can carry several):
+    150  interpolated
+     65  count
+     15  rich
+     14  particle
+      8  relative-time
+
+Top 20 files (user-visible occurrences):
+    129  src/components/Playground.tsx
+     83  src/components/admin/UsersPanel.tsx
+     58  src/lib/catalog.ts
+     41  src/components/Gallery.tsx
+     34  src/components/admin/TeamsPanel.tsx
+     32  src/components/admin/MemberImport.tsx
+     28  src/components/ProfileEditor.tsx
+     27  src/app/(app)/dashboard/page.tsx
+     23  src/components/admin/LogsPanel.tsx
+     15  src/app/page.tsx
+     14  src/lib/generations.ts
+     13  src/components/LoginForm.tsx
+     11  src/app/(app)/settings/page.tsx
+     11  src/app/api/generations/route.ts
+     11  src/components/admin/ModelsPanel.tsx
+     11  src/lib/display-name.ts
+     10  src/app/(app)/admin/page.tsx
+     10  src/components/PasswordChangeForm.tsx
+      9  src/components/Nav.tsx
+      8  src/app/api/admin/users/[id]/route.ts
+
+Format calls in src/ outside tests (dates, numbers, currency):
+     20  usd
+      8  fmtDate
+      7  toFixed
+      2  toLocaleString
+      1  fmtRelative
+
+Not user-visible:
+    203  harness / harness-selector
+    156  harness / harness-other
+    143  script / script
+     99  test / test
+
+Harness journeys (all Korean strings):
+     70  .claude/skills/verify-video-gen-studio/journeys/teams.mjs
+     60  .claude/skills/verify-video-gen-studio/journeys/playground.mjs
+     53  .claude/skills/verify-video-gen-studio/journeys/import.mjs
+     50  .claude/skills/verify-video-gen-studio/journeys/images.mjs
+     37  .claude/skills/verify-video-gen-studio/journeys/admin.mjs
+     33  .claude/skills/verify-video-gen-studio/journeys/settings.mjs
+     23  .claude/skills/verify-video-gen-studio/journeys/password.mjs
+     13  .claude/skills/verify-video-gen-studio/journeys/dashboard.mjs
+      9  .claude/skills/verify-video-gen-studio/journeys/gallery.mjs
+      7  .claude/skills/verify-video-gen-studio/journeys/login.mjs
+      4  .claude/skills/verify-video-gen-studio/vgs.mjs
+
+Harness selectors that name Korean UI text: 203. Harness and script strings that match src/ copy: 259.
+
+Harness docs (lines with Hangul):
+     37  .claude/skills/verify-video-gen-studio/features/playground.md
+     22  .claude/skills/verify-video-gen-studio/features/admin.md
+     21  .claude/skills/verify-video-gen-studio/features/import.md
+     18  .claude/skills/verify-video-gen-studio/features/teams.md
+     14  .claude/skills/verify-video-gen-studio/features/images.md
+     13  .claude/skills/verify-video-gen-studio/features/gallery.md
+     13  .claude/skills/verify-video-gen-studio/features/password.md
+     13  .claude/skills/verify-video-gen-studio/features/settings.md
+     12  .claude/skills/verify-video-gen-studio/SKILL.md
+     11  .claude/skills/verify-video-gen-studio/features/dashboard.md
+     10  .claude/skills/verify-video-gen-studio/features/login.md
+      6  .claude/skills/verify-video-gen-studio/features/README.md
+
+node docs/plans/i18n/inventory.mjs --files
+admin         83  src/components/admin/UsersPanel.tsx
+admin         34  src/components/admin/TeamsPanel.tsx
+admin         32  src/components/admin/MemberImport.tsx
+admin         23  src/components/admin/LogsPanel.tsx
+admin         11  src/components/admin/ModelsPanel.tsx
+admin         10  src/app/(app)/admin/page.tsx
+admin          8  src/lib/teams.ts
+admin          7  src/lib/member-sheet.ts
+admin          6  src/lib/member-import.ts
+admin          4  src/components/admin/AdminPanels.tsx
+admin          1  src/lib/model-settings.ts
+auth          15  src/app/page.tsx
+auth          13  src/components/LoginForm.tsx
+auth          10  src/components/PasswordChangeForm.tsx
+auth           3  src/lib/credentials.ts
+auth           1  src/app/layout.tsx
+auth           1  src/app/login/page.tsx
+dashboard     27  src/app/(app)/dashboard/page.tsx
+dashboard      1  src/components/UsageChart.tsx
+gallery       41  src/components/Gallery.tsx
+gallery        1  src/app/(app)/gallery/page.tsx
+playground   129  src/components/Playground.tsx
+playground    58  src/lib/catalog.ts
+playground     1  src/app/(app)/playground/page.tsx
+server        14  src/lib/generations.ts
+server        11  src/app/api/generations/route.ts
+server         8  src/app/api/admin/users/[id]/route.ts
+server         7  src/lib/openai.ts
+server         6  src/lib/auth.ts
+server         6  src/lib/higgsfield.ts
+server         5  src/app/api/me/avatar/route.ts
+server         4  src/app/api/admin/users/route.ts
+server         4  src/app/api/generations/[id]/route.ts
+server         3  src/app/api/uploads/blob/route.ts
+server         3  src/app/api/uploads/route.ts
+server         2  src/app/api/admin/models/route.ts
+server         1  src/app/api/auth/login/route.ts
+server         1  src/app/api/auth/password/route.ts
+server         1  src/app/api/cron/settle/route.ts
+server         1  src/app/api/me/route.ts
+settings      28  src/components/ProfileEditor.tsx
+settings      11  src/app/(app)/settings/page.tsx
+settings      11  src/lib/display-name.ts
+settings       1  src/lib/nickname.ts
+shell          9  src/components/Nav.tsx
+shell          7  src/lib/generation-status.ts
+shell          4  src/lib/format.ts
+shell          1  src/components/Modal.tsx

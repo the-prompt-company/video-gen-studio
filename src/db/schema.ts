@@ -13,6 +13,7 @@ import {
   check,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
+import { LOCALES, type Locale } from "../i18n/locale";
 import type { WireBody } from "../lib/catalog";
 import { GENERATION_STATUSES } from "../lib/generation-status";
 import type { RequestId } from "../lib/higgsfield";
@@ -29,25 +30,31 @@ export const teams = pgTable(
   (t) => [uniqueIndex("teams_name_lower_key").on(sql`lower(${t.name})`), check("teams_name_not_blank", sql`btrim(${t.name}) <> ''`)],
 );
 
-export const users = pgTable("users", {
-  id: serial("id").primaryKey(),
-  username: text("username").notNull().unique(),
-  nickname: text("nickname"),
-  avatarKey: text("avatar_key").$type<ObjectKey>(),
-  passwordHash: text("password_hash").notNull(),
-  mustChangePassword: boolean("must_change_password").notNull().default(false),
-  passwordChangedAt: timestamp("password_changed_at", { withTimezone: true }),
-  role: text("role", { enum: ["user", "admin"] }).notNull().default("user"),
-  teamId: integer("team_id").$type<TeamId>().references(() => teams.id, { onDelete: "set null" }),
-  // Higgsfield "key-id:key-secret", encrypted at rest with AUTH_SECRET.
-  apiKeyEnc: text("api_key_enc"),
-  active: boolean("active").notNull().default(true),
-  note: text("note"),
-  failedAttempts: integer("failed_attempts").notNull().default(0),
-  lockedUntil: timestamp("locked_until", { withTimezone: true }),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
-});
+export const users = pgTable(
+  "users",
+  {
+    id: serial("id").primaryKey(),
+    username: text("username").notNull().unique(),
+    nickname: text("nickname"),
+    avatarKey: text("avatar_key").$type<ObjectKey>(),
+    passwordHash: text("password_hash").notNull(),
+    mustChangePassword: boolean("must_change_password").notNull().default(false),
+    passwordChangedAt: timestamp("password_changed_at", { withTimezone: true }),
+    role: text("role", { enum: ["user", "admin"] }).notNull().default("user"),
+    teamId: integer("team_id").$type<TeamId>().references(() => teams.id, { onDelete: "set null" }),
+    // Higgsfield "key-id:key-secret", encrypted at rest with AUTH_SECRET.
+    apiKeyEnc: text("api_key_enc"),
+    active: boolean("active").notNull().default(true),
+    note: text("note"),
+    failedAttempts: integer("failed_attempts").notNull().default(0),
+    lockedUntil: timestamp("locked_until", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
+    /** The member's chosen language. Null until they choose, and then the cookie or the browser decides. */
+    locale: text("locale").$type<Locale>(),
+  },
+  (t) => [check("users_locale_check", sql`${t.locale} in (${sql.raw(LOCALES.map((l) => `'${l}'`).join(", "))})`)],
+);
 
 export const models = pgTable("models", {
   modelId: text("model_id").primaryKey(),

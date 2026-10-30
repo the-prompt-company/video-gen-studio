@@ -1,0 +1,88 @@
+{
+  "meta": {
+    "description": "A video generation playground for our team, built on Higgsfield"
+  },
+  "pages": {
+    "login": "Sign in",
+    "playground": "Playground",
+    "gallery": "Gallery",
+    "dashboard": "Dashboard",
+    "admin": "Admin",
+    "settings": "Settings"
+  },
+  "common": {
+    "close": "Close"
+  },
+  "nav": {
+    "label": "Main menu",
+    "logout": "Sign out"
+  },
+  "status": {
+    "pending": "Waiting to submit",
+    "queued": "Queued",
+    "in_progress": "Generating",
+    "completed": "Done",
+    "failed": "Failed",
+    "nsfw": "Blocked (NSFW)",
+    "canceled": "Canceled"
+  },
+  "language": {
+    "label": "Language",
+    "lead": "Sets the language for every screen. Your choice is saved to your account, so it follows you to other devices.",
+    "failed": "Couldn't change the language. Try again."
+  },
+  "landing": {
+    "badge": "Higgsfield API · Team-only workspace",
+    "headline": "Make videos from a few references",
+    "headlineAccent": "and track every cost",
+    "lead": "Sign in with the ID you were given and you're set. The admin assigns API keys on the server, and the model, parameters and cost of every generation are recorded for each member.",
+    "openPlayground": "Open the Playground",
+    "viewGallery": "View the Gallery",
+    "steps": {
+      "prompt": {
+        "title": "Prompt and references",
+        "body": "Start from a prompt alone, use one image as the first frame, or add up to 6 images and 3 videos as references."
+      },
+      "model": {
+        "title": "Model and parameters",
+        "body": "Choose Seedance 2.0 or MiniMax H3, then set the duration, resolution and aspect ratio. The estimated cost shows right away."
+      },
+      "record": {
+        "title": "Generate and record",
+        "body": "Follow the progress live. Finished generations are recorded in the Gallery and your usage automatically."
+      }
+    },
+    "retention": "Higgsfield keeps result videos for 7 days. To keep one longer, download it from the Gallery."
+  },
+  "auth": {
+    "heading": {
+      "login": {
+        "title": "Sign in",
+        "lead": "Enter the ID and password you were given."
+      },
+      "change": {
+        "title": "Change password",
+        "lead": "Confirm your current password, then choose a new one. You will be signed out on every other device."
+      },
+      "temporary": {
+        "title": "Set a new password",
+        "lead": "You signed in with a temporary password from an admin. To continue, choose a new password that only you know."
+      }
+    },
+    "signIn": "Sign in",
+    "password": "Password",
+    "checking": "Checking…",
+    "signInFailed": "Sign-in failed",
+    "offline": "Can't reach the server",
+    "changePassword": "Change password",
+    "backToSignIn": "Back to sign in",
+    "currentPassword": "Current password",
+    "newPassword": "New password",
+    "minLength": "{min, plural, one {At least # character} other {At least # characters}}",
+    "confirmPassword": "Confirm new password",
+    "mismatch": "The new passwords don't match. Enter the same password twice.",
+    "changeFailed": "Couldn't change the password. Try again.",
+    "changing": "Changing…",
+    "changed": "Password changed. You are signed out on every other device and browser."
+  }
+}

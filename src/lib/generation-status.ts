@@ -25,16 +25,6 @@ export function predecessorsOf(to: GenerationStatus): GenerationStatus[] {
   return GENERATION_STATUSES.filter((s) => RANK[s] < RANK[to]);
 }
 
-export const STATUS_LABEL: Record<GenerationStatus, string> = {
-  pending: "제출 대기",
-  queued: "대기",
-  in_progress: "생성 중",
-  completed: "완료",
-  failed: "실패",
-  nsfw: "NSFW 차단",
-  canceled: "취소",
-};
-
 export const STATUS_TONE: Record<GenerationStatus, string> = {
   pending: "bg-zinc-500/15 text-foreground-2 ring-zinc-500/30",
   queued: "bg-zinc-500/15 text-foreground-2 ring-zinc-500/30",

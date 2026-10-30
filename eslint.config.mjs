@@ -1,9 +1,56 @@
 import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
+import noHangul from "./eslint-rules/no-hangul.mjs";
 
 const SINGLE_WRITER = "generations 행은 src/lib/generations.ts만 고친다. settle, cancelGeneration 같은 소유자 함수를 부를 것.";
 const ONE_CALL_PER_ROW = "OpenAI는 src/lib/generations.ts만 부른다. 이미지 행 하나에 호출 하나를 보장하는 claim이 거기 있다.";
+
+// Files that still hold Korean screen text. Each i18n PR moves its surface's text into src/messages and deletes its
+// files here; the last one deletes the list. Every other file under src/ fails `npm run lint` on a Hangul literal.
+const I18N_PENDING = [
+  // Error text and formatting (i18n PR 2)
+  "src/app/api/admin/models/route.ts",
+  "src/app/api/admin/users/[[]id]/route.ts",
+  "src/app/api/admin/users/route.ts",
+  "src/app/api/auth/login/route.ts",
+  "src/app/api/auth/password/route.ts",
+  "src/app/api/cron/settle/route.ts",
+  "src/app/api/generations/[[]id]/route.ts",
+  "src/app/api/generations/route.ts",
+  "src/app/api/me/avatar/route.ts",
+  "src/app/api/me/route.ts",
+  "src/app/api/uploads/blob/route.ts",
+  "src/app/api/uploads/route.ts",
+  "src/lib/auth.ts",
+  "src/lib/credentials.ts",
+  "src/lib/format.ts",
+  "src/lib/generations.ts",
+  "src/lib/higgsfield.ts",
+  "src/lib/openai.ts",
+  // Gallery, dashboard, playground, catalog (i18n PR 3)
+  "src/app/(app)/dashboard/page.tsx",
+  "src/components/Gallery.tsx",
+  "src/components/Playground.tsx",
+  "src/components/UsageChart.tsx",
+  "src/lib/catalog.ts",
+  // Settings, members, teams, import, model rates, logs (i18n PR 4)
+  "src/app/(app)/admin/page.tsx",
+  "src/app/(app)/settings/page.tsx",
+  "src/components/ProfileEditor.tsx",
+  "src/components/admin/AdminPanels.tsx",
+  "src/components/admin/LogsPanel.tsx",
+  "src/components/admin/MemberImport.tsx",
+  "src/components/admin/ModelsPanel.tsx",
+  "src/components/admin/TeamsPanel.tsx",
+  "src/components/admin/UsersPanel.tsx",
+  "src/lib/display-name.ts",
+  "src/lib/member-import.ts",
+  "src/lib/member-sheet.ts",
+  "src/lib/model-settings.ts",
+  "src/lib/nickname.ts",
+  "src/lib/teams.ts",
+];
 
 const eslintConfig = defineConfig([
   ...nextVitals,
@@ -29,6 +76,14 @@ const eslintConfig = defineConfig([
     rules: {
       "no-restricted-imports": ["error", { patterns: [{ group: ["@/lib/openai", "**/lib/openai", "./openai"], message: ONE_CALL_PER_ROW }] }],
     },
+  },
+  // Its own rule, not another no-restricted-syntax block: a second block would replace the single-writer selectors above.
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    // ESLint 9 does not read .gitignore, and next-intl writes ko.d.json.ts into src/messages/.
+    ignores: ["src/**/*.test.ts", "src/messages/**", ...I18N_PENDING],
+    plugins: { i18n: { rules: { "no-hangul": noHangul } } },
+    rules: { "i18n/no-hangul": "error" },
   },
   // Override default ignores of eslint-config-next.
   globalIgnores([

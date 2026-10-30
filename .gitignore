@@ -42,6 +42,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# next-intl writes the message types (createMessagesDeclaration) on every dev or build start
+src/messages/*.d.json.ts
+
 # impeccable session cache (design.json is committed)
 .impeccable/hook.cache.json
 

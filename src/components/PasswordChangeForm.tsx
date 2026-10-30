@@ -1,7 +1,10 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { useTranslations } from "next-intl";
 import { Button, ErrorText, Field, Input } from "@/components/ui";
+import { MIN_PASSWORD_LENGTH } from "@/lib/credentials";
+import type { Locale } from "@/i18n/locale";
 
 type Status = { kind: "idle" } | { kind: "sending" } | { kind: "failed"; error: string } | { kind: "changed" };
 
@@ -12,9 +15,12 @@ type Known =
 export type PasswordChangeFormProps = Known & {
   onChanged?: () => void;
   autoFocus?: boolean;
+  /** A language picked on the login screen during this visit, stored on the account with the new password. */
+  locale?: Locale | null;
 };
 
-export function PasswordChangeForm({ username, currentPassword, hideId, onChanged, autoFocus }: PasswordChangeFormProps) {
+export function PasswordChangeForm({ username, currentPassword, hideId, onChanged, autoFocus, locale }: PasswordChangeFormProps) {
+  const t = useTranslations("auth");
   const [id, setId] = useState("");
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
@@ -24,7 +30,7 @@ export function PasswordChangeForm({ username, currentPassword, hideId, onChange
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (next !== confirm) {
-      setStatus({ kind: "failed", error: "새 비밀번호 확인이 다릅니다. 같은 비밀번호를 두 번 입력하세요" });
+      setStatus({ kind: "failed", error: t("mismatch") });
       return;
     }
     setStatus({ kind: "sending" });
@@ -32,16 +38,16 @@ export function PasswordChangeForm({ username, currentPassword, hideId, onChange
       const res = await fetch("/api/auth/password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: username ?? id, currentPassword: currentPassword ?? current, newPassword: next }),
+        body: JSON.stringify({ username: username ?? id, currentPassword: currentPassword ?? current, newPassword: next, ...(locale && { locale }) }),
         cache: "no-store",
       });
       const body = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) {
-        setStatus({ kind: "failed", error: body.error ?? "비밀번호를 바꾸지 못했습니다. 다시 시도하세요" });
+        setStatus({ kind: "failed", error: body.error ?? t("changeFailed") });
         return;
       }
     } catch {
-      setStatus({ kind: "failed", error: "서버에 연결할 수 없습니다" });
+      setStatus({ kind: "failed", error: t("offline") });
       return;
     }
     setCurrent("");
@@ -68,7 +74,7 @@ export function PasswordChangeForm({ username, currentPassword, hideId, onChange
         </Field>
       )}
       {asksCurrent && (
-        <Field label="현재 비밀번호">
+        <Field label={t("currentPassword")}>
           <Input
             type="password"
             value={current}
@@ -79,7 +85,7 @@ export function PasswordChangeForm({ username, currentPassword, hideId, onChange
           />
         </Field>
       )}
-      <Field label="새 비밀번호" hint="8자 이상">
+      <Field label={t("newPassword")} hint={t("minLength", { min: MIN_PASSWORD_LENGTH })}>
         <Input
           type="password"
           value={next}
@@ -89,17 +95,17 @@ export function PasswordChangeForm({ username, currentPassword, hideId, onChange
           required
         />
       </Field>
-      <Field label="새 비밀번호 확인">
+      <Field label={t("confirmPassword")}>
         <Input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" required />
       </Field>
       {status.kind === "failed" && <ErrorText>{status.error}</ErrorText>}
       {status.kind === "changed" && (
         <p role="status" className="break-keep text-sm text-foreground-2">
-          비밀번호를 바꿨습니다. 다른 기기와 브라우저의 로그인은 모두 끝났습니다.
+          {t("changed")}
         </p>
       )}
       <Button type="submit" size="lg" className="w-full" disabled={status.kind === "sending"} aria-busy={status.kind === "sending"}>
-        {status.kind === "sending" ? "변경 중…" : "비밀번호 변경"}
+        {status.kind === "sending" ? t("changing") : t("changePassword")}
       </Button>
     </form>
   );

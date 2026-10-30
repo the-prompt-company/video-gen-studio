@@ -1,0 +1,34 @@
+Spike run on 2026-10-29. A copy of master 002731c outside the repository, `npm ci`, `npm install next-intl@4.14.9`, spike.diff applied.
+Next.js 16.4.3 (Turbopack), Node 24.19.0, Windows 11, headless Chromium 156 from the harness Playwright 1.64.1.
+
+npx tsc --noEmit, with a scratch file that calls t("titel") and t("orientation") without its argument, before createMessagesDeclaration:
+src/i18n/typo-check.tsx(7,10): error TS2345: Argument of type '"titel"' is not assignable to parameter of type 'NamespacedMessageKeys<...>'.
+
+npx next build, same scratch file, with createMessagesDeclaration: "./src/messages/ko.json":
+✓ Compiled successfully in 6.5s
+src/i18n/typo-check.tsx(7,8): error TS2554: Expected 2-3 arguments, but got 1.
+src/i18n/typo-check.tsx(9,8): error TS2554: Expected 2-3 arguments, but got 1.
+Failed to type check.
+
+npx next build, scratch file removed: passes. The plugin writes src/messages/ko.d.json.ts. Route table: every route is ƒ (dynamic).
+npx next build on the same copy with spike.diff reverted (master): ┌ ƒ /  ├ ○ /_not-found  and every other route ƒ. Only /_not-found changes.
+
+node locale-probe.mjs (precompile on):
+no header                      lang=ko title="로그인 · Video Gen Studio" h1="로그인" select="영상도 정사각으로 나옵니다." plural="이미지 1장 / 이미지 3장"
+Accept-Language en-US          lang=en title="Sign in · Video Gen Studio" h1="Sign in" select="The video will also be square." plural="1 image / 3 images"
+Accept-Language zh-TW          lang=zh-CN title="登录 · Video Gen Studio" h1="登录" select="视频也将是方形的。" plural="1 张图片 / 3 张图片"
+Accept-Language fr then zh     lang=zh-CN title="登录 · Video Gen Studio" h1="登录" select="视频也将是方形的。" plural="1 张图片 / 3 张图片"
+Accept-Language en, cookie ko  lang=ko title="로그인 · Video Gen Studio" h1="로그인" select="영상도 정사각으로 나옵니다." plural="이미지 1장 / 이미지 3장"
+cookie zh-CN                   lang=zh-CN title="登录 · Video Gen Studio" h1="登录" select="视频也将是方形的。" plural="1 张图片 / 3 张图片"
+bad cookie                     lang=ko title="로그인 · Video Gen Studio" h1="로그인" select="영상도 정사각으로 나옵니다." plural="이미지 1장 / 이미지 3장"
+
+node page-js.mjs <label>, one build and one `next start -p 3210` per row:
+master baseline        ko-KR h1="로그인" scripts 7 · 460.5 KB raw · 137.7 KB gzip · inline flight 5.5 KB · console errors 0
+master baseline        en-US h1="로그인" scripts 7 · 460.5 KB raw · 137.7 KB gzip · inline flight 5.5 KB · console errors 0
+next-intl precompile   ko-KR h1="로그인" scripts 7 · 469.6 KB raw · 141.0 KB gzip · inline flight 5.9 KB · console errors 0
+next-intl precompile   en-US h1="Sign in" scripts 7 · 469.6 KB raw · 141.0 KB gzip · inline flight 6.0 KB · console errors 0
+next-intl runtime ICU  ko-KR h1="로그인" scripts 8 · 499.8 KB raw · 149.7 KB gzip · inline flight 6.1 KB · console errors 0
+next-intl runtime ICU  en-US h1="Sign in" scripts 8 · 499.8 KB raw · 149.7 KB gzip · inline flight 6.2 KB · console errors 0
+
+Delta against the baseline: +3.3 KB gzip with precompile, +12.0 KB gzip without. bundle-measure.mjs predicts 3.6 KB and 12.3 KB.
+The spike catalog has 7 messages per locale. Estimate, not measured in the app: a JSON stand-in for the full catalog (the 468 unique texts that inventory.mjs --json finds on team-1-admin) is 28.3 KB raw and 8.0 KB gzip, which the provider would add to the inline flight data of each full page load.

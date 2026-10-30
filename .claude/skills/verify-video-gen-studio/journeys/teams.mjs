@@ -54,13 +54,13 @@ export default async function teams({ page, ev, base, creds, webDir, local }) {
   const signInFirstTime = async (p, id) => {
     await p.goto(`${base}/login?next=${encodeURIComponent("/settings")}`, { waitUntil: "networkidle" });
     await p.getByLabel("ID").fill(id);
-    await p.getByLabel("비밀번호").fill(passwords[id]);
-    await p.getByRole("button", { name: "로그인", exact: true }).click();
-    await p.getByRole("heading", { level: 1, name: "새 비밀번호 정하기" }).waitFor({ timeout: 20_000 });
+    await p.getByLabel(await ev.t("auth.password", undefined, p)).fill(passwords[id]);
+    await p.getByRole("button", { name: await ev.t("auth.signIn", undefined, p), exact: true }).click();
+    await p.getByRole("heading", { level: 1, name: await ev.t("auth.heading.temporary.title", undefined, p) }).waitFor({ timeout: 20_000 });
     const chosen = `team-${stamp}-${id === memberA ? "a" : "b"}-1`;
-    await p.getByLabel(/^새 비밀번호(?! 확인)/).fill(chosen);
-    await p.getByLabel("새 비밀번호 확인").fill(chosen);
-    await p.getByRole("button", { name: "비밀번호 변경", exact: true }).click();
+    await p.getByLabel(await ev.t("auth.newPassword", undefined, p)).first().fill(chosen);
+    await p.getByLabel(await ev.t("auth.confirmPassword", undefined, p)).fill(chosen);
+    await p.getByRole("button", { name: await ev.t("auth.changePassword", undefined, p), exact: true }).click();
     await p.waitForURL("**/settings", { timeout: 30_000 });
     await p.getByRole("heading", { level: 1, name: "설정" }).waitFor({ timeout: 30_000 });
     passwords[id] = chosen;

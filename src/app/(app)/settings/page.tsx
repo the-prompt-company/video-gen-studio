@@ -1,12 +1,15 @@
 import type { ReactNode } from "react";
+import { getTranslations } from "next-intl/server";
 import { getCurrentUser } from "@/lib/auth";
 import { viewerOf } from "@/lib/scope";
 import { avatarUrl, storageEnabled } from "@/lib/storage";
 import { PageContainer } from "@/components/ui";
 import { PasswordChangeForm } from "@/components/PasswordChangeForm";
 import { ProfileEditor } from "@/components/ProfileEditor";
+import { LanguagePicker } from "@/components/LanguagePicker";
+import { pageTitle } from "@/i18n/metadata";
 
-export const metadata = { title: "설정" };
+export const generateMetadata = pageTitle("settings");
 
 function Section({ id, title, lead, children }: { id: string; title: string; lead: string; children: ReactNode }) {
   return (
@@ -25,12 +28,12 @@ function Section({ id, title, lead, children }: { id: string; title: string; lea
 export default async function SettingsPage() {
   const user = await getCurrentUser();
   if (!user) return null;
-  const { team } = await viewerOf(user);
+  const [{ team }, tLanguage] = await Promise.all([viewerOf(user), getTranslations("language")]);
 
   return (
     <PageContainer>
       <h1 className="text-2xl font-semibold">설정</h1>
-      <p className="mt-1 break-keep text-sm text-muted">상단 메뉴에 보이는 사진과 닉네임, 로그인 비밀번호를 바꿉니다.</p>
+      <p className="mt-1 break-keep text-sm text-muted">상단 메뉴에 보이는 사진과 닉네임, 화면 언어, 로그인 비밀번호를 바꿉니다.</p>
       <div className="mt-6 divide-y divide-border border-t border-border md:max-w-[42rem]">
         <Section id="settings-profile" title="프로필" lead="사진과 닉네임으로 상단 메뉴에 내가 표시됩니다. 닉네임이 없으면 ID가 보입니다.">
           <ProfileEditor
@@ -51,6 +54,9 @@ export default async function SettingsPage() {
               <dd className="mt-1.5 break-words text-sm text-foreground-2">{team ? team.name : <span className="text-subtle">미소속</span>}</dd>
             </div>
           </dl>
+        </Section>
+        <Section id="settings-language" title={tLanguage("label")} lead={tLanguage("lead")}>
+          <LanguagePicker />
         </Section>
         <Section
           id="settings-password"

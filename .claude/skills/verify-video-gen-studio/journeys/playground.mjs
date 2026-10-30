@@ -166,12 +166,12 @@ export default async function playground({ page, ev, env }) {
   }
   if (env.VGS_POLL_NAV === "1" && liveIds.size > 0) {
     const before = polls.length;
-    const nav = page.getByRole("navigation", { name: "주 메뉴" });
-    await nav.getByRole("link", { name: "갤러리" }).click();
+    const nav = page.getByRole("navigation", { name: await ev.t("nav.label") });
+    await nav.getByRole("link", { name: await ev.t("pages.gallery") }).click();
     await page.waitForURL("**/gallery**");
     await page.waitForTimeout(3_000);
     const away = polls.length - before;
-    await nav.getByRole("link", { name: "플레이그라운드" }).click();
+    await nav.getByRole("link", { name: await ev.t("pages.playground") }).click();
     await page.waitForURL("**/playground**");
     const back = Date.now();
     const until = back + 6_000;

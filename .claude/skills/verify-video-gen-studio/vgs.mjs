@@ -12,9 +12,11 @@
  *      VGS_RUN_ID (default: timestamp), VGS_MOBILE=1 (390×844 touch viewport), VGS_CHROME (chromium exe path),
  *      VGS_ALLOW_SPEND=1 (lets the playground journey actually submit a paid generation),
  *      VGS_FAKE_HF=<fake base URL> (the playground journey generates every model and mode against that fake),
- *      VGS_VIDEO=1 (records the journey to <evidence>/video.webm).
+ *      VGS_VIDEO=1 (records the journey to <evidence>/video.webm),
+ *      VGS_LOCALE (default ko-KR: the browser language, which sets navigator.language and Accept-Language).
  */
 import { spawn, execFileSync } from "node:child_process";
+import { createRequire } from "node:module";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, openSync, appendFileSync, renameSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -27,6 +29,7 @@ const runDir = join(verifyDir, "run");
 const evidenceRoot = join(verifyDir, "evidence");
 const serverFile = join(runDir, "server.json");
 const PORT = Number(process.env.VGS_PORT || 3100);
+const LOCALE = process.env.VGS_LOCALE || "ko-KR";
 const isWin = process.platform === "win32";
 
 function envLocal() {
@@ -232,7 +235,7 @@ async function run(name) {
   const { chromium } = await import("playwright");
   const browser = await chromium.launch({ headless: true, executablePath: process.env.VGS_CHROME || undefined });
   const viewport = mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 };
-  const contextOptions = { viewport, ...(mobile ? { hasTouch: true, isMobile: true } : {}) };
+  const contextOptions = { viewport, locale: LOCALE, ...(mobile ? { hasTouch: true, isMobile: true } : {}) };
   const context = await browser.newContext({
     ...contextOptions,
     ...(process.env.VGS_VIDEO === "1" ? { recordVideo: { dir, size: viewport } } : {}),
@@ -245,7 +248,7 @@ async function run(name) {
   const page = await context.newPage();
   watchConsole(page, "");
   const extraContexts = [];
-  const result = { journey: name, runId, base, mobile, user: c.username, commit: commit(), next: nextVersion(), startedAt: new Date().toISOString(), steps: [], ok: false };
+  const result = { journey: name, runId, base, mobile, locale: LOCALE, user: c.username, commit: commit(), next: nextVersion(), startedAt: new Date().toISOString(), steps: [], ok: false };
   let n = 0;
   const ev = {
     dir,
@@ -261,8 +264,9 @@ async function run(name) {
       result.steps.push({ step: stem, url: p.url() });
       appendFileSync(join(dir, "log.md"), `- **${stem}** ${p.url()}\n`);
     },
-    async newPage() {
-      const ctx = await browser.newContext(contextOptions);
+    /** A page in a fresh browser context (its own cookies). `options` overrides the context, such as `{ locale: "en-US" }`. */
+    async newPage(options = {}) {
+      const ctx = await browser.newContext({ ...contextOptions, ...options });
       extraContexts.push(ctx);
       const p = await ctx.newPage();
       watchConsole(p, `[context ${extraContexts.length + 1}]`);
@@ -276,11 +280,19 @@ async function run(name) {
     fail(reason) {
       throw new Error(reason);
     },
+    /**
+     * The text of a message key in the language the page renders (`<html lang>`), from src/messages, so a journey
+     * finds swept elements in any language: `p.getByRole("button", { name: await ev.t("auth.signIn"), exact: true })`.
+     */
+    async t(key, values, p = page) {
+      const lang = await p.evaluate(() => document.documentElement.lang);
+      return (await translator(lang))(key, values);
+    },
     async login(to = "/playground", p = page) {
       await p.goto(`${base}/login?next=${encodeURIComponent(to)}`, { waitUntil: "networkidle" });
       await p.getByLabel("ID").fill(c.username);
-      await p.getByLabel("비밀번호").fill(c.password);
-      await p.getByRole("button", { name: "로그인", exact: true }).click();
+      await p.getByLabel(await ev.t("auth.password", undefined, p)).fill(c.password);
+      await p.getByRole("button", { name: await ev.t("auth.signIn", undefined, p), exact: true }).click();
       await p.waitForURL(`**${to}**`, { timeout: 30_000 });
       await p.waitForLoadState("networkidle");
     },
@@ -294,7 +306,7 @@ async function run(name) {
       );
     },
   };
-  writeFileSync(join(dir, "log.md"), `# ${name} · ${runId}\n\n- base ${base} · user ${c.username} · commit ${result.commit} · ${mobile ? "mobile 390×844" : "desktop 1440×900"}\n`);
+  writeFileSync(join(dir, "log.md"), `# ${name} · ${runId}\n\n- base ${base} · user ${c.username} · commit ${result.commit} · ${mobile ? "mobile 390×844" : "desktop 1440×900"} · browser ${LOCALE}\n`);
   try {
     const mod = await import(pathToFileURL(file).href);
     await mod.default({ page, context, ev, base, creds: c, env: process.env, webDir, local: envLocal() });
@@ -316,6 +328,18 @@ async function run(name) {
   }
   console.log(`${result.ok ? "PASS" : "FAIL"} ${name} → ${dir}${result.error ? "\n  " + result.error : ""}`);
   process.exit(result.ok ? 0 : 1);
+}
+const translators = new Map();
+/** createTranslator from the app's own use-intl, over the app's message file for `lang` (ko, en, or zh-CN). */
+async function translator(lang) {
+  if (!translators.has(lang)) {
+    const file = join(webDir, "src", "messages", `${lang}.json`);
+    if (!existsSync(file)) throw new Error(`no messages for <html lang="${lang}">: ${file}`);
+    const core = createRequire(join(webDir, "package.json")).resolve("use-intl/core");
+    const { createTranslator } = await import(pathToFileURL(core).href);
+    translators.set(lang, createTranslator({ locale: lang, messages: JSON.parse(readFileSync(file, "utf8")), timeZone: "Asia/Seoul" }));
+  }
+  return translators.get(lang);
 }
 function listJourneys() {
   try {

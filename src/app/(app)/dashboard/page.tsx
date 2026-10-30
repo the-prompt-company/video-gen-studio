@@ -7,8 +7,9 @@ import { usd, fmtDate } from "@/lib/format";
 import { Card, Stat, Empty, PageContainer } from "@/components/ui";
 import { StatusBadge } from "@/components/StatusBadge";
 import { UsageChart } from "@/components/UsageChart";
+import { pageTitle } from "@/i18n/metadata";
 
-export const metadata = { title: "대시보드" };
+export const generateMetadata = pageTitle("dashboard");
 
 export default async function DashboardPage() {
   const user = await getCurrentUser();

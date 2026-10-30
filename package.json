@@ -13,19 +13,22 @@
     "db:seed": "dotenv -e .env.local -- tsx scripts/seed.ts",
     "db:mock": "dotenv -e .env.local -- tsx scripts/mock.ts",
     "fake:hf": "tsx scripts/fake-higgsfield.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "i18n:check": "tsx scripts/i18n-check.mts"
   },
   "dependencies": {
     "@vercel/blob": "^2.8.2",
     "drizzle-orm": "^0.45.4",
     "jose": "^6.2.13",
     "next": "16.4.3",
+    "next-intl": "4.14.9",
     "postgres": "^3.4.9",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "read-excel-file": "9.3.12"
   },
   "devDependencies": {
+    "@formatjs/icu-messageformat-parser": "3.5.22",
     "@tailwindcss/turbopack": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

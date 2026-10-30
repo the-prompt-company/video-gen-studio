@@ -55,6 +55,20 @@ body {
     "Noto Sans KR", "Malgun Gothic", sans-serif;
 }
 
+/* Chinese: Simplified Chinese gothics before the Korean ones, so one line of Han characters comes from one font.
+   The Korean fonts stay after them for Hangul nicknames and prompts. The second selector covers Chinese inside
+   another language's page, such as the 简体中文 button of the language picker. */
+:root:lang(zh-CN) body,
+body [lang="zh-CN"] {
+  font-family: var(--font-sans), "PingFang SC", "Microsoft YaHei", "Noto Sans SC", "Noto Sans CJK SC", "Source Han Sans SC",
+    "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* keep-all keeps Korean words whole, but Chinese has no spaces, so a sentence would never wrap. */
+:lang(zh-CN) .break-keep {
+  word-break: normal;
+}
+
 .font-display {
   font-family: var(--font-display), "Arial Narrow", Impact, sans-serif;
   letter-spacing: 0.06em;

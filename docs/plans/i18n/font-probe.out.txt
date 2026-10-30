@@ -1,0 +1,9 @@
+ko    current stack         Malgun Gothic 31
+en    current stack         Malgun Gothic 66
+zh-CN current stack         Noto Sans KR 1, Malgun Gothic 31, Microsoft YaHei 12
+zh-CN proposed zh-CN stack  Microsoft YaHei 44
+zh-CN with punctuation in a 384px box, word-break keep-all 3 lines, scrollWidth 384 fits
+zh-CN with punctuation in a 384px box, word-break normal   2 lines, scrollWidth 384 fits
+zh-CN no punctuation   in a 384px box, word-break keep-all 1 lines, scrollWidth 518 OVERFLOWS
+zh-CN no punctuation   in a 384px box, word-break normal   2 lines, scrollWidth 384 fits
+platform win32 · chromium 156.0.8078.4

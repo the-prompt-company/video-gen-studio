@@ -79,30 +79,30 @@ export default async function settings({ page, ev, base, webDir, local }) {
   const signIn = async (p, id) => {
     await p.goto(`${base}/login`, { waitUntil: "networkidle" });
     await p.getByLabel("ID").fill(id);
-    await p.getByLabel("비밀번호").fill(passwords[id]);
-    await p.getByRole("button", { name: "로그인", exact: true }).click();
+    await p.getByLabel(await ev.t("auth.password", undefined, p)).fill(passwords[id]);
+    await p.getByRole("button", { name: await ev.t("auth.signIn", undefined, p), exact: true }).click();
   };
   const signInFirstTime = async (p, id) => {
     await signIn(p, id);
-    await p.getByRole("heading", { level: 1, name: "새 비밀번호 정하기" }).waitFor({ timeout: 20_000 });
+    await p.getByRole("heading", { level: 1, name: await ev.t("auth.heading.temporary.title", undefined, p) }).waitFor({ timeout: 20_000 });
     const chosen = `set-${stamp}-${id === memberA ? "a" : "b"}-1`;
-    await p.getByLabel(/^새 비밀번호(?! 확인)/).fill(chosen);
-    await p.getByLabel("새 비밀번호 확인").fill(chosen);
-    await p.getByRole("button", { name: "비밀번호 변경", exact: true }).click();
+    await p.getByLabel(await ev.t("auth.newPassword", undefined, p)).first().fill(chosen);
+    await p.getByLabel(await ev.t("auth.confirmPassword", undefined, p)).fill(chosen);
+    await p.getByRole("button", { name: await ev.t("auth.changePassword", undefined, p), exact: true }).click();
     await p.waitForURL("**/playground", { timeout: 30_000 });
     await p.waitForLoadState("networkidle");
     passwords[id] = chosen;
   };
-  const identity = (p) => p.getByRole("banner").getByRole("link", { name: / 설정$/ });
+  const identity = async (p) => p.getByRole("banner").getByRole("link", { name: new RegExp(` ${await ev.t("pages.settings", undefined, p)}$`) });
   const headerShows = async (p, text, what) => {
     try {
-      await identity(p).getByText(text, { exact: true }).waitFor({ state: "visible", timeout: 20_000 });
+      await (await identity(p)).getByText(text, { exact: true }).waitFor({ state: "visible", timeout: 20_000 });
     } catch {
-      ev.fail(`${what}: the header should show "${text}", it shows "${await identity(p).innerText().catch(() => "?")}"`);
+      ev.fail(`${what}: the header should show "${text}", it shows "${await (await identity(p)).innerText().catch(() => "?")}"`);
     }
   };
   const headerPhoto = async (p) => {
-    const img = identity(p).locator("img");
+    const img = (await identity(p)).locator("img");
     return (await img.count()) ? img.getAttribute("src") : null;
   };
   const statusSays = async (p, pattern, what) => {
@@ -136,7 +136,7 @@ export default async function settings({ page, ev, base, webDir, local }) {
     const { avatar_key: key } = await row(memberA);
     if (!key || !new RegExp(`^avatars/${(await row(memberA)).id}/[0-9a-f]{32}\\.(webp|jpg|png)$`).test(key)) ev.fail(`${what}: users.avatar_key should be avatars/<id>/<hex>.<ext>, got ${key}`);
     try {
-      await identity(page).locator(`img[src$="/${key}"]`).waitFor({ timeout: 20_000 });
+      await (await identity(page)).locator(`img[src$="/${key}"]`).waitFor({ timeout: 20_000 });
     } catch {
       ev.fail(`${what}: the header photo ${await headerPhoto(page)} should become the stored key ${key} without a reload`);
     }
@@ -169,10 +169,10 @@ export default async function settings({ page, ev, base, webDir, local }) {
     await headerShows(page, memberA, "a member without a nickname");
     if (await headerPhoto(page)) ev.fail("a member without a photo should get the letter fallback, not an <img>");
     await ev.shot("nav-id-and-letter");
-    await identity(page).click();
+    await (await identity(page)).click();
     await page.waitForURL("**/settings", { timeout: 30_000 });
     await page.getByRole("heading", { level: 1, name: "설정" }).waitFor({ timeout: 30_000 });
-    if ((await identity(page).getAttribute("aria-current")) !== "page") ev.fail("the identity link should be the current page on /settings");
+    if ((await (await identity(page)).getAttribute("aria-current")) !== "page") ev.fail("the identity link should be the current page on /settings");
     const account = page.getByRole("region", { name: "계정" });
     const shownId = (await account.locator("dl > div").filter({ has: page.locator("dt", { hasText: /^ID$/ }) }).locator("dd").innerText()).trim();
     if (shownId !== memberA) ev.fail(`계정 should show the ID, got "${shownId}"`);
@@ -229,7 +229,7 @@ export default async function settings({ page, ev, base, webDir, local }) {
       await statusSays(page, /사진을 지웠습니다/, "photo removal");
       if ((await row(memberA)).avatar_key !== null) ev.fail("removing the photo should clear users.avatar_key");
       try {
-        await identity(page).locator("img").waitFor({ state: "detached", timeout: 20_000 });
+        await (await identity(page)).locator("img").waitFor({ state: "detached", timeout: 20_000 });
       } catch {
         ev.fail("after removal the header should show the letter fallback without a reload");
       }
@@ -261,7 +261,7 @@ export default async function settings({ page, ev, base, webDir, local }) {
     ev.note("nickname saved trimmed; the header switched without a reload and keeps it on /dashboard");
     await ev.shot("nickname-on-dashboard");
 
-    await identity(page).click();
+    await (await identity(page)).click();
     await page.waitForURL("**/settings", { timeout: 30_000 });
     await nickname.fill("");
     await saveNickname.click();
@@ -344,11 +344,11 @@ export default async function settings({ page, ev, base, webDir, local }) {
     await new Promise((r) => setTimeout(r, 1_100));
     const password = page.getByRole("region", { name: "비밀번호" });
     const next = `set-${stamp}-a-2`;
-    await password.getByLabel("현재 비밀번호").fill(passwords[memberA]);
-    await password.getByLabel(/^새 비밀번호(?! 확인)/).fill(next);
-    await password.getByLabel("새 비밀번호 확인").fill(next);
-    await password.getByRole("button", { name: "비밀번호 변경", exact: true }).click();
-    await statusSays(page, /비밀번호를 바꿨습니다\. 다른 기기와 브라우저의 로그인은 모두 끝났습니다/, "password change from settings");
+    await password.getByLabel(await ev.t("auth.currentPassword")).fill(passwords[memberA]);
+    await password.getByLabel(await ev.t("auth.newPassword")).first().fill(next);
+    await password.getByLabel(await ev.t("auth.confirmPassword")).fill(next);
+    await password.getByRole("button", { name: await ev.t("auth.changePassword"), exact: true }).click();
+    await statusSays(page, await ev.t("auth.changed"), "password change from settings");
     passwords[memberA] = next;
     if (!page.url().endsWith("/settings")) ev.fail(`the change should stay on /settings, got ${page.url()}`);
     await ev.shot("password-changed");
@@ -357,7 +357,7 @@ export default async function settings({ page, ev, base, webDir, local }) {
     await headerShows(page, memberA, "this browser after the change");
     await second.goto(`${base}/settings`, { waitUntil: "networkidle" });
     if (new URL(second.url()).pathname !== "/login") ev.fail(`the second browser should be signed out, /settings went to ${second.url()}`);
-    if (!(await second.getByRole("heading", { level: 1, name: "로그인" }).isVisible())) ev.fail("the second browser should see the login form");
+    if (!(await second.getByRole("heading", { level: 1, name: await ev.t("auth.heading.login.title", undefined, second) }).isVisible())) ev.fail("the second browser should see the login form");
     ev.note("the password change kept this browser on /settings and sent the second browser's /settings to the login form");
     await ev.shot("second-browser-signed-out", { page: second });
   } finally {

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { flushSync } from "react-dom";
 import {
   defaultParams,
@@ -20,7 +21,7 @@ import {
 } from "@/lib/catalog";
 import type { PublicGeneration, Unavailable } from "@/lib/generations";
 import { usd } from "@/lib/format";
-import { isLive, STATUS_LABEL } from "@/lib/generation-status";
+import { isLive } from "@/lib/generation-status";
 import { refUploadName } from "@/lib/ref-name";
 import { Button, ErrorText, Field, Input, Select, Textarea } from "@/components/ui";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -203,11 +204,12 @@ const I = {
 };
 
 function FeedItem({ g, index, total, active, now, modelName }: { g: PublicGeneration; index: number; total: number; active: boolean; now: number; modelName: string }) {
+  const tStatus = useTranslations("status");
   const live = isLive(g.status);
   const isImage = describeModel(g.modelId).output === "image";
   const started = new Date(g.createdAt).getTime();
   const took = g.completedAt ? new Date(g.completedAt).getTime() - started : now - started;
-  const label = STATUS_LABEL[g.status];
+  const label = tStatus(g.status);
   return (
     <article data-id={g.id} aria-current={active ? "true" : undefined} aria-label={`${index + 1}번째 결과: ${label}`} className="relative flex h-[calc(100%_-_72px)] w-full flex-col overflow-hidden bg-surface lg:block">
       {/* Peek strip: what shows when this item waits one snap below. */}

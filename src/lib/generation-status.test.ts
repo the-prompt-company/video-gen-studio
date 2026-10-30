@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { GENERATION_STATUSES, isLive, predecessorsOf, STATUS_LABEL, STATUS_TONE, type GenerationStatus } from "./generation-status";
+import { GENERATION_STATUSES, isLive, predecessorsOf, STATUS_TONE, type GenerationStatus } from "./generation-status";
+import ko from "../messages/ko.json";
+import en from "../messages/en.json";
+import zhCN from "../messages/zh-CN.json";
 
 const LIVE: Record<GenerationStatus, boolean> = {
   pending: true,
@@ -39,9 +42,12 @@ test("no write moves a row backwards or sideways", () => {
   }
 });
 
-test("every status has a label and a tone", () => {
+test("every status has a tone and a label in every language", () => {
   for (const s of GENERATION_STATUSES) {
-    assert.ok(STATUS_LABEL[s], `label for ${s}`);
     assert.ok(STATUS_TONE[s], `tone for ${s}`);
+    for (const [locale, messages] of Object.entries({ ko, en, "zh-CN": zhCN })) {
+      const label: unknown = (messages.status as Record<string, unknown>)[s];
+      assert.ok(typeof label === "string" && label.trim(), `${locale}.json status.${s}`);
+    }
   }
 });
