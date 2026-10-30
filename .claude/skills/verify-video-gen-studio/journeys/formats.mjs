@@ -53,23 +53,25 @@ export default async function formats({ page, ev, base, env, webDir, local, cred
     const ago = { ko: "3분 전", en: "3 minutes ago", "zh-CN": "3分钟前" }[lang];
     if (!relative.includes(ago) || !relative.includes("$0.2250")) ev.fail(`the fresh tile reads ${JSON.stringify(relative)}`);
     await review("gallery-tiles", { focus: tile });
-    await tile.getByRole("button").first().click();
-    const detail = page.getByRole("dialog", { name: "생성 상세" });
+    await tile.getByRole("button", { name: await ev.t("gallery.openDetail", { prompt }) }).click();
+    const detail = page.getByRole("dialog", { name: await ev.t("gallery.detail.title") });
     await detail.waitFor({ timeout: 10_000 });
     const dates = (await detail.locator("dd").allTextContents()).map((t) => t.trim()).filter((t) => DATE[lang].test(t));
-    if (dates.length < 2) ev.fail(`the detail should show 생성 and 완료 in the ${lang} pattern, got ${JSON.stringify(await detail.locator("dd").allTextContents())}`);
+    if (dates.length < 2) ev.fail(`the detail should show the created and finished times in the ${lang} pattern, got ${JSON.stringify(await detail.locator("dd").allTextContents())}`);
     ev.note(`fmt-gallery: tile "${ago}" and $0.2250, detail dates ${dates.join(", ")}`);
     await review("gallery-detail");
     await page.keyboard.press("Escape");
 
     await page.goto(`${base}/playground`, { waitUntil: "networkidle" });
     // GPT Image 2 has a rate before any admin sets one, so its estimate shows in dollars.
-    await page.getByLabel("모델").selectOption("openai/gpt-image-2");
-    await page.getByLabel("프롬프트").fill("i18n2 cost bar");
-    const cost = (await page.getByRole("complementary", { name: "생성 설정" }).locator(".font-display.text-2xl").textContent())?.trim() ?? "";
+    const drawer = page.getByRole("complementary", { name: await ev.t("playground.drawer") });
+    await drawer.getByLabel(await ev.t("playground.model")).selectOption("openai/gpt-image-2");
+    await drawer.getByLabel(await ev.t("playground.prompt")).fill("i18n2 cost bar");
+    const costBar = drawer.locator(".font-display.text-2xl");
+    const cost = (await costBar.textContent())?.trim() ?? "";
     if (!/^\$\d+\.\d{4}$/.test(cost)) ev.fail(`the cost bar reads ${cost}`);
     ev.note(`fmt-playground: cost bar ${cost}`);
-    await review("playground-cost", { focus: page.getByRole("complementary", { name: "생성 설정" }).locator(".font-display.text-2xl") });
+    await review("playground-cost", { focus: costBar });
 
     await page.goto(`${base}/admin`, { waitUntil: "networkidle" });
     const adminRow = page.getByRole("row").filter({ hasText: creds.username }).first();
