@@ -280,7 +280,7 @@
       "pill": "{shape} {ratio}",
       "auto": "자동",
       "followsImage": "첫 프레임 이미지 비율을 따름",
-      "firstFrameNote": "1번 이미지가 <num>{size}</num> {shape, select, landscape {가로} portrait {세로} other {정사각}} 이미지라 영상도 <em>{shape, select, landscape {가로로} portrait {세로로} other {정사각으로}}</em> 나옵니다. 가로 영상이 필요하면 가로 이미지를 올리세요.",
+      "firstFrameNote": "1번 이미지가 <num>{size}</num> {shape, select, landscape {가로} portrait {세로} other {정사각}} 이미지라 영상도 <em>{shape, select, landscape {가로로} portrait {세로로} other {정사각으로}}</em> 나옵니다.{shape, select, landscape {} other { 가로 영상이 필요하면 가로 이미지를 올리세요.}}",
       "firstFrameRule": "이미지→영상은 화면비를 따로 고르지 않고 첫 프레임 이미지의 비율을 따릅니다."
     },
     "refs": {
