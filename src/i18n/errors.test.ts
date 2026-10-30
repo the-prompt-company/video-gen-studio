@@ -4,16 +4,16 @@ import { readFileSync } from "node:fs";
 import { parse, TYPE, type MessageFormatElement } from "@formatjs/icu-messageformat-parser";
 import { createTranslator } from "use-intl/core";
 import type { ErrorParams } from "@/lib/errors";
-import { reasonText, type ErrorTranslator } from "./errors";
+import { paramLabelOf, reasonText, type KeyTranslator } from "./errors";
 import { LOCALES, TIME_ZONE, type Locale } from "./locale";
 
-type Catalog = { errors: Record<string, string> };
+type Catalog = { errors: Record<string, string>; params: Record<string, string> };
 const catalog = (locale: Locale) => JSON.parse(readFileSync(new URL(`../messages/${locale}.json`, import.meta.url), "utf8")) as Catalog;
 const CODES = Object.keys(catalog("ko").errors);
 
-function translator(locale: Locale, problems: string[]): ErrorTranslator {
-  const t = createTranslator({ locale, messages: catalog(locale), namespace: "errors", timeZone: TIME_ZONE, onError: (e) => problems.push(`${locale}: ${e.message}`) });
-  return t as unknown as ErrorTranslator;
+function translator(locale: Locale, problems: string[], namespace: "errors" | "params" = "errors"): KeyTranslator {
+  const t = createTranslator({ locale, messages: catalog(locale), namespace, timeZone: TIME_ZONE, onError: (e) => problems.push(`${locale}: ${e.message}`) });
+  return t as unknown as KeyTranslator;
 }
 
 /** A value for every argument the Korean message takes: a branch name for a select, a count for a plural, a word otherwise. */
@@ -72,5 +72,17 @@ test("a server error reads in the page's language with its params", () => {
   assert.equal(reasonText(translator("en", problems), { code: "wrongCredentials" }), "The ID or password is incorrect.");
   assert.match(reasonText(translator("zh-CN", problems), { code: "locked", params: { minutes: 15 } }), /15 分钟/);
   assert.equal(reasonText(translator("ko", problems), { code: "nameTooLong", params: { kind: "teamName", max: 30, length: 31 } }), "팀 이름은 30자까지입니다 (지금 31자)");
+  assert.deepEqual(problems, []);
+});
+
+test("a parameter blocker names the parameter in the page's language, and a key no message names reads as itself", () => {
+  const problems: string[] = [];
+  const text = (locale: Locale, code: string, params: ErrorParams) =>
+    reasonText(translator(locale, problems), { code: code as never, params }, paramLabelOf(translator(locale, problems, "params")));
+  assert.equal(text("ko", "paramRange", { param: "duration", min: 4, max: 15 }), "길이(초): 4~15");
+  assert.equal(text("en", "paramChoice", { param: "quality", options: "low | medium | high" }), "Quality: low | medium | high");
+  assert.equal(text("zh-CN", "paramOnOff", { param: "generate_audio" }), "生成音频：开启或关闭");
+  assert.equal(text("en", "paramOnOff", { param: "seed" }), "seed: on or off");
+  assert.equal(reasonText(translator("en", problems), { code: "paramOnOff", params: { param: "generate_audio" } }), "generate_audio: on or off", "with no lookup, the key");
   assert.deepEqual(problems, []);
 });

@@ -18,3 +18,4 @@ Every screen speaks Korean, English, and Simplified Chinese (`ko`, `en`, `zh-CN`
 - Never translate model names, `Higgsfield`, or user content (prompts, nicknames, IDs, team names, provider error text). Pass user content as an ICU argument.
 - Use an argument for every value and `plural` for every count. After an open value, write Korean that needs no batchim-dependent particle, or use `select` for a closed set.
 - A file in `I18N_PENDING` (`eslint.config.mjs`) still holds Korean. When you move its last Korean string into the messages, delete it from the list.
+- The browser gets only the `SHARED` namespaces in `src/i18n/provider.tsx`. A client component that reads any other namespace renders inside a page's `<NextIntlClientProvider messages={await pageMessages([...])}>` that names it, or its text shows as the bare key.

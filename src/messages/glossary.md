@@ -69,3 +69,11 @@ Each language button in the picker shows its own name (`한국어`, `English`, `
 | 팀 | team | 团队 | |
 | 미소속 | No team | 未分配团队 | |
 | API 키 | API key | API 密钥 | |
+| 생성 설정 | Generation settings | 生成设置 | The playground's form, called the drawer in code |
+| 생성 방식 | Mode | 生成方式 | Label of the mode list |
+| 첫 프레임 | first frame | 首帧 | |
+| 출력 화면비 | Output aspect ratio | 输出画面比例 | |
+| 가로, 세로, 정사각 | Landscape, Portrait, Square | 横版, 竖版, 方形 | Orientation of an image or a video |
+| OpenAI 편집 | OpenAI editing | OpenAI 编辑 | The edits endpoint, used when references are attached |
+| 정가 | List price | 原价 | A provider's published price before a discount |
+| 사용 불가 | Unavailable | 不可用 | A model the server cannot run |

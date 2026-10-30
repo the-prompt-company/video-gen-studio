@@ -13,7 +13,7 @@ async function main() {
 
   for (const id of FAMILY_IDS) {
     const f = FAMILIES[id];
-    await db.insert(schema.models).values({ modelId: id, name: f.name, note: f.blurb, pricePerSecUsd: f.rate.defaultUsd.toFixed(4) }).onConflictDoNothing();
+    await db.insert(schema.models).values({ modelId: id, name: f.name, pricePerSecUsd:f.rate.defaultUsd.toFixed(4) }).onConflictDoNothing();
   }
   console.log(`models: ${FAMILY_IDS.length} rows ensured`);
 

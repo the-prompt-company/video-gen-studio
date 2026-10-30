@@ -53,11 +53,12 @@ export default async function playground({ page, ev, env }) {
     return live.length;
   };
   await readLive();
-  const drawer = page.getByRole("complementary", { name: "생성 설정" });
-  if (!(await drawer.isVisible())) ev.fail("drawer aside[aria-label=생성 설정] not visible");
+  const drawer = page.getByRole("complementary", { name: await ev.t("playground.drawer") });
+  if (!(await drawer.isVisible())) ev.fail("the drawer (playground.drawer) is not visible");
   await ev.shot("drawer");
+  const stage = page.getByRole("region", { name: await ev.t("playground.stage") });
 
-  const model = page.getByLabel("모델");
+  const model = drawer.getByLabel(await ev.t("playground.model"));
   const options = await model.locator("option").allTextContents();
   ev.note(`model options: ${options.join(" | ")}`);
   const seedance = options.find((o) => o.startsWith("Seedance 2.0"));
@@ -65,54 +66,65 @@ export default async function playground({ page, ev, env }) {
   if (options.length === 0) ev.fail("model select has no options (all models disabled in admin?)");
   if (options.some((o) => /Hailuo/.test(o))) ev.fail("Hailuo is still offered");
 
-  const modes = drawer.getByRole("list", { name: "생성 방식" });
+  const modes = drawer.getByRole("list", { name: await ev.t("playground.modes") });
   const currentMode = async () => (await modes.locator('[aria-current="step"]').textContent())?.trim();
-  if ((await currentMode()) !== "텍스트→영상") ev.fail(`with no reference the mode should read 텍스트→영상, got ${await currentMode()}`);
-  if (!(await drawer.getByText("선택", { exact: true }).first().isVisible())) ev.fail("the reference counter does not say references are optional (선택)");
+  const expectMode = async (mode, why) => {
+    const want = await ev.t(`mode.${mode}`);
+    const got = await currentMode();
+    if (got !== want) ev.fail(`${why}: the mode should read ${want} (mode.${mode}), got ${got}`);
+  };
+  await expectMode("t2v", "nothing attached");
+  if (!(await drawer.getByText(await ev.t("playground.refs.optional"), { exact: true }).first().isVisible())) ev.fail("the reference counter does not mark references optional (playground.refs.optional)");
 
   // prompt: typing updates the character-count hint.
-  await page.getByLabel("프롬프트").fill("검증용 프롬프트: 비 오는 밤거리, 느린 돌리 인");
-  if (!(await drawer.getByText(/^\d+자$/).isVisible())) ev.fail("prompt length hint did not appear");
+  const promptBox = drawer.getByLabel(await ev.t("playground.prompt"));
+  const promptText = "검증용 프롬프트: 비 오는 밤거리, 느린 돌리 인";
+  await promptBox.fill(promptText);
+  if (!(await drawer.getByText(await ev.t("playground.promptLength", { count: promptText.length }), { exact: true }).isVisible())) ev.fail("the prompt length hint (playground.promptLength) did not appear");
 
-  // aspect-pills: Seedance exposes 출력 화면비 as pressable pills; 세로 9:16 flips the hint to 세로.
+  // aspect-pills: Seedance exposes the output aspect ratio as pressable pills; the 9:16 pill flips the hint to portrait.
+  const aspect = drawer.getByRole("group", { name: await ev.t("playground.aspect.label") });
+  const resolution = drawer.getByLabel(await ev.t("params.resolution"));
   if (seedance) {
     await model.selectOption({ label: seedance });
-    const group = page.getByRole("group", { name: "출력 화면비" });
-    await group.waitFor({ timeout: 5_000 });
-    const portrait = group.getByRole("button", { name: /9:16/ });
+    await aspect.waitFor({ timeout: 5_000 });
+    const portrait = aspect.getByRole("button", { name: /9:16/ });
     await portrait.click();
     if ((await portrait.getAttribute("aria-pressed")) !== "true") ev.fail("9:16 pill did not become aria-pressed");
-    const pressed = await group.getByRole("button", { pressed: true }).count();
+    const pressed = await aspect.getByRole("button", { pressed: true }).count();
     if (pressed !== 1) ev.fail(`exactly one aspect pill should be pressed, found ${pressed}`);
-    const res = await page.getByLabel("해상도").locator("option").allTextContents();
+    if (!(await drawer.getByText(await ev.t("generation.shape", { shape: "portrait" }), { exact: true }).isVisible())) ev.fail("the aspect hint does not read portrait (generation.shape) after 9:16");
+    const res = await resolution.locator("option").allTextContents();
     if (res.join(",") !== "480p,720p,1080p,4k") ev.fail(`Seedance resolutions should be 480p,720p,1080p,4k, got ${res.join(",")}`);
     await ev.shot("seedance-portrait");
   } else ev.note("Seedance not offered; aspect-pills skipped (unmet precondition)");
 
   if (h3) {
     await model.selectOption({ label: h3 });
-    const group = page.getByRole("group", { name: "출력 화면비" });
-    await group.waitFor({ timeout: 5_000 });
-    if ((await group.getByRole("button", { name: "자동" }).getAttribute("aria-pressed")) !== "true") ev.fail("H3 should start on 자동");
-    const dur = await page.getByLabel("길이(초)").locator("option").allTextContents();
+    await aspect.waitFor({ timeout: 5_000 });
+    if ((await aspect.getByRole("button", { name: await ev.t("playground.aspect.auto"), exact: true }).getAttribute("aria-pressed")) !== "true") ev.fail("H3 should start on the auto pill (playground.aspect.auto)");
+    const dur = await drawer.getByLabel(await ev.t("params.duration")).locator("option").allTextContents();
     if (dur.join(",") !== "5,10,15") ev.fail(`H3 duration options should be 5,10,15, got ${dur.join(",")}`);
-    if (!(await drawer.getByText(/2K로 고정/).first().isVisible())) ev.fail("H3 fixed-2K note missing");
-    if (await page.getByLabel("해상도").count()) ev.fail("H3 has no resolution choice");
+    if (!(await drawer.getByText(await ev.t("families.h3.note")).first().isVisible())) ev.fail("H3 fixed-2K note (families.h3.note) missing");
+    if (await resolution.count()) ev.fail("H3 has no resolution choice");
     await ev.shot("h3");
     if (seedance) await model.selectOption({ label: seedance });
   } else ev.note("MiniMax H3 not offered; model-switch skipped (unmet precondition)");
 
   // refs-dialog: button opens a modal; the picker is a real <input type=file>; Esc closes and focus returns.
-  const refsButton = page.getByRole("button", { name: "레퍼런스 추가" });
+  const addRefs = await ev.t("playground.refs.add");
+  const attachedName = await ev.t("playground.refs.attached");
+  const refsButton = drawer.getByRole("button", { name: addRefs, exact: true });
   await refsButton.click();
-  const dialog = page.getByRole("dialog", { name: "레퍼런스 추가" });
+  const dialog = page.getByRole("dialog", { name: addRefs });
   await dialog.waitFor({ timeout: 5_000 });
-  if (!(await dialog.getByText(/레퍼런스는 선택입니다/).isVisible())) ev.fail("the reference dialog does not say references are optional");
+  const [videoNote, imageNote] = await Promise.all(["higgsfield", "openai"].map((provider) => ev.t("playground.refs.note", { provider })));
+  if (!(await dialog.getByText(videoNote).or(dialog.getByText(imageNote)).isVisible())) ev.fail("the reference dialog does not say references are optional (playground.refs.note)");
   await ev.shot("refs-dialog-empty");
   await dialog.locator('input[type=file][accept^="image/"]').setInputFiles(IMAGES[0]);
   // Upload goes to Higgsfield storage through /api/uploads and needs the user's API key.
   // With a key: a thumbnail "1" appears. Without: role=alert explains. Both are real outcomes; record which.
-  const thumb = dialog.getByRole("list", { name: "첨부한 레퍼런스" }).locator("li");
+  const thumb = dialog.getByRole("list", { name: attachedName }).locator("li");
   const alert = dialog.getByRole("alert");
   await Promise.race([thumb.first().waitFor({ timeout: 30_000 }), alert.waitFor({ timeout: 30_000 })]).catch(() => ev.fail("neither a thumbnail nor an error appeared within 30s of picking a file"));
   const attached = (await thumb.count()) > 0;
@@ -121,40 +133,39 @@ export default async function playground({ page, ev, env }) {
   await ev.shot("refs-dialog-after-pick");
   await page.keyboard.press("Escape");
   if (await dialog.isVisible().catch(() => false)) ev.fail("Esc did not close the reference dialog");
-  if (!(await refsButton.evaluate((el) => el === document.activeElement))) ev.fail("focus did not return to 레퍼런스 추가 after closing");
+  if (!(await refsButton.evaluate((el) => el === document.activeElement))) ev.fail("focus did not return to the add-references button (playground.refs.add) after closing");
 
-  const startFrame = drawer.getByRole("checkbox", { name: /이 이미지로 시작/ });
+  const startFrame = drawer.getByRole("checkbox", { name: await ev.t("playground.startFromImage") });
   if (attached) {
-    if ((await currentMode()) !== "레퍼런스→영상") ev.fail(`one image should default to 레퍼런스→영상, got ${await currentMode()}`);
-    if (!(await startFrame.isVisible())) ev.fail("이 이미지로 시작 is not offered for exactly one image");
+    await expectMode("r2v", "one image");
+    if (!(await startFrame.isVisible())) ev.fail("the start-from-image checkbox (playground.startFromImage) is not offered for exactly one image");
     await startFrame.check();
-    if ((await currentMode()) !== "이미지→영상") ev.fail(`이 이미지로 시작 should switch to 이미지→영상, got ${await currentMode()}`);
-    if (seedance && (await page.getByRole("group", { name: "출력 화면비" }).isVisible())) ev.fail("Seedance 이미지→영상 takes no aspect ratio, but the pills show");
+    await expectMode("i2v", "start from this image");
+    if (seedance && (await aspect.isVisible())) ev.fail("Seedance image-to-video takes no aspect ratio, but the pills show");
     await ev.shot("start-from-image");
     await startFrame.uncheck();
-    await removeAll(drawer);
-    if ((await currentMode()) !== "텍스트→영상") ev.fail("removing the reference should return to 텍스트→영상");
+    await removeAll(drawer, attachedName);
+    await expectMode("t2v", "the reference removed");
   }
 
-  // generate-gate: without an API key the status banner shows and 생성하기 stays disabled.
-  const banner = drawer.getByRole("status").filter({ hasText: "API 키" });
-  const generate = drawer.getByRole("button", { name: "생성하기" });
+  // generate-gate: without an API key the status banner shows and the Generate button stays disabled.
+  const banner = drawer.getByRole("status").filter({ hasText: await ev.t("errors.noKey") });
+  const generate = drawer.getByRole("button", { name: await ev.t("playground.generate"), exact: true });
   if (await banner.isVisible()) {
-    if (await generate.isEnabled()) ev.fail("생성하기 must be disabled while the no-API-key banner shows");
+    if (await generate.isEnabled()) ev.fail("Generate (playground.generate) must be disabled while the no-API-key banner shows");
     ev.note("no API key on this account: generate correctly disabled; paid submit not exercised");
   } else if (env.VGS_FAKE_HF) {
-    for (const id of await everyMode({ page, ev, drawer, model, seedance, h3, generate, currentMode, startFrame, uploads, fake: env.VGS_FAKE_HF })) liveIds.add(id);
+    for (const id of await everyMode({ page, ev, drawer, stage, model, promptBox, seedance, h3, generate, expectMode, startFrame, uploads, fake: env.VGS_FAKE_HF })) liveIds.add(id);
   } else if (env.VGS_ALLOW_SPEND === "1") {
-    if (!(await generate.isEnabled())) ev.fail("API key present but 생성하기 disabled");
+    if (!(await generate.isEnabled())) ev.fail("API key present but Generate (playground.generate) disabled");
     await generate.click();
-    const stage = page.getByRole("region", { name: "결과 무대" });
     await stage.getByRole("article").first().waitFor({ timeout: 30_000 });
     ev.note("generation submitted (VGS_ALLOW_SPEND=1); a queued item is on the stage");
   } else ev.note("API key present; paid submit skipped (set VGS_ALLOW_SPEND=1, or VGS_FAKE_HF against the fake, to exercise it)");
   await ev.shot("generate-gate");
 
   // pg-poll: each live item on the stage is polled by its own uuid, every poll is a 200, and the body is that item.
-  // VGS_POLL_WAIT_MS keeps the page open longer so the backoff schedule can be read; VGS_POLL_NAV=1 leaves for 갤러리 and comes back.
+  // VGS_POLL_WAIT_MS keeps the page open longer so the backoff schedule can be read; VGS_POLL_NAV=1 leaves for the gallery and comes back.
   const liveAtEnd = await readLive();
   const waitMs = Number(env.VGS_POLL_WAIT_MS ?? 0);
   if (waitMs > 0) {
@@ -189,7 +200,7 @@ export default async function playground({ page, ev, env }) {
   writeFileSync(join(ev.dir, "poll.json"), JSON.stringify({ liveIds: [...liveIds], polls, ticks: schedule, gaps }, null, 2));
   for (const p of polls) ev.note(`poll GET ${p.path} → ${p.status}${p.itemId === p.id ? "" : ` (body item.id ${p.itemId})`}`);
   // The overlay puts the request log in the screenshot; it is removed right after.
-  await page.getByRole("region", { name: "결과 무대" }).scrollIntoViewIfNeeded();
+  await stage.scrollIntoViewIfNeeded();
   const lines = polls.length ? polls.map((p) => `GET ${p.path} → ${p.status}`) : ["no poll requests"];
   await page.evaluate((text) => {
     const el = document.createElement("pre");
@@ -208,23 +219,27 @@ export default async function playground({ page, ev, env }) {
     if (bad.length) ev.fail(`poll requests not matching a live uuid with a 200 and its own item: ${bad.map((p) => `${p.path} → ${p.status}`).join("; ")}`);
     ev.note(`poll requests ${polls.length}, all 200`);
     ev.note(`poll ticks ${schedule.length} (${schedule.map((k) => k.n).join(",")} requests each), gaps ${gaps.join(", ")} ms`);
-    if (liveAtEnd > 0 && !(await page.getByRole("progressbar", { name: "생성 진행 중" }).first().isVisible())) ev.fail("live item on the feed but no 생성 진행 중 progress bar on the stage");
+    if (liveAtEnd > 0 && !(await stage.getByRole("progressbar", { name: await ev.t("playground.feed.progress") }).first().isVisible())) ev.fail("live item on the feed but no progress bar (playground.feed.progress) on the stage");
   }
 }
 
-async function removeAll(drawer) {
-  const remove = drawer.getByRole("list", { name: "첨부한 레퍼런스" }).getByRole("button", { name: /제거$/ });
+/** Each attached thumbnail holds one button, its remove button. */
+async function removeAll(drawer, attachedName) {
+  const remove = drawer.getByRole("list", { name: attachedName }).getByRole("button");
   while ((await remove.count()) > 0) await remove.first().click();
 }
 
-async function everyMode({ page, ev, drawer, model, seedance, h3, generate, currentMode, startFrame, uploads, fake }) {
+async function everyMode({ page, ev, drawer, stage, model, promptBox, seedance, h3, generate, expectMode, startFrame, uploads, fake }) {
   const stats = async () => (await fetch(`${fake}/_stats`)).json();
+  const addRefs = await ev.t("playground.refs.add");
+  const attachedName = await ev.t("playground.refs.attached");
+  const railGenerate = stage.getByRole("button", { name: await ev.t("playground.rail.generate"), exact: true });
   const submitted = [];
   const attach = async (images, videos) => {
-    await page.getByRole("button", { name: "레퍼런스 추가" }).click();
-    const dialog = page.getByRole("dialog", { name: "레퍼런스 추가" });
+    await drawer.getByRole("button", { name: addRefs, exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: addRefs });
     await dialog.waitFor({ timeout: 5_000 });
-    const list = dialog.getByRole("list", { name: "첨부한 레퍼런스" }).locator("li");
+    const list = dialog.getByRole("list", { name: attachedName }).locator("li");
     const want = (await list.count()) + images.length + videos.length;
     if (images.length) await dialog.locator('input[type=file][accept^="image/"]').setInputFiles(images);
     for (const v of videos) await dialog.locator('input[type=file][accept="video/mp4"]').setInputFiles(v);
@@ -238,7 +253,7 @@ async function everyMode({ page, ev, drawer, model, seedance, h3, generate, curr
   };
   const submitAndRead = async (label, want, checkBody) => {
     const before = (await stats()).submits.length;
-    const counter = (await page.getByRole("button", { name: "생성", exact: true }).locator("xpath=following-sibling::span[1]").textContent())?.trim();
+    const counter = (await railGenerate.locator("xpath=following-sibling::span[1]").textContent())?.trim();
     const answer = page.waitForResponse((r) => r.request().method() === "POST" && new URL(r.url()).pathname === "/api/generations", { timeout: 30_000 });
     await generate.click();
     const res = await answer;
@@ -256,8 +271,8 @@ async function everyMode({ page, ev, drawer, model, seedance, h3, generate, curr
     const problem = checkBody(sent.body);
     if (problem) ev.fail(`${label}: ${problem} in ${JSON.stringify(sent.body)}`);
     const shown = counter === "—" ? null : counter;
-    if (shown !== null && shown !== usd(body.estimatedCostUsd)) ev.fail(`${label}: 생성 showed ${shown} but the row's cost is ${body.estimatedCostUsd}`);
-    ev.note(`pg-generate-modes ${label}: ${sent.endpoint} ← ${JSON.stringify(sent.body)}; 생성 showed ${shown ?? "— (no rate)"}, row cost ${body.estimatedCostUsd}`);
+    if (shown !== null && shown !== usd(body.estimatedCostUsd)) ev.fail(`${label}: the rail's generate counter showed ${shown} but the row's cost is ${body.estimatedCostUsd}`);
+    ev.note(`pg-generate-modes ${label}: ${sent.endpoint} ← ${JSON.stringify(sent.body)}; the rail counter showed ${shown ?? "— (no rate)"}, row cost ${body.estimatedCostUsd}`);
     await ev.shot(`generated-${label.replace(/[^\w-]+/g, "-")}`);
   };
   const urls = (b, key) => (Array.isArray(b[key]) ? b[key] : []);
@@ -266,35 +281,35 @@ async function everyMode({ page, ev, drawer, model, seedance, h3, generate, curr
     await model.selectOption({ label: option });
     const family = option.startsWith("Seedance") ? "bytedance/seedance-2.0" : "minimax/h3";
     const short = family === "minimax/h3" ? "h3" : "seedance";
-    await removeAll(drawer);
+    await removeAll(drawer, attachedName);
     if (family === "minimax/h3") {
-      await page.getByLabel("프롬프트").fill("");
-      const blocker = drawer.getByRole("status").filter({ hasText: "프롬프트가 필요합니다" });
-      if (!(await blocker.isVisible()) || (await generate.isEnabled())) ev.fail("H3 without a prompt should say why and keep 생성하기 disabled");
+      await promptBox.fill("");
+      const blocker = drawer.getByRole("status").filter({ hasText: await ev.t("errors.promptRequired", { model: "MiniMax H3", mode: "t2v" }) });
+      if (!(await blocker.isVisible()) || (await generate.isEnabled())) ev.fail("H3 without a prompt should say why (errors.promptRequired) and keep Generate disabled");
       ev.note(`pg-blocker: ${await blocker.textContent()}`);
       await ev.shot("h3-needs-prompt");
     }
-    await page.getByLabel("프롬프트").fill(`검증 ${short}: 등대 위로 천천히 상승하는 카메라`);
+    await promptBox.fill(`검증 ${short}: 등대 위로 천천히 상승하는 카메라`);
 
     await attach(IMAGES, [WEBM_AS_MP4]);
-    if (!uploads.every((u) => typeof u === "string" && u.startsWith(fake))) ev.fail(`uploads did not go to the fake ${fake}: ${uploads.join(", ")}; refusing to click 생성하기`);
-    if ((await currentMode()) !== "레퍼런스→영상") ev.fail(`two images and a video should read 레퍼런스→영상, got ${await currentMode()}`);
-    if (family === "bytedance/seedance-2.0" && !(await drawer.getByText(/입력 영상 3\.0s/).isVisible())) ev.fail("the estimate line does not count the 3 s reference video");
+    if (!uploads.every((u) => typeof u === "string" && u.startsWith(fake))) ev.fail(`uploads did not go to the fake ${fake}: ${uploads.join(", ")}; refusing to click Generate`);
+    await expectMode("r2v", "two images and a video");
+    if (family === "bytedance/seedance-2.0" && !(await drawer.getByText(await ev.t("playground.fact.inputVideo", { seconds: "3.0" })).isVisible())) ev.fail("the estimate line does not count the 3 s reference video (playground.fact.inputVideo)");
     await ev.shot(`${short}-references`);
     await submitAndRead(`${short} reference`, `${family}/reference-to-video`, (b) =>
       urls(b, "image_urls").length !== 2 ? "image_urls should hold 2 urls" : urls(b, "video_urls").length !== 1 ? "video_urls should hold 1 url" : "image_url" in b ? "image_url must not be sent" : null,
     );
 
-    await removeAll(drawer);
+    await removeAll(drawer, attachedName);
     await attach([IMAGES[0]], []);
     await startFrame.check();
-    if ((await currentMode()) !== "이미지→영상") ev.fail(`이 이미지로 시작 should read 이미지→영상, got ${await currentMode()}`);
+    await expectMode("i2v", "start from this image");
     await submitAndRead(`${short} first frame`, `${family}/image-to-video`, (b) =>
       typeof b.image_url !== "string" ? "image_url missing" : "image_urls" in b ? "image_urls must not be sent" : family === "bytedance/seedance-2.0" && "aspect_ratio" in b ? "Seedance image-to-video takes no aspect_ratio" : null,
     );
 
-    await removeAll(drawer);
-    if ((await currentMode()) !== "텍스트→영상") ev.fail(`no reference should read 텍스트→영상, got ${await currentMode()}`);
+    await removeAll(drawer, attachedName);
+    await expectMode("t2v", "no reference");
     await submitAndRead(`${short} text`, `${family}/text-to-video`, (b) =>
       !b.prompt ? "prompt missing" : ["image_url", "image_urls", "video_urls"].some((k) => k in b) ? "text-to-video must carry no media" : null,
     );

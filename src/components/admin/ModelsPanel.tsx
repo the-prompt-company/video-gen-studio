@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useFormatter } from "next-intl";
-import { costUsd, FAMILIES, isFamilyId } from "@/lib/catalog";
+import { useFormatter, useTranslations } from "next-intl";
+import { costUsd, FAMILIES, isFamilyId, type PricePreset } from "@/lib/catalog";
 import { caught, type Reason } from "@/lib/errors";
 import { Button, Card, Input } from "@/components/ui";
 import { useErrorText } from "@/i18n/errors";
@@ -14,6 +14,8 @@ type Row = { modelId: string; name: string; vendor: string; pricePerSecUsd: numb
 export function ModelsPanel() {
   const format = useFormatter();
   const errorText = useErrorText();
+  const tPrices = useTranslations("prices");
+  const presetLabel = (p: PricePreset) => (p.preset === "higgsfieldTable" ? tPrices("preset.higgsfieldTable", { discount: String(p.discount) }) : tPrices(`preset.${p.preset}`));
   const [rows, setRows] = useState<Row[]>([]);
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [error, setError] = useState<Reason | null>(null);
@@ -56,7 +58,7 @@ export function ModelsPanel() {
         {rows.map((r) => {
             const family = isFamilyId(r.modelId) ? FAMILIES[r.modelId] : null;
             const typed = Number(draft[r.modelId]);
-            const example = family && Number.isFinite(typed) && typed > 0 ? costUsd(family.rate.example.basis, typed) : null;
+            const example = family && Number.isFinite(typed) && typed > 0 ? costUsd(family.rate.example, typed) : null;
             const unitId = `rate-unit-${r.modelId.replace(/\W/g, "-")}`;
             return (
               <li key={r.modelId} aria-label={r.name} className="grid gap-3 py-4 sm:grid-cols-[minmax(0,13rem)_minmax(0,1fr)_auto] sm:items-start">
@@ -65,7 +67,7 @@ export function ModelsPanel() {
                   <div className="font-mono text-[11px] text-subtle">{r.modelId}</div>
                 </div>
                 <div>
-                  {family && <div id={unitId} className="mb-1.5 text-xs font-medium text-muted">{family.rate.basis} 기준 {family.rate.per.long} USD</div>}
+                  {family && <div id={unitId} className="mb-1.5 text-xs font-medium text-muted">{tPrices(`basis.${family.key}`)} 기준 {tPrices("per", { unit: family.rate.unit })} USD</div>}
                   <div className="flex items-center gap-2">
                     <div className="w-36">
                       <Input
@@ -87,20 +89,20 @@ export function ModelsPanel() {
                     <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-subtle">
                       {family.rate.published.map((p) => (
                         <button
-                          key={p.label}
+                          key={p.preset}
                           type="button"
                           onClick={() => setDraft({ ...draft, [r.modelId]: String(p.usd) })}
-                          aria-label={`${p.label} ${p.usd}로 채우기`}
+                          aria-label={`${presetLabel(p)} ${p.usd}로 채우기`}
                           className="inline-flex min-h-8 items-center gap-1 whitespace-nowrap rounded-full border border-border px-2.5 text-foreground-2 transition hover:border-foreground/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                         >
-                          {p.label} <span className="tabular-nums text-foreground">${p.usd}</span>
+                          {presetLabel(p)} <span className="tabular-nums text-foreground">${p.usd}</span>
                         </button>
                       ))}
                     </div>
                   )}
                   {family && (
                     <div className="mt-1.5 text-xs tabular-nums text-subtle">
-                      {example === null ? "단가를 넣으면 예시 비용이 보입니다" : `예: ${family.rate.example.label} ${usd(format, example)}`}
+                      {example === null ? "단가를 넣으면 예시 비용이 보입니다" : `예: ${tPrices(`example.${family.key}`)} ${usd(format, example)}`}
                     </div>
                   )}
                 </div>

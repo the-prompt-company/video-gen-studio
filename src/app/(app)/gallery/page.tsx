@@ -6,6 +6,8 @@ import { publicGeneration } from "@/lib/generations";
 import { Gallery } from "@/components/Gallery";
 import { PageContainer } from "@/components/ui";
 import { pageTitle } from "@/i18n/metadata";
+import { NextIntlClientProvider } from "next-intl";
+import { pageMessages } from "@/i18n/provider";
 
 export const generateMetadata = pageTitle("gallery");
 
@@ -17,7 +19,7 @@ export default async function GalleryPage({ searchParams }: { searchParams: Prom
 
   const db = getDb();
   const g = schema.generations;
-  const [rows, now] = await Promise.all([
+  const [rows, now, messages] = await Promise.all([
     db
       .select({ g, username: schema.users.username })
       .from(g)
@@ -26,11 +28,14 @@ export default async function GalleryPage({ searchParams }: { searchParams: Prom
       .orderBy(desc(g.createdAt))
       .limit(120),
     getNow(),
+    pageMessages(["generation", "gallery", "mode"]),
   ]);
 
   return (
     <PageContainer>
-      <Gallery items={rows.map((r) => publicGeneration(r.g, r.username))} isAdmin={user.role === "admin"} showAll={showAll} now={now.getTime()} />
+      <NextIntlClientProvider messages={messages}>
+        <Gallery items={rows.map((r) => publicGeneration(r.g, r.username))} isAdmin={user.role === "admin"} showAll={showAll} now={now.getTime()} />
+      </NextIntlClientProvider>
     </PageContainer>
   );
 }

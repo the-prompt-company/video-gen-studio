@@ -129,18 +129,18 @@ export default async function errors({ page, ev, base, env, webDir, local }) {
     await fillNewPassword(member, chosenA);
     await member.waitForURL("**/playground", { timeout: 30_000 });
     await member.waitForLoadState("networkidle");
-    const drawer = member.getByRole("complementary", { name: "생성 설정" });
+    const drawer = member.getByRole("complementary", { name: await ev.t("playground.drawer", undefined, member) });
     // Without a Higgsfield key the drawer starts on the image model, which needs none.
-    await member.getByLabel("모델").selectOption("bytedance/seedance-2.0");
+    await drawer.getByLabel(await ev.t("playground.model", undefined, member)).selectOption("bytedance/seedance-2.0");
     const noKey = drawer.getByRole("status").filter({ hasText: await ev.t("errors.noKey", undefined, member) });
     await noKey.first().waitFor({ timeout: 20_000 });
-    await member.getByLabel("프롬프트").fill("");
+    await drawer.getByLabel(await ev.t("playground.prompt", undefined, member)).fill("");
     const blocker = drawer.getByRole("status").filter({ hasText: await ev.t("errors.promptRequired", { model: "Seedance 2.0", mode: "t2v" }, member) });
     await blocker.first().waitFor({ timeout: 10_000 });
     ev.note("err-drawer: the no-key line and the cost bar's reason read in the page language");
     await review("playground-no-key", member, noKey.first());
     await review("playground-blocker", member, blocker.first());
-    const stage = member.getByRole("region", { name: "결과 무대" });
+    const stage = member.getByRole("region", { name: await ev.t("playground.stage", undefined, member) });
     const coded = await ev.t("errors.submitDeadline", { minutes: 30 }, member);
     await expectText(stage.locator("p"), coded, "the coded failure on the stage");
     await review("playground-failure", member, stage.getByText(coded).first());
@@ -185,11 +185,12 @@ export default async function errors({ page, ev, base, env, webDir, local }) {
     const failImage = async (fail, code, surface, check) => {
       await setOpenAi({ fail });
       await admin.goto(`${base}/playground`, { waitUntil: "networkidle" });
-      await admin.getByLabel("모델").selectOption(GPT);
-      await admin.getByLabel("프롬프트").fill(`${imagePrompt} ${fail}`);
+      const adminDrawer = admin.getByRole("complementary", { name: await ev.t("playground.drawer", undefined, admin) });
+      await adminDrawer.getByLabel(await ev.t("playground.model", undefined, admin)).selectOption(GPT);
+      await adminDrawer.getByLabel(await ev.t("playground.prompt", undefined, admin)).fill(`${imagePrompt} ${fail}`);
       const [res] = await Promise.all([
         admin.waitForResponse((r) => new URL(r.url()).pathname === "/api/generations" && r.request().method() === "POST"),
-        admin.getByRole("button", { name: "생성하기" }).click(),
+        adminDrawer.getByRole("button", { name: await ev.t("playground.generate", undefined, admin), exact: true }).click(),
       ]);
       const id = (await res.json()).item?.id;
       if (!id) ev.fail(`the ${fail} image submit answered ${res.status()}`);
@@ -200,7 +201,7 @@ export default async function errors({ page, ev, base, env, webDir, local }) {
       }
       if (row?.status !== "failed" || row.reason?.code !== code || !check(row.reason.params)) ev.fail(`the ${fail} image row ended ${row?.status} ${JSON.stringify(row?.reason)}`);
       const shown = await ev.t(`errors.${code}`, row.reason.params, admin);
-      const adminStage = admin.getByRole("region", { name: "결과 무대" });
+      const adminStage = admin.getByRole("region", { name: await ev.t("playground.stage", undefined, admin) });
       await expectText(adminStage.locator("p"), shown, `the ${fail} image failure on the stage`);
       ev.note(`err-image ${fail}: the row stores ${JSON.stringify(row.reason)} and the stage reads it in the page language`);
       await review(surface, admin, adminStage.getByText(shown).first());

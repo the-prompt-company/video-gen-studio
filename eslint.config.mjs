@@ -9,12 +9,6 @@ const ONE_CALL_PER_ROW = "OpenAI는 src/lib/generations.ts만 부른다. 이미�
 // Files that still hold Korean screen text. Each i18n PR moves its surface's text into src/messages and deletes its
 // files here; the last one deletes the list. Every other file under src/ fails `npm run lint` on a Hangul literal.
 const I18N_PENDING = [
-  // Gallery, dashboard, playground, catalog (i18n PR 3)
-  "src/app/(app)/dashboard/page.tsx",
-  "src/components/Gallery.tsx",
-  "src/components/Playground.tsx",
-  "src/components/UsageChart.tsx",
-  "src/lib/catalog.ts",
   // Settings, members, teams, import, model rates, logs (i18n PR 4)
   "src/app/(app)/admin/page.tsx",
   "src/app/(app)/settings/page.tsx",

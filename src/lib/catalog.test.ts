@@ -1,7 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { parse, TYPE } from "@formatjs/icu-messageformat-parser";
 import { ENDPOINTS, invalidBody } from "../../scripts/fake-higgsfield";
 import { invalidImageRequest } from "../../scripts/fake-openai";
+import { LOCALES } from "../i18n/locale";
 import type { AppError } from "./errors";
 import {
   defaultParams,
@@ -11,6 +14,8 @@ import {
   FAMILIES,
   FAMILY_IDS,
   legacyBody,
+  modelLine,
+  MODES,
   modesOf,
   planGeneration,
   resendRequest,
@@ -157,9 +162,9 @@ test("caps and prompts: H3 takes five images and always a prompt, Seedance six i
 });
 
 test("params are checked against the model's ranges, and the prompt is sent trimmed", () => {
-  assert.deepEqual(blocked(planGeneration(draft({ params: { duration: 16 } }), 0)), { code: "paramRange", params: { label: "길이(초)", min: 4, max: 15 } });
-  assert.deepEqual(blocked(planGeneration(draft({ family: H3, params: { duration: 7 } }), 0)), { code: "paramChoice", params: { label: "길이(초)", options: "5 | 10 | 15" } });
-  assert.deepEqual(blocked(planGeneration(draft({ params: { resolution: "2K" } }), 0)), { code: "paramChoice", params: { label: "해상도", options: "480p | 720p | 1080p | 4k" } });
+  assert.deepEqual(blocked(planGeneration(draft({ params: { duration: 16 } }), 0)), { code: "paramRange", params: { param: "duration", min: 4, max: 15 } });
+  assert.deepEqual(blocked(planGeneration(draft({ family: H3, params: { duration: 7 } }), 0)), { code: "paramChoice", params: { param: "duration", options: "5 | 10 | 15" } });
+  assert.deepEqual(blocked(planGeneration(draft({ params: { resolution: "2K" } }), 0)), { code: "paramChoice", params: { param: "resolution", options: "480p | 720p | 1080p | 4k" } });
   assert.equal(ready(planGeneration(draft({ prompt: "  밤  " }), 0)).body.prompt, "밤");
   assert.equal(ready(planGeneration(draft({ family: H3, params: { duration: "10" } }), 0)).durationS, 10);
 });
@@ -237,15 +242,22 @@ test("a resend goes to the row's stored endpoint with its stored bytes, whatever
   assert.equal(resendRequest({ ...retired.row, modelId: "alibaba/wan-3.0/reference-to-video", requestBody: null }), null);
 });
 
-test("old rows keep a name and labels: Hailuo and the old Seedance id resolve, an older id falls back to its path", () => {
+test("old rows keep a name and a mode: Hailuo and the old Seedance id resolve, an older id falls back to its path", () => {
   const hailuo = describeModel("minimax/hailuo-2.3/standard/image-to-video");
-  assert.deepEqual([hailuo.name, hailuo.family, hailuo.mode, hailuo.paramLabel("prompt_optimizer")], ["Hailuo 2.3 Standard", null, "i2v", "프롬프트 자동 보정"]);
+  assert.deepEqual([hailuo.name, hailuo.family, hailuo.mode], ["Hailuo 2.3 Standard", null, "i2v"]);
   const seedance = describeModel("bytedance/seedance-2.0/reference-to-video");
   assert.deepEqual([seedance.name, seedance.family, seedance.mode, seedance.group], ["Seedance 2.0", SEEDANCE, "r2v", SEEDANCE]);
   assert.equal(describeModel("bytedance/seedance-2.0/text-to-video").group, SEEDANCE, "all three endpoints fold into one model");
-  assert.equal(describeModel("bytedance/seedance-2.0/text-to-video").paramLabel("resolution"), "해상도");
   const wan = describeModel("alibaba/wan-3.0/reference-to-video");
-  assert.deepEqual([wan.name, wan.family, wan.mode, wan.paramLabel("seed")], ["alibaba/wan-3.0", null, null, "seed"]);
+  assert.deepEqual([wan.name, wan.family, wan.mode], ["alibaba/wan-3.0", null, null]);
+});
+
+test("a stored row's line is its model and the page's name for its mode, or the model alone when the mode is unknown", () => {
+  const modeName = (m: Mode) => `<${m}>`;
+  assert.equal(modelLine("bytedance/seedance-2.0/text-to-video", modeName), "Seedance 2.0 · <t2v>");
+  assert.equal(modelLine("minimax/hailuo-2.3/standard/image-to-video", modeName), "Hailuo 2.3 Standard · <i2v>");
+  assert.equal(modelLine("openai/gpt-image-2/edits", modeName), "GPT Image 2 · <r2i>");
+  assert.equal(modelLine("alibaba/wan-3.0/reference-to-video", modeName), "alibaba/wan-3.0");
 });
 
 test("GPT Image 2: nothing attached goes to generations, any image reference to edits, and a video reference is refused", () => {
@@ -311,7 +323,7 @@ test("GPT Image 2 blockers: a prompt in both modes, at most 16 images and 32,000
   assert.deepEqual(blocked(planGeneration(draft({ family: GPT, mode: "t2i", prompt: "가".repeat(32_001) }), 0)), { code: "promptTooLong", params: { max: 32_000 } });
   assert.deepEqual(blocked(planGeneration(draft({ family: GPT, mode: "t2i", params: { background: "transparent", output_format: "jpeg" } }), 0)), { code: "transparentNeedsAlpha" });
   ready(planGeneration(draft({ family: GPT, mode: "t2i", params: { background: "transparent", output_format: "png" } }), 0));
-  assert.deepEqual(blocked(planGeneration(draft({ family: GPT, mode: "t2i", params: { quality: "auto" } }), 0)), { code: "paramChoice", params: { label: "품질", options: "low | medium | high" } });
+  assert.deepEqual(blocked(planGeneration(draft({ family: GPT, mode: "t2i", params: { quality: "auto" } }), 0)), { code: "paramChoice", params: { param: "quality", options: "low | medium | high" } });
 });
 
 function gpt(params: Record<string, unknown>, extra: { promptChars?: number; inputImages?: number; usage?: TokenUsage } = {}) {
@@ -330,7 +342,7 @@ test("cost: at $30 per 1M output tokens, GPT Image 2's estimate is OpenAI's publ
   assert.equal(costUsd(gpt({ quality: "medium", aspect_ratio: "1:1" }, { promptChars: 200, inputImages: 2 }), 30), 0.159, "each reference adds 6,563 image tokens at $8 per 1M");
   assert.equal(costUsd(gpt({ quality: "medium", aspect_ratio: "1:1" }), 15), 0.0265, "the admin's rate scales the whole price list");
   assert.equal(costUsd(gpt({ quality: "high" }), 0), 0, "no rate, no cost");
-  assert.equal(costUsd(FAMILIES[GPT].rate.example.basis, FAMILIES[GPT].rate.defaultUsd), 0.053, "the admin page's example at the default rate");
+  assert.equal(costUsd(FAMILIES[GPT].rate.example, FAMILIES[GPT].rate.defaultUsd), 0.053, "the admin page's example at the default rate");
 });
 
 test("cost: with usage, GPT Image 2 is priced from OpenAI's token counts at text $5, image input $8 and output $30 per 1M", () => {
@@ -349,18 +361,66 @@ test("the plan keeps what it priced and at which rate, so the server can price O
   assert.deepEqual(basis, { family: GPT, mode: "r2i", inputVideoS: 0, promptChars: 200, inputImages: 2 });
   assert.equal(plan.costUsd, costUsd(plan.costBasis, 30));
   assert.equal(plan.costUsd, 0.159);
-  assert.deepEqual(plan.facts, ["1024×1024", "medium", "레퍼런스 2장"]);
+  assert.deepEqual(plan.facts, [
+    { kind: "token", text: "1024×1024" },
+    { kind: "token", text: "medium" },
+    { kind: "refImages", count: 2 },
+  ]);
   const video = planGeneration(draft({ mode: "r2v", videos: [{ url: VID, seconds: 3 }], params: { resolution: "720p", duration: 6 } }), 0.0985);
-  assert.deepEqual(video.facts, ["6s", "720p", "입력 영상 3.0s"]);
+  assert.deepEqual(video.facts, [
+    { kind: "seconds", seconds: 6 },
+    { kind: "token", text: "720p" },
+    { kind: "inputVideo", seconds: 3 },
+  ]);
+  const h3 = planGeneration(draft({ family: H3, mode: "r2v", videos: [{ url: VID, seconds: 3 }], params: { duration: 10 } }), 0.065);
+  assert.deepEqual(h3.facts, [{ kind: "seconds", seconds: 10 }], "H3 bills no input seconds and has one resolution, so neither is a fact");
 });
 
 test("stored image endpoints read as GPT Image 2, an image model of OpenAI", () => {
   for (const [id, mode] of [["openai/gpt-image-2/generations", "t2i"], ["openai/gpt-image-2/edits", "r2i"]] as const) {
     const m = describeModel(id);
-    assert.deepEqual([m.name, m.group, m.family, m.mode, m.provider, m.output, m.paramLabel("quality")], ["GPT Image 2", GPT, GPT, mode, "openai", "image", "품질"]);
+    assert.deepEqual([m.name, m.group, m.family, m.mode, m.provider, m.output], ["GPT Image 2", GPT, GPT, mode, "openai", "image"]);
   }
   const seedance = describeModel("bytedance/seedance-2.0/text-to-video");
   assert.deepEqual([seedance.provider, seedance.output], ["higgsfield", "video"]);
   const hailuo = describeModel("minimax/hailuo-2.3/standard/image-to-video");
   assert.deepEqual([hailuo.provider, hailuo.output], ["higgsfield", "video"]);
+});
+
+type Tree = { [key: string]: string | Tree };
+const MESSAGES = LOCALES.map((locale) => ({ locale, tree: JSON.parse(readFileSync(new URL(`../messages/${locale}.json`, import.meta.url), "utf8")) as Tree }));
+
+function message(tree: Tree, key: string): string | undefined {
+  const found = key.split(".").reduce<Tree | string | undefined>((node, part) => (typeof node === "object" ? node[part] : undefined), tree);
+  return typeof found === "string" && found.length > 0 ? found : undefined;
+}
+
+test("every parameter a model takes, and the retired Hailuo's prompt_optimizer, has a label in all three languages", () => {
+  const keys = new Set([...FAMILY_IDS.flatMap((f) => FAMILIES[f].params.map((p) => p.key)), "prompt_optimizer"]);
+  for (const { locale, tree } of MESSAGES) for (const key of keys) assert.ok(message(tree, `params.${key}`), `${locale} params.${key}`);
+});
+
+test("quality, output format and background name every option a model offers, in all three languages", () => {
+  for (const key of ["quality", "output_format", "background"]) {
+    const options = FAMILY_IDS.flatMap((f) => FAMILIES[f].params).flatMap((p) => (p.key === key && p.type === "enum" ? p.options : []));
+    assert.ok(options.length > 0, `a model offers ${key}`);
+    for (const { locale, tree } of MESSAGES) {
+      const [select, ...rest] = parse(message(tree, `paramValues.${key}`) ?? "");
+      assert.ok(select?.type === TYPE.select && select.value === "value" && rest.length === 0, `${locale} paramValues.${key} is one select on value`);
+      for (const option of options) assert.ok(option in select.options, `${locale} paramValues.${key} names ${option}`);
+    }
+  }
+});
+
+test("every model has a blurb, a note, a price basis and an example, and every published price a label, in all three languages", () => {
+  for (const { locale, tree } of MESSAGES) {
+    for (const f of FAMILY_IDS.map((id) => FAMILIES[id])) {
+      for (const key of [`families.${f.key}.blurb`, `families.${f.key}.note`, `prices.basis.${f.key}`, `prices.example.${f.key}`]) assert.ok(message(tree, key), `${locale} ${key}`);
+      for (const p of f.rate.published) assert.ok(message(tree, `prices.preset.${p.preset}`), `${locale} prices.preset.${p.preset}`);
+    }
+  }
+});
+
+test("every mode has a name in all three languages", () => {
+  for (const { locale, tree } of MESSAGES) for (const m of MODES) assert.ok(message(tree, `mode.${m}`), `${locale} mode.${m}`);
 });
