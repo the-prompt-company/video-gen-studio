@@ -38,7 +38,7 @@ export default async function PlaygroundPage({ searchParams }: { searchParams: P
         largeUploadPrefix={user && process.env.BLOB_READ_WRITE_TOKEN ? refPrefix(user.id) : null}
         galleryCount={Number(completed)}
         threads={threads}
-        thread={typeof thread === "string" ? thread : null}
+        initialThread={typeof thread === "string" ? thread : null}
       />
     </NextIntlClientProvider>
   );
