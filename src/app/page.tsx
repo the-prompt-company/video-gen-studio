@@ -28,7 +28,7 @@ export default async function Landing() {
         <span className="mb-6 rounded-full border border-border bg-surface px-3 py-1 text-xs text-muted">
           {t("badge")}
         </span>
-        <h1 className="max-w-3xl text-4xl font-semibold leading-[1.1] tracking-tight sm:text-6xl">
+        <h1 className="max-w-3xl text-balance text-4xl font-semibold leading-[1.1] tracking-tight sm:text-6xl">
           {t("headline")}
           <br />
           <span className="text-accent-soft">
