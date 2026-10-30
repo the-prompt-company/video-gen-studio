@@ -5,7 +5,7 @@ This directory is the maintained source for verifying the user-facing behavior o
 ## Baseline preconditions
 
 - Launch with `vgs launch` from `web/`; the instance is `http://localhost:3100` (or `VGS_PORT`).
-- `.env.local` points at the team Supabase project; there is no disposable database. Mutate only what a recipe restores, what is tagged `[목업]`, or a `vgs-pw-*@example.test`, `vgs-imp-<stamp>-*@example.test`, `vgs-set-*@example.test` or `vgs-team-<stamp>-*@example.test` member (and `vgs-team-<stamp>-*` team) the password, import, settings and teams recipes create and delete.
+- `.env.local` points at the team Supabase project; there is no disposable database. Mutate only what a recipe restores, what is tagged `[목업]`, or a `vgs-pw-*@example.test`, `vgs-imp-<stamp>-*@example.test`, `vgs-set-*@example.test`, `vgs-team-<stamp>-*@example.test` or `vgs-loc-<stamp>-*@example.test` member (and `vgs-team-<stamp>-*` team) the password, import, settings, teams and locale recipes create and delete.
 - Credentials are `VGS_USER`/`VGS_PASS`, defaulting to the seeded admin. Admin-only recipes say so.
 - `vgs doctor` reports `ok: true` with the expected port, pid, and role before any drive.
 - Never drive an instance that `vgs launch` did not start (the developer's `npm run dev` on 3000 is off limits).
@@ -16,6 +16,7 @@ This directory is the maintained source for verifying the user-facing behavior o
 - Start every recipe from a fresh browser context; `ev.login(path)` signs in through the real form.
 - Prefer ARIA roles, accessible names, and labels over CSS selectors or DOM position. The handle table in `SKILL.md` lists the stable ones.
 - Treat every command as literal. Keep quoted Korean names unchanged.
+- Pick the browser language with `VGS_LOCALE` (`ko-KR` by default, `en-US`, `zh-CN`). Translated surfaces (sign-in, password forms, header, modal close, status badges) are found by message key with `await ev.t("<key>", values, page)`, which reads the page's `<html lang>`; surfaces not yet translated keep their Korean names in every language.
 - Run journeys through `vgs run <journey>`; add `VGS_MOBILE=1` for the 390px layout.
 - A paid generation only happens with `VGS_ALLOW_SPEND=1`. Default runs prove the gate and stop.
 - Restore mutated data inside the journey (`finally`). Do not remove proof artifacts during cleanup.
@@ -43,6 +44,7 @@ Keep implementation details out of the map. Name only user paths, stable handles
 ## Features
 
 - [Login](./login.md) covers the form, wrong-password error, success, the signed-in redirect guard, and logout.
+- [Locale](./locale.md) covers the browser language on first visit, the login picker and its cookie, a pick stored at the first sign-in, the 설정 language section, the language after sign-out and on a second browser, the shared-browser rule, and Chinese fonts. Creates and deletes two disposable members.
 - [Password](./password.md) covers the forced change of a temporary password, the change from the login screen, other sessions ending, the shared lockout, email IDs in any case, and the admin reset. Creates and deletes one disposable member.
 - [Import](./import.md) covers creating members from an `.xlsx` (header detection, the per-row preview, the 200-row cap), the nickname column and 임시 비밀번호 badge, the admin nickname edit, and 초기 비밀번호로 되돌리기. Creates and deletes 207 disposable members.
 - [Settings](./settings.md) covers the header identity link, profile photo pick/preview/save/replace/remove with the stored 256×256 square, the photo delete guard, the nickname rule and header update, the read-only ID and team, and the password change that signs other browsers out. Creates and deletes two disposable members and their photos.

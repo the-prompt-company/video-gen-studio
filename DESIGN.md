@@ -228,7 +228,7 @@ components:
 ## Typography
 
 **Display Font:** Bebas Neue (fallback: Arial Narrow, Impact) — `.font-display`, letter-spacing 0.06em
-**Body Font:** Inter (fallback: system-ui, Apple SD Gothic Neo, Noto Sans KR, Malgun Gothic)
+**Body Font:** Inter (fallback: system-ui, Apple SD Gothic Neo, Noto Sans KR, Malgun Gothic). 중국어 화면(`<html lang="zh-CN">`)과 다른 언어 화면 안의 `lang="zh-CN"` 요소는 Inter 다음에 PingFang SC, Microsoft YaHei, Noto Sans SC, Noto Sans CJK SC, Source Han Sans SC를 먼저 두고 한국어 글꼴을 그 뒤에 둔다. 한 줄의 한자가 한 글꼴에서 나오고, 한글 닉네임·프롬프트는 여전히 한국어 글꼴로 보인다.
 **Label/Mono Font:** 없음. 숫자 정렬은 Inter의 `tabular-nums`로 한다.
 
 **Character:** Bebas Neue는 포스터의 숫자처럼 좁고 높다. 라틴과 숫자만 있으므로 워드마크·카운터·경과 시간처럼 한 단어 이하의 라틴·숫자에만 쓰고, 한글이 들어가는 모든 글은 Inter + 시스템 고딕이 맡는다. 굵기는 Bebas 400 하나, Inter는 400·500·600 세 단계.
@@ -246,7 +246,9 @@ components:
 - **Meta** (Inter 400, 11px, 1): 글리프 라벨, 상태 배지(500), 하단 바의 계산식, 썸네일 "제거". 11px 아래로는 내려가지 않는다.
 
 ### Named Rules
-**The Bebas Is A Numeral Rule.** Bebas Neue는 숫자와 라틴 한 단어에만 쓴다. 한글 본문·라벨·버튼에 `.font-display`를 얹지 않는다. Bebas에는 한글이 없어 시스템 글꼴로 떨어진다.
+**The Bebas Is A Numeral Rule.** Bebas Neue는 숫자와 라틴 한 단어에만 쓴다. 한글 본문·라벨·버튼에 `.font-display`를 얹지 않는다. Bebas에는 한글이 없어 시스템 글꼴로 떨어진다. 어느 언어에서도 Bebas는 숫자와 라틴 한 단어만 싣고, 중국어는 싣지 않는다.
+
+**The Chinese Wraps Rule.** `break-keep`(word-break: keep-all)은 한국어 단어를 통째로 지키지만, 띄어쓰기가 없는 중국어 문장은 한 줄로 늘어나 상자를 넘친다. 그래서 `globals.css`가 `:lang(zh-CN) .break-keep`을 `word-break: normal`로 되돌린다. 새 글에 `break-keep`을 써도 중국어는 저절로 줄을 바꾼다.
 
 **The Tabular Rule.** 비용, 길이, 횟수, 개수 등 Inter로 쓴 숫자는 모두 `tabular-nums`. 비용은 `usd()`로 소수 자릿수를 맞춘다(≥100은 정수, ≥1은 2자리, 그 아래는 4자리).
 

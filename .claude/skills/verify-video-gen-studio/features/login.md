@@ -9,6 +9,7 @@ Login lets a team member sign in with a distributed ID and password, tells them 
 - `login-ok` signs in and lands on `/playground` (or `?next=`), header shows the username.
 - `login-guard` a signed-in visit to `/login` redirects to `/playground`; a signed-out visit to a protected page redirects to `/login?next=<path>`. A session ended by a password change counts as signed out: it gets the form, not a redirect.
 - `logout` the header button clears the session and returns to `/login`.
+- `login-language` three language buttons under the form switch the page language in place (see [Locale](./locale.md)).
 
 ## How to get to it (user POV)
 
