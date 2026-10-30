@@ -16,7 +16,6 @@ const INITIAL = "oooooooo";
 const LANG = { "ko-KR": "ko", "en-US": "en", "zh-CN": "zh-CN" };
 const T2V = "bytedance/seedance-2.0/text-to-video";
 
-/** The title rule as the operator wrote it: whitespace collapsed, cut after 30 graphemes with an ellipsis. */
 function titleOf(prompt) {
   const graphemes = Array.from(new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(prompt.replace(/\s+/g, " ").trim()), (s) => s.segment);
   return graphemes.length <= 30 ? graphemes.join("") : `${graphemes.slice(0, 30).join("").trimEnd()}…`;
@@ -60,7 +59,6 @@ export default async function threads({ page, ev, base, env, webDir, local }) {
     }
     const [{ id: aId }] = await sql`select id from users where username = ${memberA}`;
     const [{ id: bId }] = await sql`select id from users where username = ${memberB}`;
-    // A's earlier history: two finished rows inserted the way master's code inserts, naming no thread.
     const earlierRows = await sql`
       insert into generations (user_id, model_id, prompt, params, status, result_url, duration_s, cost_usd, created_at, completed_at, expires_at)
       values
@@ -70,7 +68,6 @@ export default async function threads({ page, ev, base, env, webDir, local }) {
           now() - interval '2 hours', now() - interval '119 minutes', now() + interval '6 days')
       returning id`;
     const earlierIds = earlierRows.map((r) => r.id).reverse();
-    // B's own thread with one row: the thread A, and the admin, must not reach.
     const foreignId = randomUUID();
     await sql`insert into threads (id, user_id, kind, title) values (${foreignId}, ${bId}, 'chat', ${prompts.foreign})`;
     await sql`
@@ -103,7 +100,6 @@ export default async function threads({ page, ev, base, env, webDir, local }) {
         ev.fail(`${why}: the stage should hold ${JSON.stringify(ids)}, got ${JSON.stringify(await stageIds())} at ${a.url()}`);
       }
     };
-    // Desktop shows the list as a column; at 390 px the bar's button opens it in a sheet.
     const openList = async () => {
       if (!mobile) return a.getByRole("navigation", { name: await ta("threads.label") });
       await a.getByRole("button", { name: await ta("threads.picker") }).click();
@@ -132,7 +128,6 @@ export default async function threads({ page, ev, base, env, webDir, local }) {
         await a.waitForTimeout(1000);
       }
     };
-    /** Generate from the drawer as it stands, after typing `prompt` when one is given. */
     const generate = async (prompt) => {
       if (prompt !== undefined) await drawer.getByLabel(await ta("playground.prompt")).fill(prompt);
       const answer = a.waitForResponse((r) => r.request().method() === "POST" && new URL(r.url()).pathname === "/api/generations", { timeout: 30_000 });
@@ -143,13 +138,11 @@ export default async function threads({ page, ev, base, env, webDir, local }) {
       return body;
     };
 
-    // New-thread state: no thread in the URL, the earlier history listed, the stage inviting a first generation.
     if (threadOf() !== null) ev.fail(`the playground opened on thread ${threadOf()} instead of a new thread`);
     await stage.getByText(await ta("threads.fresh.title"), { exact: true }).waitFor({ timeout: 15_000 });
     if (JSON.stringify(await listNames()) !== JSON.stringify([earlierName])) ev.fail(`before any generation the list should hold only ${earlierName}, got ${JSON.stringify(await listNames())}`);
     await review("new-thread", a);
 
-    // The first generation creates the thread, titled by its prompt, and the URL names it.
     const one = await generate(prompts.one);
     await a.waitForURL((u) => new URL(u).searchParams.get("thread") === one.thread.id, { timeout: 15_000 });
     if (one.thread.title !== titleOf(prompts.one)) ev.fail(`thread title "${one.thread.title}", expected "${titleOf(prompts.one)}"`);
@@ -172,8 +165,21 @@ export default async function threads({ page, ev, base, env, webDir, local }) {
     const made = [one.item.id, oneAgain.item.id, two.item.id];
     await waitDone(made);
     ev.note("the three generations completed against the fake");
+    // Thread one finished while thread two or the new thread held the stage; the gallery glyph still counts it.
+    const galleryLabel = await ta("pages.gallery");
+    const counterNow = () => a.evaluate((label) => document.querySelector(`section a[aria-label="${label}"]`)?.nextElementSibling?.textContent?.trim(), galleryLabel);
+    const wantFinished = String(((await ev.api("/api/generations?limit=50", undefined, a)).body?.items ?? []).filter((x) => x.status === "completed").length);
+    try {
+      await a.waitForFunction(
+        ([label, want]) => document.querySelector(`section a[aria-label="${label}"]`)?.nextElementSibling?.textContent?.trim() === want,
+        [galleryLabel, wantFinished],
+        { timeout: 30_000 },
+      );
+    } catch {
+      ev.fail(`without a reload the gallery glyph reads ${await counterNow()}, the member has ${wantFinished} finished results`);
+    }
+    ev.note(`gallery glyph counted results that finished on other threads: ${wantFinished}`);
 
-    // Latest activity first: thread two, thread one, then the earlier history.
     const order = await listNames();
     const want = [two.thread.title, one.thread.title, earlierName];
     if (JSON.stringify(order) !== JSON.stringify(want)) ev.fail(`list order ${JSON.stringify(order)}, expected ${JSON.stringify(want)}`);
@@ -186,14 +192,12 @@ export default async function threads({ page, ev, base, env, webDir, local }) {
       await review("thread-list", a);
     }
 
-    // Switching shows only the picked thread's results.
     await pick(one.thread.title);
     await a.waitForURL((u) => new URL(u).searchParams.get("thread") === one.thread.id);
     await expectStage([oneAgain.item.id, one.item.id], "picking thread one");
     await stage.locator("video").first().waitFor({ timeout: 20_000 });
     await review("thread-feed", a);
 
-    // Reuse fills the drawer from the result on the stage, and the next generation stays in this thread.
     await stage.getByRole("button", { name: await ta("playground.rail.reuse") }).click();
     const reusedPrompt = await drawer.getByLabel(await ta("playground.prompt")).inputValue();
     if (reusedPrompt !== prompts.oneAgain) ev.fail(`reuse filled the prompt with "${reusedPrompt}"`);
@@ -208,11 +212,9 @@ export default async function threads({ page, ev, base, env, webDir, local }) {
     await a.waitForURL((u) => new URL(u).searchParams.get("thread") === two.thread.id);
     await expectStage([two.item.id], "picking thread two");
 
-    // Reload keeps the thread; Back returns to the one before.
     await a.reload({ waitUntil: "networkidle" });
     if (threadOf() !== two.thread.id) ev.fail(`reload left thread two for ${threadOf()}`);
     await expectStage([two.item.id], "thread two after reload");
-    // The rail still follows the stage: the download glyph links the result, the gallery glyph counts every finished one.
     const download = stage.getByRole("link", { name: await ta("generation.download") });
     if (!(await download.getAttribute("href"))) ev.fail("the download glyph has no link for the finished result");
     const finished = ((await ev.api("/api/generations?limit=50", undefined, a)).body?.items ?? []).filter((x) => x.status === "completed").length;
@@ -229,13 +231,18 @@ export default async function threads({ page, ev, base, env, webDir, local }) {
     await expectStage([reused.item.id, oneAgain.item.id, one.item.id], "Back to thread one");
     ev.note("reload kept thread two; Back returned to thread one");
 
-    // The earlier history holds the rows made with no thread.
     await pick(earlierName);
     await a.waitForURL((u) => new URL(u).searchParams.get("thread") === "earlier");
     await expectStage(earlierIds, "the earlier history");
     await review("earlier-history", a);
 
-    // Deleting thread one, on the stage, after a confirmation: the list drops it, the stage becomes a new thread.
+    // The header's link to the playground, from inside a thread, opens a new thread: URL and stage agree.
+    await a.getByRole("navigation", { name: await ta("nav.label") }).getByRole("link", { name: await ta("pages.playground"), exact: true }).click();
+    await a.waitForURL((u) => !new URL(u).searchParams.has("thread"));
+    await stage.getByText(await ta("threads.fresh.title"), { exact: true }).waitFor({ timeout: 15_000 });
+    await expectStage([], "the header's playground link");
+    ev.note("the header's playground link left the earlier history for a new thread");
+
     const statValue = async (key) => {
       const label = a.getByText(await ta(key), { exact: true }).first();
       return ((await label.locator("xpath=following-sibling::div[1]").textContent()) ?? "").trim();
@@ -265,7 +272,6 @@ export default async function threads({ page, ev, base, env, webDir, local }) {
     if (JSON.stringify(afterDelete) !== JSON.stringify([two.thread.title, earlierName])) ev.fail(`after the delete the list reads ${JSON.stringify(afterDelete)}`);
     ev.note(`deleted thread one; the stage is a new thread and the list reads ${afterDelete.join(" | ")}`);
 
-    // Its results stay: the gallery shows both, the feed of all rows keeps them, the dashboard does not move.
     const gone = await ev.api(`/api/generations?thread=${one.thread.id}`, undefined, a);
     if (gone.status !== 404 || gone.body?.error?.code !== "noSuchThread") ev.fail(`the deleted thread's feed answered ${gone.status} ${JSON.stringify(gone.body)}`);
     const all = (await ev.api("/api/generations?limit=50", undefined, a)).body?.items?.map((x) => x.id) ?? [];
@@ -280,7 +286,6 @@ export default async function threads({ page, ev, base, env, webDir, local }) {
     }
     ev.note("both results of the deleted thread are still in the gallery");
 
-    // Another member's thread: the page shows the same not-found state as a deleted one, and every route answers 404.
     for (const [who, p] of [["member", a], ["admin", page]]) {
       await p.goto(`${base}/playground?thread=${foreignId}`, { waitUntil: "networkidle" });
       await p.getByRole("region", { name: await ev.t("playground.stage", undefined, p) }).getByText(await ev.t("threads.missing.title", undefined, p), { exact: true }).waitFor();
