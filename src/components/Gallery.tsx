@@ -122,7 +122,11 @@ function Tile({ g, now, onOpen }: { g: PublicGeneration; now: number; onOpen: ()
           <span className="truncate">
             {modelLine(g.modelId, (m) => tMode(m))} · <span className="tabular-nums">{usd(format, g.costUsd)}</span>
           </span>
-          <span className="shrink-0">{g.username ? `${g.username} · ` : ""}{ago(format, g.createdAt, now)}</span>
+          {/* An ID is an email and "5 minutes ago" is long, so the ID gives way and the model line keeps half the row. */}
+          <span className="flex min-w-0 max-w-1/2 shrink-0">
+            {g.username && <span className="min-w-0 truncate">{g.username}</span>}
+            <span className="shrink-0 whitespace-pre">{g.username ? " · " : ""}{ago(format, g.createdAt, now)}</span>
+          </span>
         </div>
         {keep && <div className={`text-[11px] ${keep.kind === "expired" ? "text-rose-300" : "text-subtle"}`}>{t("retention.line", { value: retentionText(keep) })}</div>}
       </div>
