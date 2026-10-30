@@ -28,13 +28,13 @@
   },
   "language": {
     "label": "Language",
-    "lead": "The language of every screen. It is saved to your account, so it stays the same when you sign in on another device.",
+    "lead": "Sets the language for every screen. Your choice is saved to your account, so it follows you to other devices.",
     "failed": "Couldn't change the language. Try again."
   },
   "landing": {
     "badge": "Higgsfield API · Team-only workspace",
-    "headline": "Turn a few references",
-    "headlineAccent": "into videos, and track the cost",
+    "headline": "Make videos from a few references",
+    "headlineAccent": "and track every cost",
     "lead": "Sign in with the ID you were given and you're set. The admin assigns API keys on the server, and the model, parameters and cost of every generation are recorded for each member.",
     "openPlayground": "Open the Playground",
     "viewGallery": "View the Gallery",
@@ -49,7 +49,7 @@
       },
       "record": {
         "title": "Generate and record",
-        "body": "Follow the progress live. When a generation is done, it is added to the Gallery and your usage automatically."
+        "body": "Follow the progress live. Finished generations are recorded in the Gallery and your usage automatically."
       }
     },
     "retention": "Higgsfield keeps result videos for 7 days. To keep one longer, download it from the Gallery."
