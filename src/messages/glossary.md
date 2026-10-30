@@ -70,6 +70,9 @@ Each language button in the picker shows its own name (`한국어`, `English`, `
 | 미소속 | No team | 未分配团队 | |
 | API 키 | API key | API 密钥 | |
 | 생성 설정 | Generation settings | 生成设置 | The playground's form, called the drawer in code |
+| 스레드 | thread | 会话 | A member's group of generations in the playground, like a chat; private to its owner |
+| 새 스레드 | New thread | 新建会话 | Button; the stage's heading for a thread not created yet reads 새 스레드 / New thread / 新会话 |
+| 이전 기록 | Earlier history | 以往记录 | The thread holding the generations made before threads existed |
 | 생성 방식 | Mode | 生成方式 | Label of the mode list |
 | 첫 프레임 | first frame | 首帧 | |
 | 출력 화면비 | Output aspect ratio | 输出画面比例 | |

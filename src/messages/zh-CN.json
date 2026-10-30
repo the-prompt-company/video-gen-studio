@@ -357,6 +357,31 @@
     "generate": "生成",
     "submitting": "正在提交…"
   },
+  "threads": {
+    "label": "会话",
+    "new": "新建会话",
+    "earlier": "以往记录",
+    "collapse": "收起会话列表",
+    "expand": "展开会话列表",
+    "picker": "会话列表",
+    "fresh": {
+      "title": "新会话",
+      "lead": "在<wide>左侧面板</wide><narrow>下方</narrow>生成后，此会话会出现在列表中，并以第一条提示词命名。"
+    },
+    "missing": {
+      "title": "找不到该会话",
+      "lead": "该会话不存在或已被删除。在此生成将开始一个新会话。"
+    },
+    "delete": {
+      "label": "删除 {title}",
+      "title": "删除会话",
+      "body": "将从会话列表中移除“{title}”。",
+      "keeps": "其中的视频和图片仍保留在作品库中，用量和费用也不会改变。正在进行的生成任务会继续直到完成。",
+      "confirm": "删除",
+      "cancel": "取消",
+      "deleting": "正在删除…"
+    }
+  },
   "mode": {
     "t2v": "文生视频",
     "i2v": "图生视频",

@@ -23,8 +23,10 @@ import { ApiError, appError, caught, parseAppError } from "@/lib/errors";
 import type { PublicGeneration, Unavailable } from "@/lib/generations";
 import { isLive } from "@/lib/generation-status";
 import { refUploadName } from "@/lib/ref-name";
+import type { PublicThread } from "@/lib/threads";
 import { Button, ErrorText, Field, Input, Select, Textarea } from "@/components/ui";
 import { StatusBadge } from "@/components/StatusBadge";
+import { DeleteThreadDialog, ThreadBar, ThreadColumn, useThreadName } from "@/components/Threads";
 import { useErrorText, useParamLabel, type KeyTranslator } from "@/i18n/errors";
 import { usd } from "@/i18n/format";
 
@@ -35,6 +37,8 @@ import { usd } from "@/i18n/format";
 type Offer = { family: FamilyId; rateUsd: number; unavailable: Unavailable | null };
 type Ref = { id: string; url: string; name: string; kind: "image" | "video"; local?: string; w?: number; h?: number; seconds?: number };
 type FeedAnswer = { items?: PublicGeneration[]; now?: number };
+/** The stage's results and the thread they belong to: another thread's results never show, so a switch resets nothing. */
+type Feed = { thread: string | null; items: PublicGeneration[]; galleryTotal: number };
 type Shape = "landscape" | "portrait" | "square";
 type PlaygroundText = ReturnType<typeof useTranslations<"playground">>;
 
@@ -417,13 +421,30 @@ function RefDialog({ modelName, refNote, imageHint, imageAccept, refs, images, v
   );
 }
 
-export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers: Offer[]; largeUploadPrefix: string | null; galleryCount: number }) {
+const NO_ITEMS: PublicGeneration[] = [];
+const newThreadId = () => crypto.randomUUID();
+
+export function Playground({
+  offers,
+  largeUploadPrefix,
+  galleryCount,
+  threads: initialThreads,
+  thread: initialThread,
+}: {
+  offers: Offer[];
+  largeUploadPrefix: string | null;
+  galleryCount: number;
+  threads: PublicThread[];
+  /** The `thread` the page was loaded with, or null for a new thread. */
+  thread: string | null;
+}) {
   const t = useTranslations("playground");
   const tGeneration = useTranslations("generation");
   const tMode = useTranslations("mode");
   const tFamilies = useTranslations("families");
   const tPrices = useTranslations("prices");
   const tPages = useTranslations("pages");
+  const tThreads = useTranslations("threads");
   const format = useFormatter();
   const errorText = useErrorText();
   const modeName = (m: Mode) => tMode(m);
@@ -451,9 +472,41 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
 
   const [refsOpen, setRefsOpen] = useState(false);
   const refsButtonRef = useRef<HTMLButtonElement>(null);
+
+  // The URL names the thread on the stage. Without one, the stage is a new thread under an id chosen here, which its
+  // first generation creates on the server, so a resent first submit lands in the same thread. This state follows the
+  // address bar through our own history writes and popstate rather than useSearchParams, which can keep an older
+  // search when a pick lands while Back's server request is still out.
+  const [threadParam, setThreadParam] = useState(initialThread);
+  useEffect(() => {
+    const follow = () => setThreadParam(new URL(window.location.href).searchParams.get("thread"));
+    window.addEventListener("popstate", follow);
+    return () => window.removeEventListener("popstate", follow);
+  }, []);
+  function showThread(thread: string | null, entry: "push" | "replace") {
+    const url = thread === null ? window.location.pathname : `?thread=${thread}`;
+    if (entry === "push") window.history.pushState(null, "", url);
+    else window.history.replaceState(null, "", url);
+    setThreadParam(thread);
+  }
+  const [threads, setThreads] = useState(initialThreads);
+  const [draftId, setDraftId] = useState(newThreadId);
+  const [deleting, setDeleting] = useState<PublicThread | null>(null);
+  const [listOpen, setListOpen] = useState<boolean | null>(null);
+  const threadName = useThreadName();
+  const selected = threadParam === null ? null : (threads.find((x) => x.id === threadParam) ?? null);
+  const selectedId = selected?.id ?? null;
+  const stageThread = selectedId ?? draftId;
+  const stageThreadRef = useRef(stageThread);
+  useEffect(() => {
+    stageThreadRef.current = stageThread;
+  }, [stageThread]);
+
   // The gallery count shares the list's state so one pure update moves both; React may run an updater twice.
-  const [{ items, galleryTotal }, setFeed] = useState({ items: [] as PublicGeneration[], galleryTotal: galleryCount });
-  const [loaded, setLoaded] = useState(false);
+  const [feed, setFeed] = useState<Feed>({ thread: null, items: NO_ITEMS, galleryTotal: galleryCount });
+  const { galleryTotal } = feed;
+  const items = feed.thread === stageThread ? feed.items : NO_ITEMS;
+  const loaded = feed.thread === stageThread || selectedId === null;
   const [activeId, setActiveId] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   // Server clock minus this browser's clock. Rows carry the database's created_at, and a member's computer clock can
@@ -462,12 +515,15 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
   const feedRef = useRef<HTMLDivElement>(null);
   const pollDelay = useRef(POLL_FIRST_MS);
 
-  function upsert(item: PublicGeneration) {
-    setFeed(({ items, galleryTotal }) => {
+  /** Put a row into `thread`'s feed, by default the one on the stage now. */
+  function upsert(item: PublicGeneration, thread = stageThreadRef.current) {
+    setFeed((feed) => {
+      const items = feed.thread === thread ? feed.items : NO_ITEMS;
       const prev = items.find((x) => x.id === item.id);
       return {
+        thread,
         items: prev ? items.map((x) => (x.id === item.id ? item : x)) : [item, ...items].slice(0, FEED_LIMIT),
-        galleryTotal: galleryTotal + (item.status === "completed" && prev && prev.status !== "completed" ? 1 : 0),
+        galleryTotal: feed.galleryTotal + (item.status === "completed" && prev && prev.status !== "completed" ? 1 : 0),
       };
     });
   }
@@ -479,18 +535,30 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
     setNow(Date.now() + clockOffset.current);
   }
 
+  // Rows this tab put on the stage while the thread loaded (its first generation, or one sent right after a switch)
+  // stay on top of what the server answers. A thread the server no longer shows leaves the list.
   useEffect(() => {
+    if (selectedId === null) return;
+    let current = true;
     const sentAt = Date.now();
-    fetch(`/api/generations?limit=${FEED_LIMIT}`)
-      .then((r) => r.json())
-      .then((b: FeedAnswer) => {
-        syncClock(sentAt, b.now);
-        setFeed((feed) => ({ ...feed, items: b.items ?? [] }));
-        setActiveId(b.items?.[0]?.id ?? null);
+    fetch(`/api/generations?thread=${selectedId}&limit=${FEED_LIMIT}`)
+      .then(async (r) => ({ gone: r.status === 404, body: (await r.json().catch(() => null)) as FeedAnswer | null }))
+      .then(({ gone, body }) => {
+        if (!current) return;
+        if (gone) return setThreads((list) => list.filter((x) => x.id !== selectedId));
+        syncClock(sentAt, body?.now);
+        const answered = body?.items ?? [];
+        setFeed((feed) => {
+          const mine = feed.thread === selectedId ? feed.items.filter((x) => !answered.some((a) => a.id === x.id)) : NO_ITEMS;
+          return { ...feed, thread: selectedId, items: [...mine, ...answered].slice(0, FEED_LIMIT) };
+        });
+        setActiveId((id) => id ?? answered[0]?.id ?? null);
       })
-      .catch(() => {})
-      .finally(() => setLoaded(true));
-  }, []);
+      .catch(() => {});
+    return () => {
+      current = false;
+    };
+  }, [selectedId]);
 
   // A finished row stays in the poll set while the server still expects to copy it, so the stored URL replaces the
   // provider URL without a reload. The window bounds a copy that keeps failing.
@@ -524,7 +592,7 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
       window.clearTimeout(timeout);
       if (stopped) return;
       syncClock(started, body?.now);
-      body?.items?.forEach(upsert);
+      body?.items?.forEach((item) => upsert(item));
       pollDelay.current = Math.min(POLL_MAX_MS, pollDelay.current * 1.5);
       wait(pollDelay.current - (Date.now() - started));
     };
@@ -542,6 +610,11 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
     const t = window.setInterval(() => setNow(Date.now() + clockOffset.current), 1000);
     return () => window.clearInterval(t);
   }, [liveKey]);
+
+  // Another thread on the stage starts at its newest result.
+  useEffect(() => {
+    feedRef.current?.scrollTo({ top: 0 });
+  }, [stageThread]);
 
   // The item occupying the stage is the active one.
   const idsKey = items.map((i) => i.id).join(",");
@@ -614,23 +687,33 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
     if (!plan.ready) return setError(errorText(plan.blocker));
     setSubmitting(true);
     setError(null);
+    const target = stageThread;
+    const opening = selectedId === null;
     try {
       const res = await fetch("/api/generations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(draft),
+        body: JSON.stringify({ ...draft, thread: target }),
       });
-      const body = (await res.json().catch(() => null)) as { item?: PublicGeneration } | null;
+      const body = (await res.json().catch(() => null)) as { item?: PublicGeneration; thread?: PublicThread } | null;
       const item = body?.item;
-      if (item) {
-        pollDelay.current = POLL_FIRST_MS;
-        // The new item must be in the DOM before the scroll, or scroll anchoring keeps the previous item on the stage.
-        flushSync(() => {
-          upsert(item);
-          setActiveId(item.id);
-        });
-        feedRef.current?.scrollTo({ top: 0, behavior: prefersReducedMotion() ? "auto" : "smooth" });
-        feedRef.current?.closest("section")?.scrollIntoView({ block: "start", behavior: prefersReducedMotion() ? "auto" : "smooth" });
+      const thread = body?.thread;
+      if (item && thread) {
+        setThreads((list) => [thread, ...list.filter((x) => x.id !== thread.id)]);
+        if (stageThreadRef.current === target) {
+          pollDelay.current = POLL_FIRST_MS;
+          // The new item must be in the DOM before the scroll, or scroll anchoring keeps the previous item on the stage.
+          flushSync(() => {
+            upsert(item, target);
+            setActiveId(item.id);
+          });
+          if (opening) showThread(thread.id, "replace");
+          feedRef.current?.scrollTo({ top: 0, behavior: prefersReducedMotion() ? "auto" : "smooth" });
+          feedRef.current?.closest("section")?.scrollIntoView({ block: "start", behavior: prefersReducedMotion() ? "auto" : "smooth" });
+        } else if (opening) {
+          // The member moved on while the first submit was out; the next new thread needs an id of its own.
+          setDraftId(newThreadId());
+        }
       }
       // A refused submit still returns its row, whose reason says why it failed.
       if (!res.ok || !item) setError(errorText(item?.reason ?? parseAppError(body, res.status)));
@@ -671,6 +754,27 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
     document.getElementById("prompt")?.focus();
   }
 
+  function pickThread(id: string) {
+    if (id !== threadParam) showThread(id, "push");
+    setError(null);
+  }
+
+  function startThread() {
+    setDraftId(newThreadId());
+    if (threadParam !== null) showThread(null, "push");
+    setError(null);
+  }
+
+  /** After a delete, the list drops the thread; a member who deleted the thread on the stage lands on a new thread. */
+  function threadDeleted(id: string) {
+    setDeleting(null);
+    setThreads((list) => list.filter((x) => x.id !== id));
+    if (id === threadParam) {
+      setDraftId(newThreadId());
+      showThread(null, "replace");
+    }
+  }
+
   if (!offer || !family || !plan) return <div className="p-8 text-center text-sm text-subtle">{t("noModels")}</div>;
 
   const specs = paramsFor(family.id, mode);
@@ -694,21 +798,28 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
     feed.scrollTo({ top: i * (feed.clientHeight - 72), behavior: prefersReducedMotion() ? "auto" : "smooth" });
   }
 
+  const missing = threadParam !== null && selected === null;
+  const byWidth = {
+    wide: (chunks: React.ReactNode) => <span className="hidden lg:inline">{chunks}</span>,
+    narrow: (chunks: React.ReactNode) => <span className="lg:hidden">{chunks}</span>,
+  };
+  const threadList = { threads, currentId: selectedId, onPick: pickThread, onNew: startThread, onDelete: setDeleting };
+
   return (
     <div className="flex flex-1 flex-col lg:h-[calc(100dvh_-_3.5rem)] lg:flex-none lg:flex-row lg:overflow-hidden">
+      <ThreadColumn {...threadList} open={listOpen} onOpen={setListOpen} />
+      <ThreadBar {...threadList} title={selected ? threadName(selected) : tThreads("label")} />
+
       {/* STAGE: one result owns it; the next waits one snap below. */}
-      <section aria-label={t("stage")} className="order-1 flex h-[72dvh] min-h-[480px] min-w-0 shrink-0 flex-col bg-background lg:order-2 lg:h-full lg:flex-1 lg:shrink lg:flex-row">
+      <section aria-label={t("stage")} className="order-1 flex h-[72dvh] min-h-[480px] min-w-0 shrink-0 flex-col bg-background lg:order-3 lg:h-full lg:flex-1 lg:shrink lg:flex-row">
         <div ref={feedRef} className="feed relative h-full min-h-0 flex-1 overflow-y-auto" tabIndex={-1}>
           {items.length === 0 ? (
             <div className="flex h-full w-full flex-col items-center justify-center gap-4 px-6 text-center">
               {loaded ? (
                 <>
-                  <p className="text-xl font-semibold text-foreground sm:text-2xl">{t("empty.title")}</p>
-                  <p className="max-w-sm text-sm text-muted">
-                    {t.rich("empty.lead", {
-                      wide: (chunks) => <span className="hidden lg:inline">{chunks}</span>,
-                      narrow: (chunks) => <span className="lg:hidden">{chunks}</span>,
-                    })}
+                  <p className="text-xl font-semibold text-foreground sm:text-2xl">{missing ? tThreads("missing.title") : threads.length > 0 ? tThreads("fresh.title") : t("empty.title")}</p>
+                  <p className="max-w-sm break-keep text-sm text-muted">
+                    {missing ? tThreads("missing.lead") : threads.length > 0 ? tThreads.rich("fresh.lead", byWidth) : t.rich("empty.lead", byWidth)}
                   </p>
                   <Button variant="outline" size="sm" className="lg:hidden" onClick={() => document.getElementById(DRAWER_ID)?.scrollIntoView({ block: "start", behavior: prefersReducedMotion() ? "auto" : "smooth" })}>
                     {t("empty.toSettings")}
@@ -747,7 +858,7 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
       </section>
 
       {/* DRAWER: the form that puts the next item on the stage. */}
-      <aside id={DRAWER_ID} aria-label={t("drawer")} className="order-2 flex w-full flex-col border-t border-border bg-background lg:order-1 lg:h-full lg:w-[480px] lg:shrink-0 lg:border-r lg:border-t-0">
+      <aside id={DRAWER_ID} aria-label={t("drawer")} className="order-2 flex w-full flex-col border-t border-border bg-background lg:order-2 lg:h-full lg:w-[480px] lg:shrink-0 lg:border-r lg:border-t-0">
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-5">
           <h1 className="text-base font-semibold">{tPages("playground")}</h1>
 
@@ -943,6 +1054,7 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
           }}
         />
       )}
+      {deleting && <DeleteThreadDialog thread={deleting} onClose={() => setDeleting(null)} onDeleted={threadDeleted} />}
     </div>
   );
 }
