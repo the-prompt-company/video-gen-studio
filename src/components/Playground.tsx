@@ -210,6 +210,7 @@ const I = {
 function FeedItem({ g, index, total, active, now, modelName }: { g: PublicGeneration; index: number; total: number; active: boolean; now: number; modelName: string }) {
   const tStatus = useTranslations("status");
   const format = useFormatter();
+  const errorText = useErrorText();
   const live = isLive(g.status);
   const isImage = describeModel(g.modelId).output === "image";
   const started = new Date(g.createdAt).getTime();
@@ -248,7 +249,7 @@ function FeedItem({ g, index, total, active, now, modelName }: { g: PublicGenera
           ) : (
             <>
               <span className="text-4xl font-semibold leading-none tracking-tight text-foreground-2 sm:text-5xl">{label}</span>
-              <p className="max-w-md text-sm text-muted">{g.error ?? (g.status === "canceled" ? "취소된 생성입니다." : isImage ? "결과 이미지가 없습니다." : "결과 영상이 없습니다.")}</p>
+              <p className="max-w-md text-sm text-muted">{errorText(g.reason ?? appError("noResult", { kind: g.status === "canceled" ? "canceled" : isImage ? "image" : "video" }))}</p>
             </>
           )}
         </div>
@@ -590,7 +591,8 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
         feedRef.current?.scrollTo({ top: 0, behavior: prefersReducedMotion() ? "auto" : "smooth" });
         feedRef.current?.closest("section")?.scrollIntoView({ block: "start", behavior: prefersReducedMotion() ? "auto" : "smooth" });
       }
-      if (!res.ok || !item) throw item?.error ? new Error(item.error) : new ApiError(parseAppError(body, res.status));
+      // A refused submit still returns its row, whose reason says why it failed.
+      if (!res.ok || !item) setError(errorText(item?.reason ?? parseAppError(body, res.status)));
     } catch (e) {
       setError(errorText(caught(e)));
     } finally {

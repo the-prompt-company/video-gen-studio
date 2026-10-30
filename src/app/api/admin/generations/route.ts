@@ -1,8 +1,10 @@
 import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
+import { getTranslations } from "next-intl/server";
 import { getDb, schema } from "@/db";
 import { requireAdmin, errorResponse } from "@/lib/auth";
 import { endpointsOf, isFamilyId } from "@/lib/catalog";
 import { publicGeneration } from "@/lib/generations";
+import { reasonText, type ErrorTranslator } from "@/i18n/errors";
 
 /**
  * GET /api/admin/generations?userId=&modelId=&status=&before=&limit=&format=csv
@@ -37,10 +39,12 @@ export async function GET(req: Request) {
     const items = rows.map((r) => publicGeneration(r.g, r.username));
 
     if (q.get("format") === "csv") {
+      // The error column reads in the downloading admin's language, like the logs tab.
+      const t = (await getTranslations("errors")) as unknown as ErrorTranslator;
       const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
       const head = ["created_at", "username", "model", "status", "duration_s", "cost_usd", "prompt", "params", "result_url", "error"];
       const lines = items.map((i) =>
-        [i.createdAt.toISOString(), i.username, i.modelId, i.status, i.durationS, i.costUsd, i.prompt, JSON.stringify(i.params), (i.video ?? i.image)?.url, i.error]
+        [i.createdAt.toISOString(), i.username, i.modelId, i.status, i.durationS, i.costUsd, i.prompt, JSON.stringify(i.params), (i.video ?? i.image)?.url, i.reason && reasonText(t, i.reason)]
           .map(esc)
           .join(","),
       );

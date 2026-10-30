@@ -15,7 +15,7 @@ import {
   type WireBody,
 } from "@/lib/catalog";
 import { decrypt, signToken, verifyToken } from "@/lib/crypto";
-import { appError, type AppError } from "@/lib/errors";
+import { appError, type AppError, type Reason } from "@/lib/errors";
 import { isLive, LIVE_STATUSES, predecessorsOf, RANK, type GenerationStatus } from "@/lib/generation-status";
 import * as hf from "@/lib/higgsfield";
 import * as openai from "@/lib/openai";
@@ -43,7 +43,7 @@ const RESUBMIT_MIN_S = 5;
 const RESUBMIT_MAX_S = 300;
 /** The operator's call: a pending row older than this fails instead of starting a paid generation nobody expects now. */
 const SUBMIT_DEADLINE_MIN = 30;
-const SUBMIT_DEADLINE_ERROR = `Higgsfield가 ${SUBMIT_DEADLINE_MIN}분 동안 요청을 받지 않았습니다`;
+const SUBMIT_DEADLINE = appError("submitDeadline", { minutes: SUBMIT_DEADLINE_MIN });
 /** A row Higgsfield may hold a job for, whose owner has no key, looks for the key again this often until the deadline. */
 const NO_KEY_RETRY_S = 60;
 /** A copy claim holds at least this long, longer than the 300 s maxDuration of every route that copies. */
@@ -53,10 +53,7 @@ const MIRROR_BACKOFF_CAP_S = 6 * 3600;
 const COPY_TIMEOUT_MS = 240_000;
 const MAX_COPY_BYTES = 1024 ** 3;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const NO_KEY = "API 키가 아직 할당되지 않았습니다. 관리자에게 문의하세요";
-const NO_RESEND = "두 번 청구되지 않도록 자동으로 다시 보내지 않습니다. 필요하면 다시 생성하세요";
-const IMAGE_NEVER_SENT = "서버가 OpenAI에 요청을 보내기 전에 멈췄습니다. 요금은 청구되지 않았습니다. 다시 생성하세요";
-const IMAGE_RUNNER_DIED = `OpenAI의 답을 기다리던 서버가 멈췄습니다. 요금이 청구됐을 수 있어 예상 비용을 기록했습니다. ${NO_RESEND}`;
+const NO_KEY = appError("noKey");
 
 /**
  * The image call's clock. POST /api/generations runs the call in after(), inside its maxDuration = 300 s, and
@@ -146,7 +143,7 @@ export async function cancelGeneration(gen: Generation, schedule: Scheduler): Pr
   if (gen.status === "pending") {
     const tried = (await resubmit(gen, schedule, "cancel")).row;
     const row = tried.status === "pending" ? await current(gen) : tried;
-    if (row.status === "pending") throw row.error === NO_KEY ? new HttpError(403, "noKey") : new HttpError(409, "submitting");
+    if (row.status === "pending") throw row.errorCode === "noKey" ? new HttpError(403, "noKey") : new HttpError(409, "submitting");
     return row.status === "queued" ? cancelGeneration(row, schedule) : row;
   }
   if (gen.status !== "queued" || !gen.requestId) throw new HttpError(409, "notCancelable");
@@ -284,13 +281,32 @@ export function publicGeneration(g: Generation, username?: string) {
     image: isImage ? publicImage(g) : null,
     durationS: g.durationS,
     costUsd: Number(g.costUsd),
-    error: g.error,
+    reason: reasonOf(g),
     createdAt: g.createdAt,
     completedAt: g.completedAt,
   };
 }
 
 export type PublicGeneration = ReturnType<typeof publicGeneration>;
+
+/** Why a row failed or waits, as stored: an error code the page translates, or text shown as written. */
+export function reasonOf(g: Pick<Generation, "error" | "errorCode" | "errorParams">): Reason | null {
+  if (g.errorCode) return appError(g.errorCode, g.errorParams ?? undefined);
+  return g.error === null ? null : { text: g.error };
+}
+
+/** The three reason columns, always written together, so a row never keeps an old code beside new text. */
+function reasonColumns(reason: Reason | null) {
+  if (reason === null) return { error: null, errorCode: null, errorParams: null };
+  if ("text" in reason) return { error: reason.text, errorCode: null, errorParams: null };
+  return { error: null, errorCode: reason.code, errorParams: reason.params ?? null };
+}
+
+/** A pending row that waits out a deferral records why, in either form. */
+function hasReason() {
+  const g = schema.generations;
+  return sql`(${g.error} is not null or ${g.errorCode} is not null)`;
+}
 
 /**
  * Stored once the copy landed and storage is still configured. Provider until then, or for good when storage is off
@@ -330,8 +346,8 @@ const POLICY = {
 
 /** next_check_at is a claim clock, compared with the database's now(), so it is only ever written as SQL. */
 type LifecyclePatch = Partial<
-  Pick<typeof schema.generations.$inferInsert, "requestId" | "resultUrl" | "expiresAt" | "completedAt" | "costUsd" | "error" | "storagePath" | "sizeBytes">
-> & { nextCheckAt?: SQL };
+  Pick<typeof schema.generations.$inferInsert, "requestId" | "resultUrl" | "expiresAt" | "completedAt" | "costUsd" | "storagePath" | "sizeBytes">
+> & { nextCheckAt?: SQL; reason?: Reason | null };
 
 /**
  * What a caller learned: a submit answer, a status answer, a user's cancel, the clock, or that the owner has no key to
@@ -351,24 +367,24 @@ type Observation =
  */
 type Step =
   | { kind: "move"; to: GenerationStatus; patch: LifecyclePatch; leaseAsSeen?: true }
-  | { kind: "wait"; afterS: number; reason: string; maybeAccepted: boolean }
+  | { kind: "wait"; afterS: number; reason: Reason; maybeAccepted: boolean }
   | { kind: "none" };
 
 /**
  * The whole transition table. Pure.
  *   terminal + anything                → none
- *   pending + submit accepted(id)      → move queued     { requestId, nextCheckAt now() in the database, error null }
+ *   pending + submit accepted(id)      → move queued     { requestId, nextCheckAt now() in the database, reason null }
  *   pending + submit deferred(s)       → wait clamp(s, 5, 300) with the reason, maybe accepted unless it was a 429
- *   pending + submit rejected(error)   → move failed     { error, completedAt, costUsd 0 }
+ *   pending + submit rejected(reason)  → move failed     { reason, completedAt, costUsd 0 }
  *   pending maybe accepted + cancel    → none, so the caller sends it again and learns whether a job exists
  *   pending maybe accepted + clock     → none, likewise
- *   pending + clock late (DB clock)    → move failed     { error "Higgsfield가 30분 동안…", completedAt, costUsd 0 }
- *   pending maybe accepted + no key    → wait 60 s with the reason "API 키…", until the deadline (DB clock)
- *   pending + no key                   → move failed     { error "API 키…", completedAt, costUsd 0 }
+ *   pending + clock late (DB clock)    → move failed     { reason submitDeadline, completedAt, costUsd 0 }
+ *   pending maybe accepted + no key    → wait 60 s with the reason noKey, until the deadline (DB clock)
+ *   pending + no key                   → move failed     { reason noKey, completedAt, costUsd 0 }
  *   live + running(s)                  → move s, only when s ranks above the row
  *   live + completed(url)              → move completed  { resultUrl, expiresAt, completedAt }, cost_usd keeps the quote
- *   live + ended(s, error)             → move s          { error, expiresAt, completedAt, costUsd 0 }
- *   live + missing                     → move failed     { error "request not found", completedAt, costUsd 0 }
+ *   live + ended(s, reason)            → move s          { reason, expiresAt, completedAt, costUsd 0 }
+ *   live + missing                     → move failed     { reason providerRequestMissing, completedAt, costUsd 0 }
  *   live + cancel                      → move canceled   { completedAt, costUsd 0 }
  */
 function decide(gen: Generation, obs: Observation, ctx: { now: Date }): Step {
@@ -380,30 +396,30 @@ function decide(gen: Generation, obs: Observation, ctx: { now: Date }): Step {
   });
   if ((obs.source === "cancel" || obs.source === "clock") && gen.status === "pending" && gen.maybeAccepted) return { kind: "none" };
   if (obs.source === "cancel") return end("canceled", {});
-  if (obs.source === "clock") return gen.status === "pending" && obs.late ? end("failed", { error: SUBMIT_DEADLINE_ERROR }) : { kind: "none" };
+  if (obs.source === "clock") return gen.status === "pending" && obs.late ? end("failed", { reason: SUBMIT_DEADLINE }) : { kind: "none" };
   if (obs.source === "noKey") {
     if (gen.status !== "pending") return { kind: "none" };
     if (gen.maybeAccepted && !obs.late) return { kind: "wait", afterS: NO_KEY_RETRY_S, reason: NO_KEY, maybeAccepted: true };
-    return end("failed", { error: NO_KEY });
+    return end("failed", { reason: NO_KEY });
   }
   if (obs.source === "submit") {
     const o = obs.outcome;
     if (gen.status !== "pending") return { kind: "none" };
-    if (o.kind === "accepted") return { kind: "move", to: "queued", patch: { requestId: o.requestId, nextCheckAt: sql`now()`, error: null } };
-    if (o.kind === "rejected") return end("failed", { error: o.error });
+    if (o.kind === "accepted") return { kind: "move", to: "queued", patch: { requestId: o.requestId, nextCheckAt: sql`now()`, reason: null } };
+    if (o.kind === "rejected") return end("failed", { reason: o.reason });
     const afterS = Math.min(RESUBMIT_MAX_S, Math.max(RESUBMIT_MIN_S, o.retryAfterS));
-    return { kind: "wait", afterS, reason: o.detail, maybeAccepted: o.cause !== "rate_limited" };
+    return { kind: "wait", afterS, reason: o.reason, maybeAccepted: o.cause !== "rate_limited" };
   }
   const s = obs.state;
   switch (s.kind) {
     case "running":
       return RANK[s.status] > RANK[gen.status] ? { kind: "move", to: s.status, patch: {} } : { kind: "none" };
     case "completed":
-      return end("completed", { resultUrl: s.videoUrl, expiresAt: s.expiresAt, error: null });
+      return end("completed", { resultUrl: s.videoUrl, expiresAt: s.expiresAt, reason: null });
     case "ended":
-      return end(s.status, { error: s.error, expiresAt: s.expiresAt });
+      return end(s.status, { reason: s.reason, expiresAt: s.expiresAt });
     case "missing":
-      return end("failed", { error: "request not found" });
+      return end("failed", { reason: appError("providerRequestMissing") });
   }
 }
 
@@ -422,7 +438,7 @@ async function apply(gen: Generation, step: Step, schedule: Scheduler): Promise<
       .update(g)
       .set({
         nextCheckAt: sql`now() + make_interval(secs => ${step.afterS})`,
-        error: step.reason,
+        ...reasonColumns(step.reason),
         ...(step.maybeAccepted && { maybeAccepted: true }),
       })
       .where(and(eq(g.id, gen.id), eq(g.status, "pending")))
@@ -430,9 +446,10 @@ async function apply(gen: Generation, step: Step, schedule: Scheduler): Promise<
     return waiting ?? current(gen);
   }
   const asSeen = step.leaseAsSeen ? and(eq(g.maybeAccepted, gen.maybeAccepted), lte(g.nextCheckAt, sql`now()`)) : undefined;
+  const { reason, ...patch } = step.patch;
   const [row] = await getDb()
     .update(g)
-    .set({ status: step.to, ...step.patch })
+    .set({ status: step.to, ...patch, ...(reason !== undefined && reasonColumns(reason)) })
     .where(and(eq(g.id, gen.id), inArray(g.status, predecessorsOf(step.to)), asSeen))
     .returning();
   if (!row) return current(gen);
@@ -495,7 +512,7 @@ async function resubmit(gen: Generation, schedule: Scheduler, intent: "send" | "
  */
 async function send(gen: Generation, key: hf.ApiKey, schedule: Scheduler): Promise<Look> {
   const outcome = await submitRow(gen, key);
-  const detail = outcome.kind === "deferred" ? outcome.detail : outcome.kind === "rejected" ? outcome.error : undefined;
+  const detail = outcome.kind === "deferred" || outcome.kind === "rejected" ? outcome.reason : undefined;
   console.info(JSON.stringify({ evt: "generation_submit", id: gen.id, outcome: outcome.kind, detail }));
   const row = await apply(gen, decide(gen, { source: "submit", outcome }, { now: new Date() }), schedule);
   if (outcome.kind === "accepted" && row.requestId !== outcome.requestId) {
@@ -506,7 +523,7 @@ async function send(gen: Generation, key: hf.ApiKey, schedule: Scheduler): Promi
 
 async function submitRow(gen: Generation, key: hf.ApiKey): Promise<hf.SubmitOutcome> {
   const request = resendRequest(gen);
-  if (!request) return { kind: "rejected", error: `보낼 요청 본문이 없는 모델입니다: ${gen.modelId}` };
+  if (!request) return { kind: "rejected", reason: appError("noRequestBody", { model: gen.modelId }) };
   return hf.submit(key, request.endpoint, request.body, { idempotencyKey: gen.id, webhookUrl: hookUrl(gen.id) });
 }
 
@@ -551,7 +568,7 @@ function submitDue() {
  */
 function notSubmitting() {
   const g = schema.generations;
-  return and(eq(g.status, "pending"), or(lte(g.nextCheckAt, sql`now()`), isNotNull(g.error)));
+  return and(eq(g.status, "pending"), or(lte(g.nextCheckAt, sql`now()`), hasReason()));
 }
 
 /** A checkable row nobody claimed a check for within the last FORCED_CHECK_FLOOR_S. */
@@ -637,8 +654,8 @@ async function claimSubmit(id: string, rule: SQL | undefined): Promise<{ row: Ge
     .update(g)
     .set({
       nextCheckAt: sql`now() + make_interval(secs => ${SUBMIT_LEASE_S})`,
-      error: null,
-      maybeAccepted: sql`${g.maybeAccepted} or ${g.error} is null`,
+      ...reasonColumns(null),
+      maybeAccepted: sql`${g.maybeAccepted} or not ${hasReason()}`,
     })
     .where(and(eq(g.id, id), rule))
     .returning({ ...getTableColumns(g), late: sql<boolean>`${g.createdAt} <= now() - make_interval(mins => ${SUBMIT_DEADLINE_MIN})` });
@@ -741,7 +758,7 @@ async function runImage(row: Generation, plan: ReadyPlan, key: openai.OpenAiKey,
         ? await keepImage(claimed.id, outcome.bytes, format, priced(outcome.usage), deadline)
         : { source: "call", outcome, actualUsd: outcome.kind === "unknown" ? priced(outcome.usage) : null };
     const usage = outcome.kind === "image" || outcome.kind === "unknown" ? outcome.usage : null;
-    const detail = outcome.kind === "refused" || outcome.kind === "unknown" ? outcome.detail : outcome.kind === "rejected" ? outcome.error : undefined;
+    const detail = outcome.kind === "refused" ? outcome.detail : outcome.kind === "unknown" ? outcome.why : outcome.kind === "rejected" ? outcome.reason : undefined;
     console.info(JSON.stringify({ evt: "image_call", id: claimed.id, op, outcome: outcome.kind, observed: obs.source, attempts, ms: Date.now() - started, usage, detail }));
     await apply(claimed, decideImage(claimed, obs, { now: new Date() }), () => {});
   } catch (e) {
@@ -787,7 +804,7 @@ async function callWithinBudget(
 /** At most two puts inside the budget. The key is fixed by the row, so a repeat writes the same bytes to the same key. */
 async function keepImage(id: string, bytes: Uint8Array, format: ImageFormat, actualUsd: number | null, deadline: number): Promise<ImageObservation> {
   const key = storage.imageKey(id, format);
-  let error = "시간이 모자랐습니다";
+  let detail: string | null = null;
   for (let attempt = 0; attempt < 2; attempt++) {
     const ms = Math.min(IMAGE_TIMING.storeAttemptMs, deadline - Date.now());
     if (ms <= 0) break;
@@ -795,31 +812,32 @@ async function keepImage(id: string, bytes: Uint8Array, format: ImageFormat, act
       await storage.putImage(key, bytes, format, { abortSignal: AbortSignal.timeout(ms) });
       return { source: "kept", key, bytes: bytes.byteLength, actualUsd };
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      detail = e instanceof Error ? e.message : String(e);
     }
   }
-  return { source: "lost", error: `이미지를 받았지만 보관하지 못했습니다(${error}). 요금은 청구됐습니다. 다시 생성하세요`, actualUsd };
+  const reason = detail === null ? appError("imageNotKept", { cause: "noTime" }) : appError("imageNotKept", { cause: "store", detail });
+  return { source: "lost", reason, actualUsd };
 }
 
 /** What a caller learned about an image row. `actualUsd` is OpenAI's usage priced at the plan's rate, when it reported usage. */
 type ImageObservation =
   | { source: "call"; outcome: Exclude<openai.ImageOutcome, { kind: "image" }>; actualUsd: number | null }
   | { source: "kept"; key: storage.ObjectKey; bytes: number; actualUsd: number | null }
-  | { source: "lost"; error: string; actualUsd: number | null }
+  | { source: "lost"; reason: AppError; actualUsd: number | null }
   | { source: "lease"; kept: { key: storage.ObjectKey; bytes: number } | null };
 
 /**
  * The image transition table. Pure. A patch without costUsd keeps the estimate written at insert.
  *   terminal + anything                → none
- *   call refused (no budget left)      → failed     { error, costUsd 0 }                  turned away before any work
- *   call rejected moderation           → nsfw       { error, costUsd 0 }
- *   call rejected key|quota|request    → failed     { error, costUsd 0 }
- *   call unknown                       → failed     { error "…청구됐을 수 있어…", costUsd usage ?? estimate }
+ *   call refused (no budget left)      → failed     { imageRefused, costUsd 0 }           turned away before any work
+ *   call rejected moderation           → nsfw       { reason, costUsd 0 }
+ *   call rejected key|quota|request    → failed     { reason, costUsd 0 }
+ *   call unknown                       → failed     { imageUnanswered, costUsd usage ?? estimate }   maybe billed
  *   kept                               → completed  { storagePath, sizeBytes, costUsd usage ?? estimate }
- *   lost (stored nowhere)              → failed     { error, costUsd usage ?? estimate }    billed, bytes gone
- *   lease, unsent                      → failed     { error "…청구되지 않았습니다…", costUsd 0 }   as seen
+ *   lost (stored nowhere)              → failed     { imageNotKept, costUsd usage ?? estimate }   billed, bytes gone
+ *   lease, unsent                      → failed     { imageNeverSent, costUsd 0 }          as seen
  *   lease, sent, image in Blob         → completed  { storagePath, sizeBytes }, estimate   as seen
- *   lease, sent, nothing in Blob       → failed     { error "…청구됐을 수 있어…" }, estimate  as seen
+ *   lease, sent, nothing in Blob       → failed     { imageRunnerDied }, estimate          as seen
  * Every end sets completedAt.
  */
 function decideImage(gen: Generation, obs: ImageObservation, ctx: { now: Date }): Step {
@@ -828,21 +846,21 @@ function decideImage(gen: Generation, obs: ImageObservation, ctx: { now: Date })
   const billed = (usd: number | null) => (usd === null ? {} : { costUsd: usd.toFixed(4) });
   switch (obs.source) {
     case "kept":
-      return end("completed", { storagePath: obs.key, sizeBytes: obs.bytes, error: null, ...billed(obs.actualUsd) });
+      return end("completed", { storagePath: obs.key, sizeBytes: obs.bytes, reason: null, ...billed(obs.actualUsd) });
     case "lost":
-      return end("failed", { error: obs.error, ...billed(obs.actualUsd) });
+      return end("failed", { reason: obs.reason, ...billed(obs.actualUsd) });
     case "call": {
       const o = obs.outcome;
-      if (o.kind === "refused") return end("failed", { error: `OpenAI가 지금은 요청을 받지 않았습니다(${o.detail}). 요금은 청구되지 않았습니다. 잠시 후 다시 생성하세요`, costUsd: "0" });
-      if (o.kind === "rejected") return end(o.cause === "moderation" ? "nsfw" : "failed", { error: o.error, costUsd: "0" });
-      return end("failed", { error: `OpenAI 응답을 받지 못했습니다(${o.detail}). 요금이 청구됐을 수 있어 비용을 기록했습니다. ${NO_RESEND}`, ...billed(obs.actualUsd) });
+      if (o.kind === "refused") return end("failed", { reason: appError("imageRefused", { detail: o.detail }), costUsd: "0" });
+      if (o.kind === "rejected") return end(o.cause === "moderation" ? "nsfw" : "failed", { reason: o.reason, costUsd: "0" });
+      return end("failed", { reason: appError("imageUnanswered", o.why), ...billed(obs.actualUsd) });
     }
     case "lease": {
       const step = !gen.maybeAccepted
-        ? end("failed", { error: IMAGE_NEVER_SENT, costUsd: "0" })
+        ? end("failed", { reason: appError("imageNeverSent"), costUsd: "0" })
         : obs.kept
-          ? end("completed", { storagePath: obs.kept.key, sizeBytes: obs.kept.bytes, error: null })
-          : end("failed", { error: IMAGE_RUNNER_DIED });
+          ? end("completed", { storagePath: obs.kept.key, sizeBytes: obs.kept.bytes, reason: null })
+          : end("failed", { reason: appError("imageRunnerDied") });
       return step.kind === "move" ? { ...step, leaseAsSeen: true } : step;
     }
   }

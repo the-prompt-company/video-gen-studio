@@ -165,6 +165,21 @@
     "importTooMany": "一次最多可创建 {max, plural, other {# 名成员}}，但此文件有 {count, plural, other {# 名}}。请按每份 {max, plural, other {# 名}}拆分文件后分别上传。",
     "emailBlank": "邮箱为空。",
     "emailInvalid": "邮箱格式不正确（例如 name@company.com）。",
-    "emailTooLong": "邮箱超过 {max, plural, other {# 个字符}}。"
+    "emailTooLong": "邮箱超过 {max, plural, other {# 个字符}}。",
+    "submitDeadline": "Higgsfield 在 {minutes, plural, other {# 分钟}}内未接收该请求。",
+    "providerRequestMissing": "Higgsfield 找不到该请求。",
+    "noRequestBody": "该模型没有可发送的请求内容：{model}",
+    "providerUnreachable": "无法连接 Higgsfield：{detail}",
+    "providerNoRequestId": "Higgsfield 的响应中没有 request_id。",
+    "providerNoResultUrl": "生成已完成，但没有结果 URL。",
+    "imageRefused": "OpenAI 目前不接受请求（{detail}）。未产生费用。请稍后重新生成。",
+    "imageUnanswered": "未收到 OpenAI 的可用响应（{cause, select, timeout {{seconds, plural, other {# 秒}}内无响应} disconnected {连接中断：{detail}} noImage {响应中没有图片} wrongFormat {图片不是所请求的 {format} 格式} other {{detail}}}）。可能已产生费用，因此已记录费用。为避免重复计费，系统不会自动重新发送。如有需要，请重新生成。",
+    "imageNotKept": "已收到图片，但未能保存（{cause, select, noTime {时间不足} other {{detail}}}）。已产生费用。请重新生成。",
+    "imageNeverSent": "服务器在向 OpenAI 发送请求前已停止。未产生费用。请重新生成。",
+    "imageRunnerDied": "等待 OpenAI 响应的服务器已停止。可能已产生费用，因此已记录预计费用。为避免重复计费，系统不会自动重新发送。如有需要，请重新生成。",
+    "openaiQuota": "OpenAI 的用量额度或余额已用完。请联系管理员。",
+    "openaiModeration": "因触发 OpenAI 安全策略，未生成图片。请尝试更换提示词或参考素材。",
+    "openaiKeyRejected": "OpenAI {status}：服务器的 OpenAI 密钥或所在地区被拒绝。请联系管理员。",
+    "noResult": "{kind, select, canceled {该生成任务已取消。} image {没有结果图片。} other {没有结果视频。}}"
   }
 }

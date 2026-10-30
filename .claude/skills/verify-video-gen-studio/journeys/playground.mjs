@@ -313,7 +313,7 @@ async function everyMode({ page, ev, drawer, model, seedance, h3, generate, curr
   }
   const ended = (await ev.api(`/api/generations?ids=${submitted.join(",")}`)).body?.items ?? [];
   if (live.length > 0) ev.fail(`rows still live after 60 s: ${live.join(", ")}`);
-  if (ended.some((r) => r.status !== "completed")) ev.fail(`not every row completed: ${ended.map((r) => `${r.modelId} ${r.status} ${r.error ?? ""}`).join("; ")}`);
+  if (ended.some((r) => r.status !== "completed")) ev.fail(`not every row completed: ${ended.map((r) => `${r.modelId} ${r.status} ${JSON.stringify(r.reason ?? "")}`).join("; ")}`);
   ev.note(`pg-generate-modes: all ${ended.length} rows completed; costs kept: ${ended.map((r) => r.costUsd).join(", ")}`);
   return submitted;
 }

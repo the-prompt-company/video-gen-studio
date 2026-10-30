@@ -131,10 +131,13 @@ const MODEL = "minimax/h3/reference-to-video";
 const CHECK_GAP_MS = 15_000;
 const MIRROR_LEASE_S = 360;
 const SUBMIT_LEASE_S = 30;
-const DEADLINE_ERROR = "Higgsfield가 30분 동안 요청을 받지 않았습니다";
 const RATE_LIMITED = "Higgsfield 429: Too many requests";
-const NO_KEY_ERROR = "API 키가 아직 할당되지 않았습니다. 관리자에게 문의하세요";
 const REF = "https://example.com/gp3-ref.jpg";
+
+/** The row stores this reason as an error code, with no text beside it. */
+const reasonIs = (row: Generation, code: string) => row.errorCode === code && row.error === null;
+/** What the page would show for the row's reason, for check details. */
+const reasonShown = (row: Generation) => (row.errorCode ? JSON.stringify({ code: row.errorCode, params: row.errorParams }) : (row.error ?? ""));
 const COPY_TIMEOUT_MS = 240_000;
 /** 50% above the worst copy peak measured (256 MB), which V8's collection timing sets, not the result's size. */
 const COPY_PEAK_BOUND_MB = 384;
@@ -1064,7 +1067,7 @@ async function lostAcceptResent(owner: Owner, admin: User, upstream: string, pro
   await sleep(wait * 1000 + 300);
   const resent = await owner.settle(await readRow(row.id), rec.schedule);
   check(
-    resent.status !== "pending" && resent.requestId === seen.requestId && resent.error === null,
+    resent.status !== "pending" && resent.requestId === seen.requestId && resent.error === null && resent.errorCode === null,
     "the poll after the wait sends the same key and body and gets the original request_id back",
     `${resent.status} ${resent.requestId}`,
   );
@@ -1163,16 +1166,16 @@ async function submitDeadline(owner: Owner, admin: User, upstream: string, proxy
   const rec = recorder();
   const failed = await owner.settle(due, rec.schedule);
   check(
-    failed.status === "failed" && failed.error === DEADLINE_ERROR && failed.completedAt !== null && Number(failed.costUsd) === 0,
-    "a pending row past 30 minutes that Higgsfield only ever refused (429) fails with the reason instead of being sent",
-    failed.error ?? "",
+    failed.status === "failed" && reasonIs(failed, "submitDeadline") && failed.errorParams?.minutes === 30 && failed.completedAt !== null && Number(failed.costUsd) === 0,
+    "a pending row past 30 minutes that Higgsfield only ever refused (429) fails with the code submitDeadline instead of being sent",
+    reasonShown(failed),
   );
   const held = await owner.settle(leased, rec.schedule);
   check(held.status === "pending", "one whose submit lease is held is not failed under its submitter");
   await assertSweepScope();
   const report = await owner.sweep(sweepDeadline());
   const [s, m] = await Promise.all([readRow(swept.id), readRow(mock.id)]);
-  check(s.status === "failed" && s.error === DEADLINE_ERROR && report.moved >= 1, "the sweep fails a past-deadline pending row too", JSON.stringify(report));
+  check(s.status === "failed" && reasonIs(s, "submitDeadline") && report.moved >= 1, "the sweep fails a past-deadline pending row too", JSON.stringify(report));
   check(m.status === "in_progress" && m.nextCheckAt.getTime() === mock.nextCheckAt.getTime(), "and leaves the mock-shaped row (no request_id, not pending) untouched");
   check(proxy.requests() === before, "none of them made a Higgsfield call", `${proxy.requests() - before} requests`);
   const requestId = await acceptedAtFake(upstream, leased);
@@ -1231,9 +1234,9 @@ async function deadlineOnDatabaseClock(owner: Owner, admin: User, upstream: stri
   );
   const behind = await withAppClock(-skew, () => owner.settle(old, rec.schedule));
   check(
-    behind.status === "failed" && behind.error === DEADLINE_ERROR,
+    behind.status === "failed" && reasonIs(behind, "submitDeadline"),
     "with the app clock 31 minutes behind, a row the database made 31 minutes ago still fails",
-    `${behind.status}: ${behind.error}`,
+    `${behind.status}: ${reasonShown(behind)}`,
   );
   await Promise.all(rec.tasks);
 }
@@ -1427,12 +1430,12 @@ async function noKeyWaitsWhileMaybeAccepted(owner: Owner, upstream: string, prox
     });
     const before = proxy.requests();
     const failed = await owner.settle(refusedOnly, rec.schedule);
-    check(failed.status === "failed" && failed.error === NO_KEY_ERROR, "a row Higgsfield only refused (429) fails at once when its owner has no key", `${failed.status}: ${failed.error}`);
+    check(failed.status === "failed" && reasonIs(failed, "noKey"), "a row Higgsfield only refused (429) fails at once, with the code noKey, when its owner has no key", `${failed.status}: ${reasonShown(failed)}`);
     const expired = await owner.settle(late, rec.schedule);
     check(
-      expired.status === "failed" && expired.error === NO_KEY_ERROR,
+      expired.status === "failed" && reasonIs(expired, "noKey"),
       "a row Higgsfield may have accepted, whose owner has no key, still fails once the 30-minute deadline has passed",
-      `${expired.status}: ${expired.error}`,
+      `${expired.status}: ${reasonShown(expired)}`,
     );
 
     const maybe = await insertRow(user, "키 없는 사용자의 죽은 제출자 행", { status: "pending", nextCheckAt: sql`now()` });
@@ -1440,9 +1443,9 @@ async function noKeyWaitsWhileMaybeAccepted(owner: Owner, upstream: string, prox
     const waiting = await owner.settle(maybe, rec.schedule);
     const wait = await secondsUntilNextCheck(maybe.id);
     check(
-      waiting.status === "pending" && waiting.maybeAccepted && waiting.error === NO_KEY_ERROR && wait > 50 && wait <= 60,
-      "a row Higgsfield may have accepted stays pending without its owner's key, records why, and waits a minute instead of failing",
-      `${waiting.status}: ${waiting.error}; next look in ${wait.toFixed(1)} s`,
+      waiting.status === "pending" && waiting.maybeAccepted && reasonIs(waiting, "noKey") && wait > 50 && wait <= 60,
+      "a row Higgsfield may have accepted stays pending without its owner's key, records why as noKey, and waits a minute instead of failing",
+      `${waiting.status}: ${reasonShown(waiting)}; next look in ${wait.toFixed(1)} s`,
     );
     const refused = await cancelOutcome(owner, waiting, rec.schedule);
     const held = await readRow(maybe.id);
@@ -1497,7 +1500,6 @@ async function submitChecks(owner: Owner, admin: User, upstream: string, proxy: 
 const GPT: FamilyId = "openai/gpt-image-2";
 const FAKE_OPENAI_KEY = "sk-lifecycle-fake-0000";
 const OPENAI_DEFAULTS = { delayMs: 0, refuseFirstN: 0, overloadedFirstN: 0, retryAfterS: 1, fail: null, usage: true };
-const MAYBE_BILLED = /청구됐을 수 있어/;
 
 async function setOpenAi(upstream: string, knobs: Record<string, unknown>): Promise<void> {
   await fetch(`${upstream}/_config`, { method: "POST", body: JSON.stringify({ openai: { ...OPENAI_DEFAULTS, ...knobs } }) });
@@ -1566,7 +1568,7 @@ async function imageCompletes(owner: Owner, admin: User, upstream: string) {
     final.requestBody ?? "",
   );
   check(
-    final.status === "completed" && final.storagePath === `images/${row.id}.png` && final.maybeAccepted && final.error === null,
+    final.status === "completed" && final.storagePath === `images/${row.id}.png` && final.maybeAccepted && final.error === null && final.errorCode === null,
     "the row completed with its image stored at images/<id>.png",
     `${final.status} ${final.storagePath}`,
   );
@@ -1635,15 +1637,15 @@ async function imageRefusedThenAnswered(owner: Owner, admin: User, upstream: str
 }
 
 async function imageRejected(owner: Owner, admin: User, upstream: string) {
-  for (const [fail, status] of [["moderation", "nsfw"], ["badkey", "failed"], ["quota", "failed"]] as const) {
+  for (const [fail, status, code] of [["moderation", "nsfw", "openaiModeration"], ["badkey", "failed", "openaiKeyRejected"], ["quota", "failed", "openaiQuota"]] as const) {
     await setOpenAi(upstream, { fail });
     try {
       const { plan, final } = await submitImage(owner, admin, `거절 ${fail}`);
       const sent = await imageRequests(upstream, plan.prompt);
       check(
-        final.status === status && final.costUsd === "0.0000" && sent.length === 1 && !/sk-/.test(final.error ?? ""),
-        `OpenAI's ${fail} refusal ends the row ${status} at cost 0 after one request, with no key fragment in the error`,
-        final.error ?? "",
+        final.status === status && reasonIs(final, code) && final.costUsd === "0.0000" && sent.length === 1 && !/sk-/.test(reasonShown(final)),
+        `OpenAI's ${fail} refusal ends the row ${status} with the code ${code} at cost 0 after one request, with no key fragment in the reason`,
+        reasonShown(final),
       );
     } finally {
       await setOpenAi(upstream, {});
@@ -1672,9 +1674,9 @@ async function imageCallNeverAnswers(owner: Owner, admin: User, upstream: string
       await Promise.all(rec.tasks);
       const ended = await readRow(row.id);
       check(
-        ended.status === "failed" && MAYBE_BILLED.test(ended.error ?? "") && ended.costUsd === plan.costUsd.toFixed(4),
-        `a call that ends without an answer (${fail}) fails the row as maybe billed and keeps the estimate`,
-        ended.error ?? "",
+        ended.status === "failed" && reasonIs(ended, "imageUnanswered") && ended.errorParams?.cause === (fail === "hangup" ? "disconnected" : "reply") && ended.costUsd === plan.costUsd.toFixed(4),
+        `a call that ends without an answer (${fail}) fails the row as imageUnanswered (maybe billed) and keeps the estimate`,
+        reasonShown(ended),
       );
       await owner.settle(ended, rec.schedule);
       await assertSweepScope();
@@ -1696,17 +1698,17 @@ async function imageLeases(owner: Owner, admin: User, upstream: string) {
   const unsent = await insertImageRow(admin, "보내기 전 멈춘 서버", false);
   const failedUnsent = await owner.settle(unsent.row, rec.schedule);
   check(
-    failedUnsent.status === "failed" && failedUnsent.costUsd === "0.0000" && /청구되지 않았습니다/.test(failedUnsent.error ?? ""),
-    "an unsent row past its grace fails at cost 0: provably nothing was sent",
-    failedUnsent.error ?? "",
+    failedUnsent.status === "failed" && failedUnsent.costUsd === "0.0000" && reasonIs(failedUnsent, "imageNeverSent"),
+    "an unsent row past its grace fails at cost 0 as imageNeverSent: provably nothing was sent",
+    reasonShown(failedUnsent),
   );
 
   const died = await insertImageRow(admin, "보낸 뒤 멈춘 서버", true);
   const failedDied = await owner.settle(died.row, rec.schedule);
   check(
-    failedDied.status === "failed" && failedDied.costUsd === died.plan.costUsd.toFixed(4) && MAYBE_BILLED.test(failedDied.error ?? ""),
-    "a sent row past its lease with nothing in Blob fails as maybe billed and keeps the estimate",
-    failedDied.error ?? "",
+    failedDied.status === "failed" && failedDied.costUsd === died.plan.costUsd.toFixed(4) && reasonIs(failedDied, "imageRunnerDied"),
+    "a sent row past its lease with nothing in Blob fails as imageRunnerDied (maybe billed) and keeps the estimate",
+    reasonShown(failedDied),
   );
 
   const stored = await insertImageRow(admin, "저장 뒤 멈춘 서버", true, "webp");
@@ -1723,7 +1725,7 @@ async function imageLeases(owner: Owner, admin: User, upstream: string) {
   await assertSweepScope();
   const report = await owner.sweep(sweepDeadline());
   const sweptRow = await readRow(swept.row.id);
-  check(sweptRow.status === "failed" && MAYBE_BILLED.test(sweptRow.error ?? "") && report.moved >= 1, "the sweep ends an image row whose lease ran out, with no OpenAI request", JSON.stringify(report));
+  check(sweptRow.status === "failed" && reasonIs(sweptRow, "imageRunnerDied") && report.moved >= 1, "the sweep ends an image row whose lease ran out, with no OpenAI request", JSON.stringify(report));
   const prompts = new Set([unsent, died, stored, swept].map((r) => r.plan.prompt));
   const reqs = (await stats(upstream)).openai.requests.filter((r) => prompts.has(String(r.body.prompt)));
   check(reqs.length === 0, "finalizing four abandoned rows made no OpenAI request", `${reqs.length}`);

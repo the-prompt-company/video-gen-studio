@@ -141,7 +141,7 @@ export function LogsPanel() {
               <dt>이미지</dt><dd className="break-all text-foreground-2">{open.imageRefs.join(", ") || "—"}</dd>
               <dt>영상</dt><dd className="break-all text-foreground-2">{open.videoRefs.join(", ") || "—"}</dd>
               <dt>비용</dt><dd className="text-foreground-2">{usd(format, open.costUsd)} ({open.durationS}s)</dd>
-              {open.error && (<><dt>오류</dt><dd className="text-rose-300">{open.error}</dd></>)}
+              {open.reason && (<><dt>오류</dt><dd className="text-rose-300">{errorText(open.reason)}</dd></>)}
             </dl>
             <div className="text-right"><Button variant="outline" size="sm" onClick={() => setOpen(null)}>닫기</Button></div>
           </div>

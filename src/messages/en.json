@@ -165,6 +165,21 @@
     "importTooMany": "You can create up to {max, plural, one {# member} other {# members}} at a time, but this file has {count, plural, one {# member} other {# members}}. Split it into files of {max, plural, one {# member} other {# members}} and upload each.",
     "emailBlank": "The email is empty.",
     "emailInvalid": "That isn't an email address (for example, name@company.com).",
-    "emailTooLong": "The email is longer than {max, plural, one {# character} other {# characters}}."
+    "emailTooLong": "The email is longer than {max, plural, one {# character} other {# characters}}.",
+    "submitDeadline": "Higgsfield didn't accept the request within {minutes, plural, one {# minute} other {# minutes}}.",
+    "providerRequestMissing": "Higgsfield can't find this request.",
+    "noRequestBody": "There's no request body to send for this model: {model}",
+    "providerUnreachable": "Can't reach Higgsfield: {detail}",
+    "providerNoRequestId": "Higgsfield's answer has no request_id.",
+    "providerNoResultUrl": "Higgsfield finished but sent no result URL.",
+    "imageRefused": "OpenAI isn't taking requests right now ({detail}). You weren't charged. Generate again in a moment.",
+    "imageUnanswered": "Got no usable answer from OpenAI ({cause, select, timeout {no reply within {seconds, plural, one {# second} other {# seconds}}} disconnected {the connection dropped: {detail}} noImage {the answer had no image} wrongFormat {the image wasn't the requested {format}} other {{detail}}}). You may have been charged, so the cost was recorded. To avoid a double charge, it won't be sent again automatically. Generate again if you need to.",
+    "imageNotKept": "The image arrived but couldn't be stored ({cause, select, noTime {ran out of time} other {{detail}}}). You were charged. Generate it again.",
+    "imageNeverSent": "The server stopped before sending the request to OpenAI. You weren't charged. Generate it again.",
+    "imageRunnerDied": "The server waiting for OpenAI's answer stopped. You may have been charged, so the estimated cost was recorded. To avoid a double charge, it won't be sent again automatically. Generate again if you need to.",
+    "openaiQuota": "The OpenAI usage limit or credits have run out. Contact an admin.",
+    "openaiModeration": "OpenAI's safety policy blocked this image. Try a different prompt or references.",
+    "openaiKeyRejected": "OpenAI {status}: the server's OpenAI key or region was rejected. Contact an admin.",
+    "noResult": "{kind, select, canceled {This generation was canceled.} image {There's no result image.} other {There's no result video.}}"
   }
 }

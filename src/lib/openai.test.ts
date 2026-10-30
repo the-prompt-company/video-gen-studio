@@ -43,6 +43,9 @@ test("a 2xx without a usable image may have been billed: unknown, keeping any us
   }
   const wrong = outcomeOf(200, h(), ok(JPEG), "png");
   assert.deepEqual(wrong.kind === "unknown" && wrong.usage, { inputTextTokens: 56, inputImageTokens: 4354, outputTokens: 1756 });
+  assert.deepEqual(wrong.kind === "unknown" && wrong.why, { cause: "wrongFormat", format: "png" });
+  const empty = outcomeOf(200, h(), JSON.stringify({ created: 1, data: [] }), "png");
+  assert.deepEqual(empty.kind === "unknown" && empty.why, { cause: "noImage" });
 });
 
 test("a rate-limit 429 and an overloaded 503 were refused before any work: refused, with Retry-After", () => {
@@ -55,21 +58,24 @@ test("a rate-limit 429 and an overloaded 503 were refused before any work: refus
 
 test("quota, moderation, a bad key and a bad request are rejected and never resent", () => {
   const quota = outcomeOf(429, h(), error("insufficient_quota", "insufficient_quota"), "png");
-  assert.deepEqual(quota.kind === "rejected" && quota.cause, "quota");
+  assert.deepEqual(quota.kind === "rejected" && [quota.cause, quota.reason], ["quota", { code: "openaiQuota" }]);
   const blocked = outcomeOf(400, h(), JSON.stringify({ error: { message: "rejected by the safety system", type: "image_generation_user_error", code: "moderation_blocked", moderation_details: { moderation_stage: "output" } } }), "png");
-  assert.deepEqual(blocked.kind === "rejected" && blocked.cause, "moderation");
+  assert.deepEqual(blocked.kind === "rejected" && [blocked.cause, blocked.reason], ["moderation", { code: "openaiModeration" }]);
   const key = outcomeOf(401, h(), error("invalid_api_key", "invalid_request_error", "Incorrect API key provided: sk-proj-abc***wxyz."), "png");
-  assert.equal(key.kind === "rejected" && key.cause, "key");
-  assert.doesNotMatch(key.kind === "rejected" ? key.error : "", /sk-|wxyz/, "the error never carries a fragment of the key");
+  assert.deepEqual(key.kind === "rejected" && [key.cause, key.reason], ["key", { code: "openaiKeyRejected", params: { status: 401 } }]);
+  assert.doesNotMatch(JSON.stringify(key), /sk-|wxyz/, "the outcome never carries a fragment of the key");
   assert.equal(outcomeOf(403, h(), error("unsupported_country_region_territory", "request_forbidden"), "png").kind, "rejected");
   const bad = outcomeOf(400, h(), error(null, "invalid_request_error", "Invalid value for size, key sk-live-123456"), "png");
   assert.equal(bad.kind === "rejected" && bad.cause, "request");
-  assert.match(bad.kind === "rejected" ? bad.error : "", /^OpenAI 400: Invalid value for size/);
-  assert.doesNotMatch(bad.kind === "rejected" ? bad.error : "", /sk-live/);
+  assert.deepEqual(bad.kind === "rejected" && bad.reason, { text: "OpenAI 400: Invalid value for size, key sk-…" }, "OpenAI's own words, shown as given");
+  assert.doesNotMatch(JSON.stringify(bad), /sk-live/);
 });
 
 test("server errors, timeouts the server reports, and an HTML 503 may follow work OpenAI billed: unknown", () => {
-  for (const status of [408, 409, 500, 502, 504]) assert.equal(outcomeOf(status, h(), error(null, "server_error"), "png").kind, "unknown", String(status));
+  for (const status of [408, 409, 500, 502, 504]) {
+    const o = outcomeOf(status, h(), error(null, "server_error"), "png");
+    assert.deepEqual(o.kind === "unknown" && o.why, { cause: "reply", detail: `OpenAI ${status}: m` }, String(status));
+  }
   assert.equal(outcomeOf(503, h(), "<html>busy</html>", "png").kind, "unknown");
 });
 
