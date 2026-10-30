@@ -10,7 +10,7 @@ export type ErrorParams = Record<string, string | number>;
 export type AppError = { code: ErrorCode; params?: ErrorParams };
 
 /**
- * Why something failed or waits: an AppError the page translates, or text shown exactly as given, which is the
+ * Why something failed or waits. It is an AppError the page translates, or text shown exactly as given, which is the
  * provider's own words, a failure reason stored in Korean before error codes, or a message thrown in the browser.
  */
 export type Reason = AppError | { text: string };
@@ -27,7 +27,7 @@ function paramsOf(raw: unknown): ErrorParams | undefined {
 
 /**
  * The `error` of a response from this app's API. A body without one, such as a proxy's error page, reads as its HTTP
- * status. The code is not checked here, because only the messages know every code: the page shows a code it has no
+ * status. The code is not checked here, because only the messages know every code. The page shows a code it has no
  * message for (a newer server during a deploy) as `unknownCode`.
  */
 export function parseAppError(body: unknown, status: number): AppError {
@@ -44,7 +44,7 @@ export class ApiError extends Error {
   }
 }
 
-/** What a catch in the browser shows: the AppError an ApiError carries, or the message of anything else thrown. */
+/** What a catch in the browser shows, the AppError an ApiError carries or the message of anything else thrown. */
 export function caught(e: unknown): Reason {
   if (e instanceof ApiError) return e.error;
   return { text: e instanceof Error ? e.message : String(e) };

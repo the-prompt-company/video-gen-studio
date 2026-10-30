@@ -10,7 +10,7 @@ export function reasonText(t: ErrorTranslator, reason: Reason): string {
   return t.has(reason.code) ? t(reason.code, reason.params) : t("unknownCode", { code: reason.code });
 }
 
-/** Turns a Reason into text in the page's language: the one place the browser renders a server error. */
+/** Turns a Reason into text in the page's language. Every server error the browser shows goes through it. */
 export function useErrorText(): (reason: Reason) => string {
   const t = useTranslations("errors") as unknown as ErrorTranslator;
   return useCallback((reason: Reason) => reasonText(t, reason), [t]);

@@ -24,7 +24,7 @@ export type ImageOp = "generations" | "edits";
  *   refused   a rate-limit 429 or an overloaded 503 with OpenAI's error body: turned away before any work, not billed.
  *             The only outcome that may be sent again.
  *   rejected  quota, moderation, key, region or a bad request. Not billed, and sending it again would fail the same way.
- *             `reason` is what the member reads: an error code, or OpenAI's own words for a bad request.
+ *             `reason` is what the member reads, an error code or OpenAI's own words for a bad request.
  *   unknown   a timeout, a dropped connection, 408, 409, 500, 502, 504, an HTML 503, or a 2xx without a usable image.
  *             OpenAI may have generated and billed it. Never sent again.
  */
@@ -102,7 +102,7 @@ export function outcomeOf(status: number, headers: Headers, text: string, format
     return { kind: "rejected", cause: "moderation", reason: appError("openaiModeration") };
   }
   if (status === 401 || status === 403) {
-    // A wrong key, an IP or organization outside the key's allowance, a missing scope or a region: only OpenAI's words tell which.
+    // Only OpenAI's words tell whether the key, an IP, an organization, a missing scope or the region was refused.
     const fields = [code && `code: ${code}`, type && `type: ${type}`].filter(Boolean).join(", ");
     return { kind: "rejected", cause: "key", reason: appError("openaiKeyRejected", { status, detail: fields ? `${message} [${fields}]` : message }) };
   }

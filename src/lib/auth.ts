@@ -74,7 +74,7 @@ export async function clearSessionCookie() {
   jar.set(SESSION_COOKIE, "", { httpOnly: true, path: "/", maxAge: 0 });
 }
 
-/** The only way a route refuses a request: a status and an error code the browser translates. */
+/** The only way a route refuses a request, with a status and an error code the browser translates. */
 export class HttpError extends Error {
   readonly error: AppError;
   constructor(

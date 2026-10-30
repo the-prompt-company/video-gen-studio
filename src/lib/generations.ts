@@ -289,7 +289,7 @@ export function publicGeneration(g: Generation, username?: string) {
 
 export type PublicGeneration = ReturnType<typeof publicGeneration>;
 
-/** Why a row failed or waits, as stored: an error code the page translates, or text shown as written. */
+/** Why a row failed or waits, as stored. It is an error code the page translates, or text shown as written. */
 export function reasonOf(g: Pick<Generation, "error" | "errorCode" | "errorParams">): Reason | null {
   if (g.errorCode) return appError(g.errorCode, g.errorParams ?? undefined);
   return g.error === null ? null : { text: g.error };
