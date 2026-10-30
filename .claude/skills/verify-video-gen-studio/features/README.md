@@ -53,4 +53,6 @@ Keep implementation details out of the map. Name only user paths, stable handles
 - [Images](./images.md) covers GPT Image 2: the 이미지 group in the model select, the no-key state, the image drawer, text→image and reference→image against the fake, and the result on the stage, in the gallery and on the dashboard. Creates generation rows, so it runs on a local database only.
 - [Gallery](./gallery.md) covers the tile grid, the detail dialog (video or image) with download, and the admin scope toggle.
 - [Dashboard](./dashboard.md) covers the personal usage stats, chart/empty states, and agreement with the generations API.
+- [Errors](./errors.md) covers server refusals and stored failure reasons in the page language, provider text and old Korean reasons as written, and the error wire format. Creates and deletes three disposable members; local database only.
+- [Formats](./formats.md) covers dates in Seoul time per language, relative times, and dollars on the dashboard, gallery, playground and admin, with no hydration warning. Local database only.
 - [Admin](./admin.md) covers the users table and its edit, add and import modals (name, focus, Esc, scroll lock), the three model rates with their units and published-rate fill, and the logs tab.

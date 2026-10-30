@@ -1,0 +1,7 @@
+400 empty sign-in      {"error":{"code":"credentialsMissing"}}
+404 bad generation id  {"error":{"code":"noSuchGeneration"}}
+400 bad locale         {"error":{"code":"unknownLocale","params":{"locales":"ko, en, zh-CN"}}}
+400 blank team name    {"error":{"code":"nameBlank","params":{"kind":"teamName"}}}
+409 duplicate ID       {"error":{"code":"duplicateUsername"}}
+400 bad upload path    {"error":{"code":"uploadPath","params":{"prefix":"refs/1/"}}}
+401 no session         {"error":{"code":"signInRequired"}}

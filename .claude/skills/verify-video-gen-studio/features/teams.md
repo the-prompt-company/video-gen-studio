@@ -4,7 +4,7 @@ An administrator creates teams, renames and deletes them, and places members in 
 
 ## Sub-features
 
-- `adm-teams` tab 팀 lists teams by name with 인원 and 팀원, under button 팀 만들기. Dialog 팀 만들기 takes 팀 이름: trimmed, at most 30 characters, one visible line, unique without regard to case (`이미 있는 팀 이름입니다…`). A row click, or Enter on `<팀 이름> 편집`, opens dialog `<팀 이름> 편집` with 팀 이름 + 저장, the member list, and 팀 삭제.
+- `adm-teams` tab 팀 lists teams by name with 인원 and 팀원, under button 팀 만들기. Dialog 팀 만들기 takes 팀 이름: trimmed, at most 30 characters, one visible line, unique without regard to case (`errors.duplicateTeamName`). A row click, or Enter on `<팀 이름> 편집`, opens dialog `<팀 이름> 편집` with 팀 이름 + 저장, the member list, and 팀 삭제.
 - `adm-teams-delete` 팀 삭제 shows group 팀 삭제 saying how many members become 미소속 and that videos and usage stay; 삭제 deletes the team and says `팀을 삭제했습니다: <name>. 팀원 N명이 미소속이 됐습니다.`
 - `adm-teams-assign` the users table has a checkbox per row (`<username> 선택`) and one in the header (`보이는 사용자 모두 선택`, only the rows the filter shows). Button 팀 지정 opens dialog 팀 지정 listing the chosen users with their current team; a team (or 미소속) and `N명 지정` move exactly them.
 - `adm-teams-filter` combobox 팀으로 거르기 shows 모든 팀, 미소속 or one team, each with its head count. Changing it clears the selection.
@@ -24,7 +24,7 @@ Preconditions:
 - The database has the `teams` table and `users.team_id` (migration applied).
 
 - **Members.** The admin API creates `vgs-team-<stamp>-a@example.test` and `-b`. Nothing else in the users table is selected or changed.
-- **Create.** Tab 팀, 팀 만들기 with focus on 팀 이름: `vgs-team-<stamp>-alpha` and `-beta`, each announced as `팀을 만들었습니다: <name>` (`01`). The upper-case alpha shows `이미 있는 팀 이름입니다` and 31 characters show `팀 이름은 30자까지입니다 (지금 31자)` inside the dialog (`02`).
+- **Create.** Tab 팀, 팀 만들기 with focus on 팀 이름: `vgs-team-<stamp>-alpha` and `-beta`, each announced as `팀을 만들었습니다: <name>` (`01`). The upper-case alpha shows `errors.duplicateTeamName` and 31 characters show `errors.nameTooLong` (`팀 이름은 30자까지입니다 (지금 31자)` in Korean) inside the dialog (`02`).
 - **Rename.** alpha's editor saves `  vgs-team-<stamp>-red ` and the dialog becomes `vgs-team-<stamp>-red 편집`; `/api/admin/teams` lists red, trimmed, and no alpha (`03`).
 - **Assign.** Tab 사용자 · API 키 has a 팀 column. The two members' own checkboxes give `2명 선택` without opening the editor; dialog 팀 지정 lists exactly those two, `2명 지정` stays disabled until red is chosen (`04`), then says `2명을 <team>에 지정했습니다`. `/api/admin/users` shows both in red and every other user's team unchanged (`05`).
 - **Editor.** B's editor moves B to beta through 팀; the API and the select agree (`06`).

@@ -39,5 +39,5 @@ Preconditions:
 
 - The pick is remembered for sign-in only in the login page's state. A reload of that page starts a new visit: the cookie still shows the language, but sign-in no longer stores it on the account.
 - `ev.t(key)` reads `<html lang>` of the page you pass, so call it after the page loaded, and pass the right page when a journey drives several.
-- Server refusals (wrong password, lockout) stay Korean in every language until error codes land in i18n PR 2.
+- Server refusals (wrong password, lockout) arrive as error codes and read in the page language. See [Errors](./errors.md).
 - Run one locale journey at a time per admin account; the members it creates sign in many times.

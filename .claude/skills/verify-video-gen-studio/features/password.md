@@ -27,12 +27,12 @@ Preconditions:
 
 - **Create a member.** The admin opens 사용자 추가 and adds `VGS-PW-<stamp>@Example.TEST` with `oooooooo`; the dialog closes and the page says `vgs-pw-<stamp>@example.test 계정을 추가했습니다`. Run `vgs run password`; the note says it is stored lowercase with mustChangePassword=true.
 - **Forced change.** Sign in with the temporary password. The h1 becomes 새 비밀번호 정하기, no `vgs_session` cookie exists, and there is no 현재 비밀번호 field (`02-temporary`). A mismatched 확인 (`03`) and the initial password (`04`) show alerts; a valid one lands on `/playground` with the member in the header (`05`).
-- **Old password.** After 로그아웃, `oooooooo` shows `ID 또는 비밀번호가 맞지 않습니다` (`06`).
+- **Old password.** After 로그아웃, `oooooooo` shows `errors.wrongCredentials` (`06`).
 - **Email case.** The mixed-case ID with the new password signs in (`07`).
 - **Change from the login screen.** A second browser opens 비밀번호 변경 (`08`), is refused the current password as the new one (`09`), then changes it and keeps its session on `/dashboard` (`10`).
 - **Revoke.** The first browser's next load of `/gallery` shows the login form (`11`).
 - **Admin reset.** The admin opens the member's row and sets `oooooooo` in dialog `<username> 편집`; the dialog says 임시 비밀번호 상태입니다 (`12`). The second browser's `/playground` shows the login form and the reset password opens 새 비밀번호 정하기 (`13`).
-- **Lockout.** Ten wrong 현재 비밀번호 submits answer 401; the eleventh, with the right one, answers 423 `실패가 누적되어 잠겼습니다` (`14`).
+- **Lockout.** Ten wrong 현재 비밀번호 submits answer 401; the eleventh, with the right one, answers 423 and the alert reads `errors.locked` with 15 minutes (`14`).
 - **Proof.** `result.json` is `ok: true`; `log.md` ends with `cleanup: deleted 1 member row(s)`.
 
 ## Gotchas
