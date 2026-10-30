@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useFormatter, useTranslations } from "next-intl";
-import type { PublicGeneration } from "@/lib/generations";
+import type { GalleryItem, GalleryProps, OwnerLabel } from "@/lib/gallery";
 import { modelLine } from "@/lib/catalog";
 import { Button, Empty } from "@/components/ui";
 import { useParamLabel } from "@/i18n/errors";
@@ -12,7 +12,7 @@ import { ago, dateTime, usd } from "@/i18n/format";
 /** A stored video or an image is kept for good. A Higgsfield video is deleted at `until`. */
 type Retention = { kind: "permanent" } | ({ until: Date } & ({ kind: "expired" } | { kind: "days"; days: number } | { kind: "hours"; hours: number }));
 
-function retentionOf(g: PublicGeneration, now: number): Retention | null {
+function retentionOf(g: GalleryItem, now: number): Retention | null {
   if (g.image || g.video?.kind === "stored") return { kind: "permanent" };
   if (!g.video?.expiresAt) return null;
   const until = new Date(g.video.expiresAt);
@@ -27,8 +27,24 @@ function useRetentionText() {
   return (r: Retention) => (r.kind === "days" ? t("days", { days: r.days }) : r.kind === "hours" ? t("hours", { hours: r.hours }) : t(r.kind));
 }
 
+function useOwnerText() {
+  const t = useTranslations("gallery.owner");
+  return (o: OwnerLabel) => {
+    switch (o.kind) {
+      case "self":
+        return t("self");
+      case "teammate":
+        return t("teammate");
+      case "nickname":
+        return o.name;
+      case "login":
+        return o.id;
+    }
+  };
+}
+
 /** "16:9" from params when the model exposes it, otherwise from the loaded video's pixels. */
-function aspectLabel(g: PublicGeneration, w?: number, h?: number): string | null {
+function aspectLabel(g: GalleryItem, w?: number, h?: number): string | null {
   const p = (g.params as Record<string, unknown>)?.aspect_ratio;
   if (typeof p === "string" && /^\d+:\d+$/.test(p)) return p;
   if (!w || !h) return null;
@@ -78,17 +94,19 @@ function useNearViewport<T extends Element>(rootMargin: string) {
   return { ref, near };
 }
 
-function Tile({ g, now, onOpen }: { g: PublicGeneration; now: number; onOpen: () => void }) {
+function Tile({ g, now, onOpen }: { g: GalleryItem; now: number; onOpen: () => void }) {
   const t = useTranslations("gallery");
   const tGen = useTranslations("generation");
   const tMode = useTranslations("mode");
   const retentionText = useRetentionText();
+  const ownerText = useOwnerText();
   const format = useFormatter();
   const { ref, size, read } = useVideoSize();
   const { ref: tileRef, near } = useNearViewport<HTMLLIElement>("0px 0px 80px 0px");
   const label = aspectLabel(g, size?.w, size?.h);
   const prompt = g.prompt || tGen("noPrompt");
   const keep = retentionOf(g, now);
+  const owner = g.owner && ownerText(g.owner);
   return (
     <li ref={tileRef} className="group overflow-hidden rounded-xl border border-border bg-surface">
       <button type="button" onClick={onOpen} className="relative block w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent" aria-label={t("openDetail", { prompt })}>
@@ -122,10 +140,9 @@ function Tile({ g, now, onOpen }: { g: PublicGeneration; now: number; onOpen: ()
           <span className="truncate">
             {modelLine(g.modelId, (m) => tMode(m))} · <span className="tabular-nums">{usd(format, g.costUsd)}</span>
           </span>
-          {/* An ID is an email and "5 minutes ago" is long, so the ID gives way and the model line keeps half the row. */}
           <span className="flex min-w-0 max-w-1/2 shrink-0">
-            {g.username && <span className="min-w-0 truncate">{g.username}</span>}
-            <span className="shrink-0 whitespace-pre">{g.username ? " · " : ""}{ago(format, g.createdAt, now)}</span>
+            {owner && <span className="min-w-0 truncate">{owner}</span>}
+            <span className="shrink-0 whitespace-pre">{owner ? " · " : ""}{ago(format, g.createdAt, now)}</span>
           </span>
         </div>
         {keep && <div className={`text-[11px] ${keep.kind === "expired" ? "text-rose-300" : "text-subtle"}`}>{t("retention.line", { value: retentionText(keep) })}</div>}
@@ -134,7 +151,7 @@ function Tile({ g, now, onOpen }: { g: PublicGeneration; now: number; onOpen: ()
   );
 }
 
-function Detail({ g, now, onClose }: { g: PublicGeneration; now: number; onClose: () => void }) {
+function Detail({ g, now, onClose }: { g: GalleryItem; now: number; onClose: () => void }) {
   const t = useTranslations("gallery");
   const tGen = useTranslations("generation");
   const tCommon = useTranslations("common");
@@ -142,6 +159,7 @@ function Detail({ g, now, onClose }: { g: PublicGeneration; now: number; onClose
   const tMode = useTranslations("mode");
   const paramLabel = useParamLabel();
   const retentionText = useRetentionText();
+  const ownerText = useOwnerText();
   const format = useFormatter();
   const { ref, size: videoSize, read } = useVideoSize();
   const [imageSize, setImageSize] = useState<{ w: number; h: number } | null>(null);
@@ -241,10 +259,10 @@ function Detail({ g, now, onClose }: { g: PublicGeneration; now: number; onClose
                   <dd className="tabular-nums text-foreground-2">{keep.kind === "permanent" ? retentionText(keep) : t("retention.until", { date: dateTime(format, keep.until), left: retentionText(keep) })}</dd>
                 </>
               )}
-              {g.username && (
+              {g.owner && (
                 <>
                   <dt className="text-muted">{t("detail.member")}</dt>
-                  <dd className="text-foreground-2">{g.username}</dd>
+                  <dd className="text-foreground-2">{ownerText(g.owner)}</dd>
                 </>
               )}
             </dl>
@@ -266,10 +284,10 @@ function Detail({ g, now, onClose }: { g: PublicGeneration; now: number; onClose
 }
 
 /** `now` is when the page was rendered. Ages and time left count from it, so the server and the browser print the same text. */
-export function Gallery({ items, isAdmin, showAll, now }: { items: PublicGeneration[]; isAdmin: boolean; showAll: boolean; now: number }) {
+export function Gallery({ items, filter, tabs, now }: GalleryProps & { now: number }) {
   const t = useTranslations("gallery");
   const tPages = useTranslations("pages");
-  const [open, setOpen] = useState<PublicGeneration | null>(null);
+  const [open, setOpen] = useState<GalleryItem | null>(null);
   const expiring = items.some((g) => g.video?.kind === "provider");
 
   return (
@@ -278,28 +296,35 @@ export function Gallery({ items, isAdmin, showAll, now }: { items: PublicGenerat
         <div>
           <h1 className="text-2xl font-semibold">{tPages("gallery")}</h1>
           <p className="mt-1 text-sm text-muted">{t("lead", { count: items.length, expiring: expiring ? "yes" : "no" })}</p>
+          {tabs.length === 1 && <p className="mt-1 text-sm text-subtle">{t("scope.noTeam")}</p>}
         </div>
-        {isAdmin && (
-          <div className="flex rounded-full border border-border p-0.5 text-sm">
-            <Link href="/gallery" className={`rounded-full px-3 py-1 ${!showAll ? "bg-white/12 text-foreground" : "text-muted"}`}>
-              {t("scope.mine")}
-            </Link>
-            <Link href="/gallery?all=1" className={`rounded-full px-3 py-1 ${showAll ? "bg-white/12 text-foreground" : "text-muted"}`}>
-              {t("scope.all")}
-            </Link>
-          </div>
+        {tabs.length > 1 && (
+          <nav aria-label={t("scope.label")} className="flex rounded-full border border-border p-0.5 text-sm">
+            {tabs.map((tab) => (
+              <Link
+                key={tab.filter}
+                href={tab.href}
+                aria-current={tab.filter === filter ? "page" : undefined}
+                className={`inline-flex min-h-11 items-center rounded-full px-3 py-1 sm:min-h-0 ${tab.filter === filter ? "bg-white/12 text-foreground" : "text-muted"}`}
+              >
+                {t(`scope.${tab.filter}`)}
+              </Link>
+            ))}
+          </nav>
         )}
       </div>
 
       {items.length === 0 ? (
         <Empty>
-          {t.rich("empty", {
-            link: (chunks) => (
-              <Link href="/playground" className="text-accent-soft underline-offset-4 hover:underline">
-                {chunks}
-              </Link>
-            ),
-          })}
+          {filter === "team"
+            ? t("emptyTeam")
+            : t.rich("empty", {
+                link: (chunks) => (
+                  <Link href="/playground" className="text-accent-soft underline-offset-4 hover:underline">
+                    {chunks}
+                  </Link>
+                ),
+              })}
         </Empty>
       ) : (
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
