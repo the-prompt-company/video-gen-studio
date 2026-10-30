@@ -14,8 +14,9 @@ export default async function login({ page, ev, base, creds }) {
   const alert = page.locator("form").getByRole("alert");
   await alert.waitFor({ timeout: 20_000 });
   const text = (await alert.textContent()) ?? "";
-  // The server's refusal stays Korean until error codes land (i18n PR 2), whatever the page language.
-  if (!text.includes("맞지 않습니다")) ev.fail(`unexpected error text: ${text}`);
+  // The server answers the code wrongCredentials; the page words it in its own language.
+  const wrong = await ev.t("errors.wrongCredentials");
+  if (text !== wrong) ev.fail(`expected "${wrong}", got "${text}"`);
   if (!page.url().endsWith("/login")) ev.fail("wrong password must stay on /login");
   await ev.shot("wrong-password");
 

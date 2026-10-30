@@ -12,12 +12,12 @@ export default async function password({ page, ev, base, creds, webDir, local })
   const admin = await ev.newPage();
   const other = await ev.newPage();
 
-  const expectAlert = async (p, pattern, what) => {
+  const expectAlert = async (p, want, what) => {
     const alert = p.locator("form").getByRole("alert");
     try {
-      await alert.filter({ hasText: pattern }).waitFor({ timeout: 20_000 });
+      await alert.filter({ hasText: want }).waitFor({ timeout: 20_000 });
     } catch {
-      ev.fail(`${what}: expected an alert matching ${pattern}, got "${(await alert.allTextContents()).join(" | ")}"`);
+      ev.fail(`${what}: expected the alert "${want}", got "${(await alert.allTextContents()).join(" | ")}"`);
     }
   };
   const signIn = async (p, id, pw) => {
@@ -87,7 +87,7 @@ export default async function password({ page, ev, base, creds, webDir, local })
     await expectAlert(page, await ev.t("auth.mismatch"), "mismatched confirmation");
     await ev.shot("temporary-mismatch");
     if ((await submitChangeForStatus(page, { next: INITIAL })) !== 400) ev.fail("the initial password as the new one should be a 400");
-    await expectAlert(page, /임시 비밀번호/, "initial password as the new one");
+    await expectAlert(page, await ev.t("errors.passwordIsInitial"), "initial password as the new one");
     await ev.shot("temporary-initial-refused");
     await fillChange(page, { next: first });
     await expectSignedIn(page, "forced change");
@@ -97,7 +97,7 @@ export default async function password({ page, ev, base, creds, webDir, local })
     await page.getByRole("button", { name: await ev.t("nav.logout") }).click();
     await page.waitForURL("**/login", { timeout: 20_000 });
     await signIn(page, typedId, INITIAL);
-    await expectAlert(page, /맞지 않습니다/, "old password after the change");
+    await expectAlert(page, await ev.t("errors.wrongCredentials"), "old password after the change");
     await ev.shot("old-password-refused");
 
     await signIn(page, typedId, first);
@@ -110,7 +110,7 @@ export default async function password({ page, ev, base, creds, webDir, local })
     await other.getByRole("heading", { level: 1, name: await ev.t("auth.heading.change.title", undefined, other) }).waitFor({ timeout: 10_000 });
     await ev.shot("change-form", { page: other });
     if ((await submitChangeForStatus(other, { id: typedId, current: first, next: first })) !== 400) ev.fail("the current password as the new one should be a 400");
-    await expectAlert(other, /현재 비밀번호와 같/, "new password equal to the current one");
+    await expectAlert(other, await ev.t("errors.passwordUnchanged", undefined, other), "new password equal to the current one");
     await ev.shot("change-same-refused", { page: other });
     await fillChange(other, { id: typedId, current: first, next: second });
     await expectSignedIn(other, "change from the login screen");
@@ -144,10 +144,10 @@ export default async function password({ page, ev, base, creds, webDir, local })
       const status = await submitChangeForStatus(page, { id: typedId, current: `wrong-${attempt}-pw`, next: second });
       if (status !== 401) ev.fail(`wrong current password #${attempt} should be a 401, got ${status}`);
     }
-    await expectAlert(page, /맞지 않습니다/, "wrong current password");
+    await expectAlert(page, await ev.t("errors.wrongCredentials"), "wrong current password");
     const lockedStatus = await submitChangeForStatus(page, { id: typedId, current: INITIAL, next: second });
     if (lockedStatus !== 423) ev.fail(`the right current password after 10 failures should be a 423, got ${lockedStatus}`);
-    await expectAlert(page, /잠겼습니다/, "right current password after 10 failures");
+    await expectAlert(page, await ev.t("errors.locked", { minutes: 15 }), "right current password after 10 failures");
     const locked = await member();
     if (!locked.lockedUntil || locked.failedAttempts < 10) ev.fail(`expected a lock after 10 failures, got ${JSON.stringify({ lockedUntil: locked.lockedUntil, failedAttempts: locked.failedAttempts })}`);
     ev.note(`locked after ${locked.failedAttempts} failures until ${locked.lockedUntil}; the right password is refused while locked`);

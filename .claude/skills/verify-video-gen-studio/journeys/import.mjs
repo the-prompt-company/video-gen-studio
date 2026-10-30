@@ -56,7 +56,8 @@ export default async function importJourney({ page, ev, base, webDir, local }) {
   };
   const expectOutcome = (byRow, row, label, detail) => {
     const text = byRow[row];
-    if (!text || !text.includes(label) || (detail && !detail.test(text))) ev.fail(`row ${row}: expected "${label}"${detail ? ` and ${detail}` : ""}, got "${text}"`);
+    const found = !detail || (typeof detail === "string" ? text?.includes(detail) : detail.test(text));
+    if (!text || !text.includes(label) || !found) ev.fail(`row ${row}: expected "${label}"${detail ? ` and ${detail}` : ""}, got "${text}"`);
   };
   const confirmCreate = async (count) => {
     const button = importer.getByRole("button", { name: `${count}명 만들기` });
@@ -123,10 +124,10 @@ export default async function importJourney({ page, ev, base, webDir, local }) {
     expectOutcome(mixed, "6", "만들 예정");
     expectOutcome(mixed, "7", "파일 안 중복", /4행과 이메일이 같습니다/);
     expectOutcome(mixed, "8", "이미 있음");
-    expectOutcome(mixed, "9", "확인 필요", /이메일 형식/);
-    expectOutcome(mixed, "10", "확인 필요", /닉네임이 비어/);
-    expectOutcome(mixed, "11", "확인 필요", /30자/);
-    expectOutcome(mixed, "12", "확인 필요", /제어 문자/);
+    expectOutcome(mixed, "9", "확인 필요", await ev.t("errors.emailInvalid"));
+    expectOutcome(mixed, "10", "확인 필요", await ev.t("errors.nameBlank", { kind: "nickname" }));
+    expectOutcome(mixed, "11", "확인 필요", await ev.t("errors.nameTooLong", { kind: "nickname", max: 30, length: 31 }));
+    expectOutcome(mixed, "12", "확인 필요", await ev.t("errors.nameControl", { kind: "nickname" }));
     if (Object.keys(mixed).length !== 8) ev.fail(`mixed.xlsx should preview 8 rows (blank rows skipped), got ${Object.keys(mixed).join(",")}`);
     ev.note("mixed.xlsx preview: rows 4,6 create; 7 duplicate of 4; 8 exists; 9-12 invalid with their reasons; blank rows 5 and 13 skipped");
     await ev.shot("mixed-preview");
@@ -195,7 +196,7 @@ export default async function importJourney({ page, ev, base, webDir, local }) {
     const nickname = edit.getByLabel(/^닉네임/);
     await nickname.fill("가".repeat(31));
     await edit.getByRole("button", { name: "저장" }).first().click();
-    await page.getByText(/닉네임은 30자까지입니다/).waitFor({ timeout: 10_000 });
+    await page.getByText(await ev.t("errors.nameTooLong", { kind: "nickname", max: 30, length: 31 })).waitFor({ timeout: 10_000 });
     await nickname.fill(`  새 이름 ${stamp} `);
     await edit.getByRole("button", { name: "저장" }).first().click();
     await row4.getByText(`새 이름 ${stamp}`, { exact: true }).waitFor({ timeout: 10_000 });
@@ -216,7 +217,7 @@ export default async function importJourney({ page, ev, base, webDir, local }) {
     await memberPage.goto(`${base}/playground`, { waitUntil: "networkidle" });
     if (!new URL(memberPage.url()).pathname.startsWith("/login")) ev.fail(`the member's session should end at the reset, /playground went to ${memberPage.url()}`);
     await signIn(memberPage, email(4), chosen);
-    await memberPage.getByRole("alert").filter({ hasText: /맞지 않습니다/ }).waitFor({ timeout: 20_000 });
+    await memberPage.getByRole("alert").filter({ hasText: await ev.t("errors.wrongCredentials", undefined, memberPage) }).waitFor({ timeout: 20_000 });
     await signIn(memberPage, email(4), INITIAL);
     await memberPage.getByRole("heading", { level: 1, name: await ev.t("auth.heading.temporary.title", undefined, memberPage) }).waitFor({ timeout: 20_000 });
     ev.note("after 초기 비밀번호로 되돌리기 the member was signed out, the chosen password stopped working, and oooooooo asks for a new one");

@@ -19,11 +19,13 @@ import {
   type Mode,
   type ParamSpec,
 } from "@/lib/catalog";
+import { ApiError, appError, caught, parseAppError } from "@/lib/errors";
 import type { PublicGeneration, Unavailable } from "@/lib/generations";
 import { isLive } from "@/lib/generation-status";
 import { refUploadName } from "@/lib/ref-name";
 import { Button, ErrorText, Field, Input, Select, Textarea } from "@/components/ui";
 import { StatusBadge } from "@/components/StatusBadge";
+import { useErrorText } from "@/i18n/errors";
 import { usd } from "@/i18n/format";
 
 /**
@@ -108,9 +110,11 @@ async function uploadFile(file: File, largeUploadPrefix: string | null, viaBlob:
     const fd = new FormData();
     fd.append("file", file);
     const res = await fetch("/api/uploads", { method: "POST", body: fd });
-    const body = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
-    if (!res.ok || !body.url) throw new Error(body.error ?? (res.status === 413 ? "파일이 너무 큽니다 (4 MB 이하)" : `업로드 실패 (${res.status})`));
-    return body.url;
+    const body = (await res.json().catch(() => null)) as { url?: string } | null;
+    if (res.ok && body?.url) return body.url;
+    const error = parseAppError(body, res.status);
+    // Vercel answers a body over its 4.5 MB limit itself, with no error code.
+    throw new ApiError(error.code === "httpStatus" && res.status === 413 ? appError("uploadTooLarge", { mb: SMALL / 1024 / 1024 }) : error);
   }
   if (largeUploadPrefix === null) throw new Error(viaBlob ? "이미지 레퍼런스는 Blob 스토어가 연결돼야 올릴 수 있습니다" : "4 MB를 넘는 파일은 Blob 스토어가 연결돼야 올릴 수 있습니다");
   const { upload: blobUpload } = await import("@vercel/blob/client");
@@ -395,6 +399,7 @@ function RefDialog({ modelName, refNote, imageHint, imageAccept, refs, images, v
 
 export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers: Offer[]; largeUploadPrefix: string | null; galleryCount: number }) {
   const format = useFormatter();
+  const errorText = useErrorText();
   const [familyId, setFamilyId] = useState<FamilyId | null>(() => (offers.find((o) => !o.unavailable) ?? offers.find((o) => o.unavailable?.status !== 503) ?? offers[0])?.family ?? null);
   const offer = offers.find((o) => o.family === familyId) ?? offers[0];
   const [params, setParams] = useState<Record<string, unknown>>(() => (offer ? { ...defaultParams(offer.family) } : {}));
@@ -556,7 +561,7 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
         setRefs((r) => [...r, { id: crypto.randomUUID(), url, name: f.name, kind, local: URL.createObjectURL(f), w: size?.w, h: size?.h, seconds }]);
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(caught(e)));
     } finally {
       setUploading(false);
     }
@@ -564,7 +569,7 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
 
   async function generate() {
     if (!draft || !plan) return;
-    if (!plan.ready) return setError(plan.blocker);
+    if (!plan.ready) return setError(errorText(plan.blocker));
     setSubmitting(true);
     setError(null);
     try {
@@ -573,8 +578,8 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(draft),
       });
-      const body = (await res.json().catch(() => ({}))) as { item?: PublicGeneration; error?: string };
-      const item = body.item;
+      const body = (await res.json().catch(() => null)) as { item?: PublicGeneration } | null;
+      const item = body?.item;
       if (item) {
         pollDelay.current = POLL_FIRST_MS;
         // The new item must be in the DOM before the scroll, or scroll anchoring keeps the previous item on the stage.
@@ -585,9 +590,9 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
         feedRef.current?.scrollTo({ top: 0, behavior: prefersReducedMotion() ? "auto" : "smooth" });
         feedRef.current?.closest("section")?.scrollIntoView({ block: "start", behavior: prefersReducedMotion() ? "auto" : "smooth" });
       }
-      if (!res.ok || !body.item) throw new Error(body.error ?? `제출 실패 (${res.status})`);
+      if (!res.ok || !item) throw item?.error ? new Error(item.error) : new ApiError(parseAppError(body, res.status));
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(caught(e)));
     } finally {
       setSubmitting(false);
     }
@@ -596,11 +601,11 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
   async function cancel(g: PublicGeneration) {
     try {
       const res = await fetch(`/api/generations/${g.id}`, { method: "DELETE" });
-      const body = (await res.json().catch(() => ({}))) as { item?: PublicGeneration; error?: string };
-      if (body.item) upsert(body.item);
-      else setError(body.error ?? `취소 실패 (${res.status})`);
+      const body = (await res.json().catch(() => null)) as { item?: PublicGeneration } | null;
+      if (body?.item) upsert(body.item);
+      else setError(errorText(parseAppError(body, res.status)));
     } catch {
-      setError("서버에 연결할 수 없습니다. 잠시 후 다시 시도하세요");
+      setError(errorText({ code: "network" }));
     }
   }
 
@@ -706,7 +711,7 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
           {offer.unavailable && (
             <div role="status" className="flex items-start gap-2.5 rounded-md border border-border bg-surface px-3 py-2 text-xs leading-relaxed text-foreground-2">
               <span aria-hidden className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" />
-              <span>{offer.unavailable.message}</span>
+              <span>{errorText(offer.unavailable.error)}</span>
             </div>
           )}
 
@@ -789,7 +794,7 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
               <p key={o.family} role="status" className="flex items-start gap-2 text-xs leading-relaxed text-foreground-2">
                 <span aria-hidden className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" />
                 <span>
-                  <span className="text-foreground">{FAMILIES[o.family].name}</span> 사용 불가 · {o.unavailable?.message}
+                  <span className="text-foreground">{FAMILIES[o.family].name}</span> 사용 불가 · {o.unavailable && errorText(o.unavailable.error)}
                 </span>
               </p>
             ))}
@@ -842,7 +847,7 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
           {!plan.ready && (
             <p role="status" className="mb-2 flex items-start gap-2 text-xs leading-relaxed text-foreground-2">
               <span aria-hidden className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" />
-              {plan.blocker}
+              {errorText(plan.blocker)}
             </p>
           )}
           <div className="flex items-center justify-between gap-4">

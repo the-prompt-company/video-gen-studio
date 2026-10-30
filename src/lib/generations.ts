@@ -15,6 +15,7 @@ import {
   type WireBody,
 } from "@/lib/catalog";
 import { decrypt, signToken, verifyToken } from "@/lib/crypto";
+import { appError, type AppError } from "@/lib/errors";
 import { isLive, LIVE_STATUSES, predecessorsOf, RANK, type GenerationStatus } from "@/lib/generation-status";
 import * as hf from "@/lib/higgsfield";
 import * as openai from "@/lib/openai";
@@ -53,9 +54,6 @@ const COPY_TIMEOUT_MS = 240_000;
 const MAX_COPY_BYTES = 1024 ** 3;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const NO_KEY = "API 키가 아직 할당되지 않았습니다. 관리자에게 문의하세요";
-const SUBMITTING = "제출 중입니다. 몇 초 뒤 다시 취소하세요";
-const NO_OPENAI_KEY = "이미지 생성은 관리자가 서버 환경 변수 OPENAI_API_KEY를 넣어야 쓸 수 있습니다. 관리자에게 문의하세요";
-const NO_IMAGE_STORE = "이미지 생성은 결과를 보관할 Vercel Blob 스토어(BLOB_READ_WRITE_TOKEN)가 연결돼야 쓸 수 있습니다. 관리자에게 문의하세요";
 const NO_RESEND = "두 번 청구되지 않도록 자동으로 다시 보내지 않습니다. 필요하면 다시 생성하세요";
 const IMAGE_NEVER_SENT = "서버가 OpenAI에 요청을 보내기 전에 멈췄습니다. 요금은 청구되지 않았습니다. 다시 생성하세요";
 const IMAGE_RUNNER_DIED = `OpenAI의 답을 기다리던 서버가 멈췄습니다. 요금이 청구됐을 수 있어 예상 비용을 기록했습니다. ${NO_RESEND}`;
@@ -86,11 +84,11 @@ export function isGenerationId(s: string): boolean {
 
 export function apiKeyFor(user: User): hf.ApiKey {
   const key = keyFrom(user.apiKeyEnc);
-  if (!key) throw new HttpError(403, NO_KEY);
+  if (!key) throw new HttpError(403, "noKey");
   return key;
 }
 
-export type Unavailable = { status: 403 | 503; message: string };
+export type Unavailable = { status: 403 | 503; error: AppError };
 
 /**
  * Why `user` cannot generate with `family` now, or null. A Higgsfield model needs the member's own key (403). The
@@ -98,9 +96,9 @@ export type Unavailable = { status: 403 | 503; message: string };
  * is stored (503); the member's Higgsfield key is never consulted for it.
  */
 export function unavailableFor(family: FamilyId, user: Pick<User, "apiKeyEnc">): Unavailable | null {
-  if (FAMILIES[family].provider === "higgsfield") return user.apiKeyEnc ? null : { status: 403, message: NO_KEY };
-  if (!openai.serverKey()) return { status: 503, message: NO_OPENAI_KEY };
-  if (!storage.storageEnabled()) return { status: 503, message: NO_IMAGE_STORE };
+  if (FAMILIES[family].provider === "higgsfield") return user.apiKeyEnc ? null : { status: 403, error: appError("noKey") };
+  if (!openai.serverKey()) return { status: 503, error: appError("noOpenAiKey") };
+  if (!storage.storageEnabled()) return { status: 503, error: appError("noImageStore") };
   return null;
 }
 
@@ -148,17 +146,17 @@ export async function cancelGeneration(gen: Generation, schedule: Scheduler): Pr
   if (gen.status === "pending") {
     const tried = (await resubmit(gen, schedule, "cancel")).row;
     const row = tried.status === "pending" ? await current(gen) : tried;
-    if (row.status === "pending") throw row.error === NO_KEY ? new HttpError(403, NO_KEY) : new HttpError(409, SUBMITTING);
+    if (row.status === "pending") throw row.error === NO_KEY ? new HttpError(403, "noKey") : new HttpError(409, "submitting");
     return row.status === "queued" ? cancelGeneration(row, schedule) : row;
   }
-  if (gen.status !== "queued" || !gen.requestId) throw new HttpError(409, "대기 중인 건만 취소할 수 있습니다");
+  if (gen.status !== "queued" || !gen.requestId) throw new HttpError(409, "notCancelable");
   const key = await ownerKey(gen.userId);
-  if (!key) throw new HttpError(403, NO_KEY);
+  if (!key) throw new HttpError(403, "noKey");
   let answer: Awaited<ReturnType<typeof hf.cancel>>;
   try {
     answer = await hf.cancel(key, gen.requestId);
   } catch (e) {
-    if (e instanceof hf.ProviderUnavailable) throw new HttpError(502, e.message);
+    if (e instanceof hf.ProviderUnavailable) throw new HttpError(502, "providerCancelFailed", { detail: e.message });
     throw e;
   }
   if (answer === "canceled") return apply(gen, decide(gen, { source: "cancel" }, { now: new Date() }), schedule);
@@ -694,7 +692,8 @@ async function startImage(user: User, plan: ReadyPlan, schedule: Scheduler): Pro
   const deadline = Date.now() + IMAGE_TIMING.runBudgetMs;
   const blocked = unavailableFor(plan.family, user);
   const key = openai.serverKey();
-  if (blocked || !key) throw new HttpError(blocked?.status ?? 503, blocked?.message ?? NO_OPENAI_KEY);
+  if (blocked) throw HttpError.of(blocked.status, blocked.error);
+  if (!key) throw new HttpError(503, "noOpenAiKey");
   const [row] = await getDb()
     .insert(schema.generations)
     .values({

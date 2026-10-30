@@ -14,18 +14,18 @@ export async function POST(req: Request) {
     const user = await requireUser();
     const form = await req.formData();
     const file = form.get("file");
-    if (!(file instanceof File)) throw new HttpError(400, "file 필드가 필요합니다");
-    if (file.size > SMALL_FILE_LIMIT) throw new HttpError(413, "4 MB를 넘는 파일은 대용량 업로드를 사용하세요");
+    if (!(file instanceof File)) throw new HttpError(400, "uploadNoFile");
+    if (file.size > SMALL_FILE_LIMIT) throw new HttpError(413, "uploadTooLarge", { mb: SMALL_FILE_LIMIT / 1024 / 1024 });
 
     const type = file.type === "image/jpg" ? "image/jpeg" : file.type;
     if (!(hf.UPLOAD_CONTENT_TYPES as readonly string[]).includes(type)) {
-      throw new HttpError(415, `지원하지 않는 형식: ${file.type || "unknown"} (jpeg/png/webp/gif/mp4/wav)`);
+      throw new HttpError(415, "uploadType", { type: file.type || "unknown", allowed: "jpeg/png/webp/gif/mp4/wav" });
     }
 
     const url = await hf.uploadBytes(apiKeyFor(user), await file.arrayBuffer(), type);
     return Response.json({ url, name: file.name, size: file.size, type });
   } catch (e) {
-    if (e instanceof hf.HiggsfieldError) return errorResponse(new HttpError(502, e.message));
+    if (e instanceof hf.HiggsfieldError) return errorResponse(new HttpError(502, "providerUploadFailed", { detail: e.message }));
     return errorResponse(e);
   }
 }

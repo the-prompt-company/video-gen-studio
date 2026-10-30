@@ -13,10 +13,10 @@ export async function POST(req: Request) {
     const currentPassword = String(b.currentPassword ?? "");
     const newPassword = String(b.newPassword ?? "");
     if (!username.trim() || !currentPassword || !newPassword) {
-      throw new HttpError(400, "ID, 현재 비밀번호, 새 비밀번호를 모두 입력하세요");
+      throw new HttpError(400, "passwordFieldsMissing");
     }
     const problem = newPasswordError(currentPassword, newPassword);
-    if (problem) throw new HttpError(400, problem);
+    if (problem) throw HttpError.of(400, problem);
 
     const u = await attemptSignIn(username, currentPassword);
     const locale = localeAfterSignIn({ picked: parseLocale(b.locale), stored: u.locale });

@@ -1,7 +1,7 @@
 import { getDb, schema } from "@/db";
 import { requireAdmin, errorResponse, HttpError } from "@/lib/auth";
 import { listTeams } from "@/lib/team-store";
-import { DUPLICATE_TEAM_NAME, parseTeamName } from "@/lib/teams";
+import { parseTeamName } from "@/lib/teams";
 
 /** GET /api/admin/teams — every team by name, each with its members. */
 export async function GET() {
@@ -19,13 +19,13 @@ export async function POST(req: Request) {
     await requireAdmin();
     const b = (await req.json().catch(() => null)) as { name?: unknown } | null;
     const parsed = parseTeamName(b?.name);
-    if (!parsed.ok) throw new HttpError(400, parsed.reason);
+    if (!parsed.ok) throw HttpError.of(400, parsed.reason);
     const [row] = await getDb()
       .insert(schema.teams)
       .values({ name: parsed.name })
       .onConflictDoNothing()
       .returning({ id: schema.teams.id, name: schema.teams.name });
-    if (!row) throw new HttpError(409, DUPLICATE_TEAM_NAME);
+    if (!row) throw new HttpError(409, "duplicateTeamName");
     return Response.json(row, { status: 201 });
   } catch (e) {
     return errorResponse(e);

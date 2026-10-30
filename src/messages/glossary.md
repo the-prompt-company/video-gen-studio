@@ -42,6 +42,8 @@ Each language button in the picker shows its own name (`한국어`, `English`, `
 | 텍스트→영상 | Text to video | 文生视频 | Mode |
 | 이미지→영상 | Image to video | 图生视频 | Mode |
 | 레퍼런스→영상 | Reference to video | 参考生视频 | Mode |
+| 텍스트→이미지 | Text to image | 文生图 | Mode |
+| 레퍼런스→이미지 | Reference to image | 参考生图 | Mode |
 | 이 이미지로 시작 | Start from this image | 以此图作为首帧 | Checkbox |
 | 프롬프트 | prompt | 提示词 | |
 | 화면비 | aspect ratio | 画面比例 | |

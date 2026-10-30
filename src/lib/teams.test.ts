@@ -10,7 +10,7 @@ const name = (raw: unknown) => {
 const nameRefused = (raw: unknown) => {
   const r = parseTeamName(raw);
   assert.equal(r.ok, false, `${JSON.stringify(raw)} should be refused, got ${JSON.stringify(r)}`);
-  return r.ok ? "" : r.reason;
+  return r.ok ? undefined : r.reason;
 };
 
 test("a team name is stored trimmed and in NFC, with its case and inner spaces kept", () => {
@@ -22,15 +22,15 @@ test("a team name is stored trimmed and in NFC, with its case and inner spaces k
 test(`a team name of up to ${MAX_TEAM_NAME_LENGTH} characters is accepted and one more is refused with the limit`, () => {
   assert.equal(MAX_TEAM_NAME_LENGTH, 30);
   assert.equal(name("팀".repeat(30)), "팀".repeat(30));
-  assert.match(nameRefused("팀".repeat(31)), /^팀 이름은 30자까지입니다 \(지금 31자\)$/);
+  assert.deepEqual(nameRefused("팀".repeat(31)), { code: "nameTooLong", params: { kind: "teamName", max: 30, length: 31 } });
 });
 
-test("a blank, multi-line, invisible or missing team name is refused with a reason that names the team name", () => {
-  for (const raw of ["", "   ", "\t\n"]) assert.match(nameRefused(raw), /^팀 이름이 비어 있습니다$/, JSON.stringify(raw));
-  assert.match(nameRefused("영업\n1팀"), /^팀 이름에 줄바꿈이나 탭/);
-  assert.match(nameRefused("영업\u202e1팀"), /^팀 이름에 보이지 않는/);
-  assert.match(nameRefused("\u3164"), /^팀 이름에 보이는 글자가 없습니다/);
-  for (const raw of [undefined, null, 12, ["팀"]]) assert.match(nameRefused(raw), /팀 이름을 글자로/, JSON.stringify(raw));
+test("a blank, multi-line, invisible or missing team name is refused with a reason about the team name", () => {
+  for (const raw of ["", "   ", "\t\n"]) assert.deepEqual(nameRefused(raw), { code: "nameBlank", params: { kind: "teamName" } }, JSON.stringify(raw));
+  assert.deepEqual(nameRefused("영업\n1팀"), { code: "nameControl", params: { kind: "teamName" } });
+  assert.deepEqual(nameRefused("영업\u202e1팀"), { code: "nameInvisible", params: { kind: "teamName" } });
+  assert.deepEqual(nameRefused("\u3164"), { code: "nameNoVisible", params: { kind: "teamName" } });
+  for (const raw of [undefined, null, 12, ["팀"]]) assert.deepEqual(nameRefused(raw), { code: "teamNameNotText" }, JSON.stringify(raw));
 });
 
 test("a team id is a positive integer that fits the serial column, and null means no team", () => {
@@ -51,9 +51,9 @@ test(`a bulk selection is 1 to ${MAX_BULK_USERS} positive user ids, with repeats
   const refused = (raw: unknown) => {
     const r = parseUserIds(raw);
     assert.equal(r.ok, false, JSON.stringify(raw));
-    return r.ok ? "" : r.reason;
+    return r.ok ? undefined : r.reason;
   };
-  assert.match(refused([]), /한 명 이상/);
-  assert.match(refused(Array.from({ length: MAX_BULK_USERS + 1 }, (_, i) => i + 1)), new RegExp(`${MAX_BULK_USERS}명까지`));
-  for (const raw of [undefined, "1,2", [1, "2"], [0], [1.5], [-3], [3e9]]) assert.match(refused(raw), /사용자 번호/, JSON.stringify(raw));
+  assert.deepEqual(refused([]), { code: "noUsersChosen" });
+  assert.deepEqual(refused(Array.from({ length: MAX_BULK_USERS + 1 }, (_, i) => i + 1)), { code: "tooManyUsers", params: { max: MAX_BULK_USERS } });
+  for (const raw of [undefined, "1,2", [1, "2"], [0], [1.5], [-3], [3e9]]) assert.deepEqual(refused(raw), { code: "badUserIds" }, JSON.stringify(raw));
 });

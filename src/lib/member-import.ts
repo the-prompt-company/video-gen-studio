@@ -1,4 +1,5 @@
 import { loginId } from "./credentials";
+import { appError, type AppError } from "./errors";
 import { parseNickname } from "./nickname";
 
 export const MAX_IMPORT_ROWS = 200;
@@ -12,13 +13,13 @@ export type PlannedRow =
   | { outcome: "create"; username: string; nickname: string }
   | { outcome: "exists"; username: string }
   | { outcome: "duplicate"; username: string; firstIndex: number }
-  | { outcome: "invalid"; reason: string };
+  | { outcome: "invalid"; reason: AppError };
 
 export type ImportResult = PlannedRow | { outcome: "created"; username: string; nickname: string };
 
 export type ImportResponse = { dryRun: boolean; results: ImportResult[] };
 
-export type ImportRequest = { ok: true; rows: ImportRow[]; dryRun: boolean } | { ok: false; error: string };
+export type ImportRequest = { ok: true; rows: ImportRow[]; dryRun: boolean } | { ok: false; error: AppError };
 
 function cellText(value: unknown): string {
   if (typeof value === "string") return value;
@@ -28,11 +29,9 @@ function cellText(value: unknown): string {
 
 export function parseImportRequest(body: unknown): ImportRequest {
   const b = (body && typeof body === "object" ? body : {}) as { rows?: unknown; dryRun?: unknown };
-  if (!Array.isArray(b.rows)) return { ok: false, error: "rows 배열이 필요합니다" };
-  if (b.rows.length === 0) return { ok: false, error: "만들 회원이 없습니다. 제목 줄 아래에 회원을 한 줄에 한 명씩 적으세요" };
-  if (b.rows.length > MAX_IMPORT_ROWS) {
-    return { ok: false, error: `한 번에 ${MAX_IMPORT_ROWS}명까지 만들 수 있는데 이 파일은 ${b.rows.length}명입니다. 파일을 ${MAX_IMPORT_ROWS}명씩 나눠 올리세요` };
-  }
+  if (!Array.isArray(b.rows)) return { ok: false, error: appError("importNoRows") };
+  if (b.rows.length === 0) return { ok: false, error: appError("importEmpty") };
+  if (b.rows.length > MAX_IMPORT_ROWS) return { ok: false, error: appError("importTooMany", { max: MAX_IMPORT_ROWS, count: b.rows.length }) };
   const rows = b.rows.map((r: unknown) => {
     const cells = (r && typeof r === "object" ? r : {}) as Record<string, unknown>;
     return { nickname: cellText(cells.nickname), email: cellText(cells.email) };
@@ -44,10 +43,10 @@ export function importUsername(row: ImportRow): string {
   return loginId(row.email);
 }
 
-function emailError(username: string): string | null {
-  if (!username) return "이메일이 비어 있습니다";
-  if (!EMAIL.test(username)) return "이메일 형식이 아닙니다 (예: name@company.com)";
-  if (username.length > MAX_ID_LENGTH) return `이메일이 ${MAX_ID_LENGTH}자를 넘습니다`;
+function emailError(username: string): AppError | null {
+  if (!username) return appError("emailBlank");
+  if (!EMAIL.test(username)) return appError("emailInvalid");
+  if (username.length > MAX_ID_LENGTH) return appError("emailTooLong", { max: MAX_ID_LENGTH });
   return null;
 }
 

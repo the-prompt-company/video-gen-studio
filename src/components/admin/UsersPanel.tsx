@@ -6,8 +6,10 @@ import type { UserUsageRow } from "@/lib/stats";
 import { INITIAL_PASSWORD, loginId } from "@/lib/credentials";
 import { MAX_NICKNAME_LENGTH } from "@/lib/nickname";
 import type { Team, TeamId } from "@/lib/teams";
+import { caught, type Reason } from "@/lib/errors";
 import { Badge, Button, Card, Field, Input, Select, Empty, ErrorText } from "@/components/ui";
 import { Modal } from "@/components/Modal";
+import { useErrorText } from "@/i18n/errors";
 import { dateTime, usd } from "@/i18n/format";
 import { api } from "./AdminPanels";
 import { MemberImport } from "./MemberImport";
@@ -16,9 +18,9 @@ type Detail = { id: number; username: string; nickname: string | null; role: str
 
 type Draft = { username: string; password: string; role: string; apiKey: string; note: string };
 
-type Editing = { kind: "edit"; member: Detail; error: string | null };
+type Editing = { kind: "edit"; member: Detail; error: Reason | null };
 
-type Open = { kind: "add"; busy: boolean; error: string | null } | { kind: "import" } | { kind: "assign"; busy: boolean; error: string | null } | Editing;
+type Open = { kind: "add"; busy: boolean; error: Reason | null } | { kind: "import" } | { kind: "assign"; busy: boolean; error: Reason | null } | Editing;
 
 const EMPTY: Draft = { username: "", password: "", role: "user", apiKey: "", note: "" };
 
@@ -29,14 +31,11 @@ const NO_TEAM = "none";
 
 const inFilter = (filter: string) => (r: UserUsageRow) => filter === ALL_TEAMS || (filter === NO_TEAM ? r.teamId === null : String(r.teamId) === filter);
 
-function message(e: unknown) {
-  return e instanceof Error ? e.message : String(e);
-}
-
 export function UsersPanel({ adminId }: { adminId: number }) {
   const format = useFormatter();
+  const errorText = useErrorText();
   const [rows, setRows] = useState<UserUsageRow[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Reason | null>(null);
   const [open, setOpen] = useState<Open | null>(null);
   const [draft, setDraft] = useState<Draft>(EMPTY);
   const [notice, setNotice] = useState<string | null>(null);
@@ -53,16 +52,16 @@ export function UsersPanel({ adminId }: { adminId: number }) {
       const b = await api<{ items: UserUsageRow[] }>("/api/admin/users");
       setRows(b.items);
     } catch (e) {
-      setError(message(e));
+      setError(caught(e));
     }
   }, []);
   useEffect(() => {
     api<{ items: UserUsageRow[] }>("/api/admin/users")
       .then((b) => setRows(b.items))
-      .catch((e) => setError(message(e)));
+      .catch((e) => setError(caught(e)));
     api<{ items: Team[] }>("/api/admin/teams")
       .then((b) => setTeams(b.items))
-      .catch((e) => setError(message(e)));
+      .catch((e) => setError(caught(e)));
   }, []);
 
   function show(next: Open) {
@@ -89,7 +88,7 @@ export function UsersPanel({ adminId }: { adminId: number }) {
       setOpen((o) => (o?.kind === "add" ? null : o));
       await load();
     } catch (err) {
-      setOpen((o) => (o?.kind === "add" ? { kind: "add", busy: false, error: message(err) } : o));
+      setOpen((o) => (o?.kind === "add" ? { kind: "add", busy: false, error: caught(err) } : o));
     }
   }
 
@@ -103,7 +102,7 @@ export function UsersPanel({ adminId }: { adminId: number }) {
       setNotice(team ? `${updated}명을 ${team.name}에 지정했습니다.` : `${updated}명을 미소속으로 바꿨습니다.`);
       await load();
     } catch (err) {
-      setOpen((o) => (o?.kind === "assign" ? { kind: "assign", busy: false, error: message(err) } : o));
+      setOpen((o) => (o?.kind === "assign" ? { kind: "assign", busy: false, error: caught(err) } : o));
     }
   }
 
@@ -111,7 +110,7 @@ export function UsersPanel({ adminId }: { adminId: number }) {
     try {
       show({ kind: "edit", member: await api<Detail>(`/api/admin/users/${id}`), error: null });
     } catch (e) {
-      setError(message(e));
+      setError(caught(e));
     }
   }
 
@@ -124,7 +123,7 @@ export function UsersPanel({ adminId }: { adminId: number }) {
       const member = await api<Detail>(`/api/admin/users/${id}`);
       update((o) => ({ ...o, member }));
     } catch (e) {
-      update((o) => ({ ...o, error: message(e) }));
+      update((o) => ({ ...o, error: caught(e) }));
     }
   }
 
@@ -138,7 +137,7 @@ export function UsersPanel({ adminId }: { adminId: number }) {
   return (
     <>
       <Card title={`사용자 ${rows.length}명`} action={toolbar}>
-        {error && <p className="mb-3 rounded-lg bg-rose-500/10 px-3 py-2 text-sm text-rose-300">{error}</p>}
+        {error && <p className="mb-3 rounded-lg bg-rose-500/10 px-3 py-2 text-sm text-rose-300">{errorText(error)}</p>}
         {notice && <p role="status" className="mb-3 break-all text-sm text-foreground-2">{notice}</p>}
         {rows.length > 0 && (
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -239,10 +238,10 @@ export function UsersPanel({ adminId }: { adminId: number }) {
         )}
       </Card>
 
-      {open?.kind === "add" && <AddMember draft={draft} onChange={setDraft} busy={open.busy} error={open.error} onSubmit={create} onClose={close} />}
+      {open?.kind === "add" && <AddMember draft={draft} onChange={setDraft} busy={open.busy} error={open.error && errorText(open.error)} onSubmit={create} onClose={close} />}
       {open?.kind === "import" && <MemberImport onCreated={load} onClose={close} />}
-      {open?.kind === "assign" && <AssignTeam members={chosen} teams={teams} busy={open.busy} error={open.error} onAssign={assign} onClose={close} />}
-      {open?.kind === "edit" && <MemberEditor key={open.member.id} member={open.member} teams={teams} error={open.error} adminId={adminId} onPatch={(body) => patch(open.member.id, body)} onClose={close} />}
+      {open?.kind === "assign" && <AssignTeam members={chosen} teams={teams} busy={open.busy} error={open.error && errorText(open.error)} onAssign={assign} onClose={close} />}
+      {open?.kind === "edit" && <MemberEditor key={open.member.id} member={open.member} teams={teams} error={open.error && errorText(open.error)} adminId={adminId} onPatch={(body) => patch(open.member.id, body)} onClose={close} />}
     </>
   );
 }

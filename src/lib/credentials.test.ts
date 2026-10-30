@@ -10,17 +10,17 @@ test("a new password of 8+ characters that differs from the current and the init
 });
 
 test("a new password under 8 characters is refused with the minimum length", () => {
-  assert.match(newPasswordError(CURRENT, "abcdefg") ?? "", /8자/);
-  assert.match(newPasswordError(CURRENT, "") ?? "", /8자/);
+  assert.deepEqual(newPasswordError(CURRENT, "abcdefg"), { code: "passwordTooShort", params: { min: 8 } });
+  assert.deepEqual(newPasswordError(CURRENT, ""), { code: "passwordTooShort", params: { min: 8 } });
 });
 
 test("the current password is refused as the new one", () => {
-  assert.match(newPasswordError(CURRENT, CURRENT) ?? "", /현재 비밀번호와 같/);
+  assert.deepEqual(newPasswordError(CURRENT, CURRENT), { code: "passwordUnchanged" });
 });
 
 test("the initial password oooooooo is refused as the new one, whatever the current password is", () => {
-  assert.match(newPasswordError(CURRENT, "oooooooo") ?? "", /임시 비밀번호/);
-  assert.match(newPasswordError("oooooooo", "oooooooo") ?? "", /임시 비밀번호/);
+  assert.deepEqual(newPasswordError(CURRENT, "oooooooo"), { code: "passwordIsInitial" });
+  assert.deepEqual(newPasswordError("oooooooo", "oooooooo"), { code: "passwordIsInitial" });
 });
 
 test("an ID with @ is an email: trimmed and lowercased", () => {

@@ -3,10 +3,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { useFormatter, useTranslations } from "next-intl";
 import type { PublicGeneration } from "@/lib/generations";
+import { caught, type Reason } from "@/lib/errors";
 import { FAMILIES, FAMILY_IDS, modelLine } from "@/lib/catalog";
 import { GENERATION_STATUSES } from "@/lib/generation-status";
 import { Button, Card, Select, Empty } from "@/components/ui";
 import { StatusBadge } from "@/components/StatusBadge";
+import { useErrorText } from "@/i18n/errors";
 import { dateTime, usd } from "@/i18n/format";
 import { api } from "./AdminPanels";
 
@@ -15,12 +17,13 @@ type UserOpt = { id: number; username: string };
 export function LogsPanel() {
   const tStatus = useTranslations("status");
   const format = useFormatter();
+  const errorText = useErrorText();
   const [users, setUsers] = useState<UserOpt[]>([]);
   const [f, setF] = useState({ userId: "", modelId: "", status: "" });
   const [items, setItems] = useState<PublicGeneration[]>([]);
   const [total, setTotal] = useState(0);
   const [open, setOpen] = useState<PublicGeneration | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Reason | null>(null);
 
   const qs = useCallback(
     (extra: Record<string, string> = {}) => {
@@ -43,7 +46,7 @@ export function LogsPanel() {
         setItems(b.items);
         setTotal(b.total);
       })
-      .catch((e) => setError(e instanceof Error ? e.message : String(e)));
+      .catch((e) => setError(caught(e)));
   }, [qs]);
 
   async function more() {
@@ -82,7 +85,7 @@ export function LogsPanel() {
           ))}
         </Select>
       </div>
-      {error && <p className="mb-3 rounded-lg bg-rose-500/10 px-3 py-2 text-sm text-rose-300">{error}</p>}
+      {error && <p className="mb-3 rounded-lg bg-rose-500/10 px-3 py-2 text-sm text-rose-300">{errorText(error)}</p>}
       {items.length === 0 ? (
         <Empty>조건에 맞는 기록이 없습니다.</Empty>
       ) : (

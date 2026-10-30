@@ -22,7 +22,7 @@ const dbNowMs = sql<number>`extract(epoch from now()) * 1000`.mapWith(Number);
 /** Settle the listed rows the caller may see. The client poll sends every live id in one request per tick. */
 async function pollRows(user: User, raw: string) {
   const ids = raw.split(",").filter((s) => s !== "");
-  if (ids.length > MAX_IDS) throw new HttpError(400, `ids는 최대 ${MAX_IDS}개입니다`);
+  if (ids.length > MAX_IDS) throw new HttpError(400, "tooManyIds", { max: MAX_IDS });
   const valid = ids.filter(isGenerationId);
   if (valid.length === 0) return { rows: [] };
   const g = schema.generations;
@@ -69,34 +69,36 @@ export async function GET(req: Request) {
   }
 }
 
-function publicUrl(v: unknown, label: string): string {
+type RefKind = "image" | "video";
+
+function publicUrl(v: unknown, kind: RefKind): string {
   const u = String(v ?? "");
-  if (!/^https?:\/\//.test(u)) throw new HttpError(400, `${label}: 공개 URL만 허용됩니다`);
+  if (!/^https?:\/\//.test(u)) throw new HttpError(400, "refNotPublicUrl", { kind });
   return u;
 }
 
-function list(v: unknown, label: string): unknown[] {
+function list(v: unknown, kind: RefKind): unknown[] {
   if (v === undefined) return [];
-  if (!Array.isArray(v)) throw new HttpError(400, `${label}: 배열이어야 합니다`);
-  if (v.length > MAX_REFS) throw new HttpError(400, `${label}: 최대 ${MAX_REFS}개`);
+  if (!Array.isArray(v)) throw new HttpError(400, "refsNotList", { kind });
+  if (v.length > MAX_REFS) throw new HttpError(400, "tooManyRefs", { kind, max: MAX_REFS });
   return v;
 }
 
 function parseDraft(raw: unknown): Draft {
   const b = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const family = String(b.family ?? "");
-  if (!isFamilyId(family)) throw new HttpError(400, "알 수 없는 모델입니다. 페이지를 새로고침하세요");
+  if (!isFamilyId(family)) throw new HttpError(400, "unknownModel");
   const mode = String(b.mode ?? "") as Mode;
-  if (!MODES.includes(mode)) throw new HttpError(400, "생성 방식이 없습니다. 페이지를 새로고침하세요");
+  if (!MODES.includes(mode)) throw new HttpError(400, "noMode");
   return {
     family,
     mode,
     prompt: String(b.prompt ?? ""),
     params: b.params && typeof b.params === "object" ? (b.params as Record<string, unknown>) : {},
-    images: list(b.images, "이미지").map((u) => publicUrl(u, "이미지")),
-    videos: list(b.videos, "영상").map((v) => {
+    images: list(b.images, "image").map((u) => publicUrl(u, "image")),
+    videos: list(b.videos, "video").map((v) => {
       const o = (v && typeof v === "object" ? v : {}) as Record<string, unknown>;
-      return { url: publicUrl(o.url, "영상"), seconds: Number(o.seconds) };
+      return { url: publicUrl(o.url, "video"), seconds: Number(o.seconds) };
     }),
     startFromImage: b.startFromImage === true,
   };
@@ -106,22 +108,22 @@ function parseDraft(raw: unknown): Draft {
  * POST /api/generations — submit one generation. The body is a Draft: { family, mode, prompt, params, images,
  * videos: [{ url, seconds }], startFromImage }. 201 when Higgsfield accepted it, 202 when it waits as 제출 대기 and
  * submits itself again, 502 when Higgsfield refused it, 400 when the plan is not ready. Every answer after insert
- * carries the row as `item`, and estimatedCostUsd is the row's cost, decided now.
+ * carries the row as `item`, whose own reason says why a refused one failed, and estimatedCostUsd is the row's cost,
+ * decided now.
  */
 export async function POST(req: Request) {
   try {
     const user = await requireUser();
     const draft = parseDraft(await req.json().catch(() => ({})));
     const setting = await loadModelSetting(draft.family);
-    if (!setting.enabled) throw new HttpError(400, `관리자가 ${FAMILIES[draft.family].name}을(를) 껐습니다`);
+    if (!setting.enabled) throw new HttpError(400, "modelDisabled", { model: FAMILIES[draft.family].name });
     const plan = planGeneration(draft, setting.rateUsd);
-    if (!plan.ready) throw new HttpError(400, plan.blocker);
+    if (!plan.ready) throw HttpError.of(400, plan.blocker);
 
     const row = await submitGeneration(user, plan, after);
-    const failed = row.status === "failed";
     return Response.json(
-      { item: publicGeneration(row), error: failed ? row.error : undefined, estimatedCostUsd: Number(row.costUsd) },
-      { status: failed ? 502 : row.status === "pending" ? 202 : 201 },
+      { item: publicGeneration(row), estimatedCostUsd: Number(row.costUsd) },
+      { status: row.status === "failed" ? 502 : row.status === "pending" ? 202 : 201 },
     );
   } catch (e) {
     return errorResponse(e);

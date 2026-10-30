@@ -10,20 +10,6 @@ const ONE_CALL_PER_ROW = "OpenAI는 src/lib/generations.ts만 부른다. 이미�
 // files here; the last one deletes the list. Every other file under src/ fails `npm run lint` on a Hangul literal.
 const I18N_PENDING = [
   // Error text and formatting (i18n PR 2)
-  "src/app/api/admin/models/route.ts",
-  "src/app/api/admin/users/[[]id]/route.ts",
-  "src/app/api/admin/users/route.ts",
-  "src/app/api/auth/login/route.ts",
-  "src/app/api/auth/password/route.ts",
-  "src/app/api/cron/settle/route.ts",
-  "src/app/api/generations/[[]id]/route.ts",
-  "src/app/api/generations/route.ts",
-  "src/app/api/me/avatar/route.ts",
-  "src/app/api/me/route.ts",
-  "src/app/api/uploads/blob/route.ts",
-  "src/app/api/uploads/route.ts",
-  "src/lib/auth.ts",
-  "src/lib/credentials.ts",
   "src/lib/generations.ts",
   "src/lib/higgsfield.ts",
   "src/lib/openai.ts",
@@ -43,12 +29,7 @@ const I18N_PENDING = [
   "src/components/admin/ModelsPanel.tsx",
   "src/components/admin/TeamsPanel.tsx",
   "src/components/admin/UsersPanel.tsx",
-  "src/lib/display-name.ts",
-  "src/lib/member-import.ts",
   "src/lib/member-sheet.ts",
-  "src/lib/model-settings.ts",
-  "src/lib/nickname.ts",
-  "src/lib/teams.ts",
 ];
 
 const eslintConfig = defineConfig([

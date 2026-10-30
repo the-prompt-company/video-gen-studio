@@ -243,7 +243,7 @@ async function everyMode({ page, ev, drawer, model, seedance, h3, generate, curr
     await generate.click();
     const res = await answer;
     const body = await res.json();
-    if (res.status() !== 201 || body.item?.modelId !== want) ev.fail(`${label}: POST answered ${res.status()} with ${body.item?.modelId ?? body.error}`);
+    if (res.status() !== 201 || body.item?.modelId !== want) ev.fail(`${label}: POST answered ${res.status()} with ${body.item?.modelId ?? JSON.stringify(body.error)}`);
     submitted.push(body.item.id);
     const until = Date.now() + 10_000;
     let sent;

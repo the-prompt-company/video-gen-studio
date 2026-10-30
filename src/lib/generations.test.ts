@@ -28,21 +28,18 @@ const BLOB = "vercel_blob_rw_store_secret";
 test("the image model needs the server's OPENAI_API_KEY and Blob, never the member's Higgsfield key", () =>
   withEnv({ BLOB_READ_WRITE_TOKEN: BLOB }, () => {
     const noKey = unavailableFor("openai/gpt-image-2", keyed);
-    assert.equal(noKey?.status, 503);
-    assert.match(noKey?.message ?? "", /관리자.*OPENAI_API_KEY/);
+    assert.deepEqual(noKey, { status: 503, error: { code: "noOpenAiKey" } });
     process.env.OPENAI_API_KEY = "sk-test";
     assert.equal(unavailableFor("openai/gpt-image-2", member), null, "a member without a Higgsfield key can make images");
     delete process.env.BLOB_READ_WRITE_TOKEN;
     const noBlob = unavailableFor("openai/gpt-image-2", member);
-    assert.equal(noBlob?.status, 503);
-    assert.match(noBlob?.message ?? "", /Blob/);
+    assert.deepEqual(noBlob, { status: 503, error: { code: "noImageStore" } });
   }));
 
 test("video models keep their rule: the member's own Higgsfield key, whatever the server holds", () =>
   withEnv({ OPENAI_API_KEY: "sk-test", BLOB_READ_WRITE_TOKEN: BLOB }, () => {
     const noKey = unavailableFor("bytedance/seedance-2.0", member);
-    assert.equal(noKey?.status, 403);
-    assert.match(noKey?.message ?? "", /API 키가 아직 할당되지 않았습니다/);
+    assert.deepEqual(noKey, { status: 403, error: { code: "noKey" } });
     assert.equal(unavailableFor("minimax/h3", keyed), null);
   }));
 
@@ -53,7 +50,7 @@ test("submitting an image without OPENAI_API_KEY answers 503 before anything is 
     let scheduled = 0;
     await assert.rejects(
       submitGeneration(member, plan as ReadyPlan, () => void scheduled++),
-      (e: unknown) => e instanceof HttpError && e.status === 503 && /OPENAI_API_KEY/.test(e.message),
+      (e: unknown) => e instanceof HttpError && e.status === 503 && e.error.code === "noOpenAiKey",
       "with DATABASE_URL unset, any insert would have thrown 'DATABASE_URL is not set' instead",
     );
     assert.equal(scheduled, 0);

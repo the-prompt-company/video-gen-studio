@@ -13,7 +13,7 @@ export async function POST(req: Request) {
   try {
     await requireAdmin();
     const request = parseImportRequest(await req.json().catch(() => null));
-    if (!request.ok) throw new HttpError(400, request.error);
+    if (!request.ok) throw HttpError.of(400, request.error);
 
     const db = getDb();
     const users = schema.users;

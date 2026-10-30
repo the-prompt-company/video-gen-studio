@@ -1109,7 +1109,7 @@ async function cancelPending(owner: Owner, admin: User, upstream: string, proxy:
       () => null,
       (e: unknown) => e as { status?: number; message?: string },
     );
-    check(refused?.status === 409 && /제출 중/.test(refused.message ?? ""), "a cancel while the submit is in flight answers 409 제출 중", refused?.message);
+    check(refused?.status === 409 && refused.message === "submitting", "a cancel while the submit is in flight answers 409 submitting", refused?.message);
     return submitting;
   });
   check(inflight.status === "queued" && inflight.requestId !== null, "and the submit it refused to race lands as queued");

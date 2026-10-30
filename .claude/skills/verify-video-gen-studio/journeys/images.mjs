@@ -28,8 +28,8 @@ export default async function images({ page, ev, env }) {
     if (!/사용 불가/.test(gpt.text)) ev.fail(`the disabled option should say 사용 불가: ${gpt.text}`);
     await ev.shot("image-no-key");
     const refused = await ev.api("/api/generations", { method: "POST", body: JSON.stringify({ family: GPT, mode: "t2i", prompt: "vgs-img 키 없음", params: {}, images: [], videos: [], startFromImage: false }) });
-    if (refused.status !== 503 || !/OPENAI_API_KEY/.test(refused.body?.error ?? "")) ev.fail(`POST without OPENAI_API_KEY answered ${refused.status} ${refused.body?.error}`);
-    ev.note(`img-no-key: option "${gpt.text}" disabled, status line names OPENAI_API_KEY, POST answered 503 "${refused.body.error}"`);
+    if (refused.status !== 503 || refused.body?.error?.code !== "noOpenAiKey") ev.fail(`POST without OPENAI_API_KEY answered ${refused.status} ${JSON.stringify(refused.body?.error)}`);
+    ev.note(`img-no-key: option "${gpt.text}" disabled, status line names OPENAI_API_KEY, POST answered 503 ${JSON.stringify(refused.body.error)}`);
     return;
   }
   if (!fake) ev.fail("set VGS_FAKE_HF to the fake the app talks to; this journey generates images");
@@ -64,7 +64,7 @@ export default async function images({ page, ev, env }) {
       page.getByRole("button", { name: "생성하기" }).click(),
     ]);
     const body = await res.json();
-    if (res.status() !== 201 || body.item?.status !== "in_progress") ev.fail(`${label}: POST answered ${res.status()} ${body.item?.status} ${body.error ?? ""}`);
+    if (res.status() !== 201 || body.item?.status !== "in_progress") ev.fail(`${label}: POST answered ${res.status()} ${body.item?.status} ${JSON.stringify(body.error ?? "")}`);
     const stage = page.getByRole("region", { name: "결과 무대" });
     const item = stage.locator(`article[data-id="${body.item.id}"]`);
     const running = item.getByText("OpenAI가 이미지를 만드는 중입니다", { exact: false });

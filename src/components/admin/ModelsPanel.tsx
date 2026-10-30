@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { useFormatter } from "next-intl";
 import { costUsd, FAMILIES, isFamilyId } from "@/lib/catalog";
+import { caught, type Reason } from "@/lib/errors";
 import { Button, Card, Input } from "@/components/ui";
+import { useErrorText } from "@/i18n/errors";
 import { usd } from "@/i18n/format";
 import { api } from "./AdminPanels";
 
@@ -11,9 +13,10 @@ type Row = { modelId: string; name: string; vendor: string; pricePerSecUsd: numb
 
 export function ModelsPanel() {
   const format = useFormatter();
+  const errorText = useErrorText();
   const [rows, setRows] = useState<Row[]>([]);
   const [draft, setDraft] = useState<Record<string, string>>({});
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Reason | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -21,7 +24,7 @@ export function ModelsPanel() {
       setRows(b.items);
       setDraft(Object.fromEntries(b.items.map((r) => [r.modelId, String(r.pricePerSecUsd)])));
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(caught(e));
     }
   }, []);
   useEffect(() => {
@@ -30,7 +33,7 @@ export function ModelsPanel() {
         setRows(b.items);
         setDraft(Object.fromEntries(b.items.map((r) => [r.modelId, String(r.pricePerSecUsd)])));
       })
-      .catch((e) => setError(e instanceof Error ? e.message : String(e)));
+      .catch((e) => setError(caught(e)));
   }, []);
 
   async function save(modelId: string, body: Record<string, unknown>) {
@@ -39,7 +42,7 @@ export function ModelsPanel() {
       await api("/api/admin/models", { method: "PATCH", body: JSON.stringify({ modelId, ...body }) });
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(caught(e));
     }
   }
 
@@ -48,7 +51,7 @@ export function ModelsPanel() {
       <p className="mb-4 text-xs leading-relaxed text-subtle">
         Higgsfield 응답에는 비용이 없어서, 영상은 생성을 요청할 때 이 단가와 Higgsfield의 요금 규칙(해상도, 화면비, 길이, 영상 레퍼런스 길이)으로 비용을 정해 기록합니다. GPT Image 2는 OpenAI가 응답에 알려 준 토큰 수에 이 단가(이미지 출력 100만 토큰당)와 OpenAI의 입력 단가 비율(텍스트 5/30, 이미지 8/30)을 곱해 기록하고, 토큰 수가 없으면 예상 비용을 씁니다. 단가를 바꾸면 그다음 요청부터 적용되고, 실제 청구 금액은 각 회사의 인보이스가 기준입니다.
       </p>
-      {error && <p className="mb-3 rounded-lg bg-rose-500/10 px-3 py-2 text-sm text-rose-300">{error}</p>}
+      {error && <p className="mb-3 rounded-lg bg-rose-500/10 px-3 py-2 text-sm text-rose-300">{errorText(error)}</p>}
       <ul aria-label="모델" className="divide-y divide-border text-sm">
         {rows.map((r) => {
             const family = isFamilyId(r.modelId) ? FAMILIES[r.modelId] : null;

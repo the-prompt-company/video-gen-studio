@@ -243,7 +243,7 @@ export default async function settings({ page, ev, base, webDir, local }) {
     const saveNickname = page.getByRole("button", { name: "닉네임 저장" });
     await nickname.fill("가".repeat(31));
     await saveNickname.click();
-    await page.locator("main").getByRole("alert").filter({ hasText: /30자/ }).waitFor({ timeout: 10_000 });
+    await page.locator("main").getByRole("alert").filter({ hasText: await ev.t("errors.nameTooLong", { kind: "nickname", max: 30, length: 31 }) }).waitFor({ timeout: 10_000 });
     const control = await ev.api("/api/me", { method: "PATCH", body: JSON.stringify({ nickname: "설정\n테스터" }) });
     const long = await ev.api("/api/me", { method: "PATCH", body: JSON.stringify({ nickname: "a".repeat(31) }) });
     if (control.status !== 400 || long.status !== 400) ev.fail(`the server should refuse a line break and 31 characters, got ${control.status} and ${long.status}`);

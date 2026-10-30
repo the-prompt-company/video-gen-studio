@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { ENDPOINTS, invalidBody } from "../../scripts/fake-higgsfield";
 import { invalidImageRequest } from "../../scripts/fake-openai";
+import type { AppError } from "./errors";
 import {
   defaultParams,
   describeModel,
@@ -35,13 +36,13 @@ function draft(over: Partial<Draft> = {}): Draft {
 }
 
 function ready(plan: Plan) {
-  assert.ok(plan.ready, plan.ready ? "" : plan.blocker);
+  assert.ok(plan.ready, plan.ready ? "" : JSON.stringify(plan.blocker));
   return { ...plan, body: JSON.parse(plan.body) as Record<string, unknown> };
 }
 
-function blocked(plan: Plan): string {
+function blocked(plan: Plan): AppError | undefined {
   assert.equal(plan.ready, false, `expected a blocker, planned ${plan.endpoint}`);
-  return plan.ready ? "" : plan.blocker;
+  return plan.ready ? undefined : plan.blocker;
 }
 
 test("routeMode: nothing attached is text, one image the member starts from is image, anything else is reference", () => {
@@ -100,8 +101,8 @@ test("the default for one image is reference; the first-frame choice is offered 
 });
 
 test("a mode the screen showed but the attachments do not route to is refused, never rerouted", () => {
-  assert.match(blocked(planGeneration(draft({ mode: "r2v" }), 0)), /새로고침/);
-  assert.match(blocked(planGeneration(draft({ mode: "i2v", images: [IMG, IMG2], startFromImage: true }), 0)), /새로고침/);
+  assert.deepEqual(blocked(planGeneration(draft({ mode: "r2v" }), 0)), { code: "modeMismatch", params: { mode: "r2v" } });
+  assert.deepEqual(blocked(planGeneration(draft({ mode: "i2v", images: [IMG, IMG2], startFromImage: true }), 0)), { code: "modeMismatch", params: { mode: "i2v" } });
 });
 
 test("bodies carry the media fields of their mode and only keys the endpoint's published schema lists", () => {
@@ -143,29 +144,29 @@ function edgeParams(family: FamilyId): Record<string, unknown> {
 test("caps and prompts: H3 takes five images and always a prompt, Seedance six images, both three videos", () => {
   const six = Array.from({ length: 6 }, (_, i) => `https://cdn.test/${i}.jpg`);
   ready(planGeneration(draft({ family: H3, mode: "r2v", images: six.slice(0, 5) }), 0));
-  assert.match(blocked(planGeneration(draft({ family: H3, mode: "r2v", images: six }), 0)), /최대 5장/);
+  assert.deepEqual(blocked(planGeneration(draft({ family: H3, mode: "r2v", images: six }), 0)), { code: "tooManyImages", params: { model: "MiniMax H3", max: 5 } });
   ready(planGeneration(draft({ mode: "r2v", images: six }), 0));
-  assert.match(blocked(planGeneration(draft({ mode: "r2v", images: [...six, IMG] }), 0)), /최대 6장/);
+  assert.deepEqual(blocked(planGeneration(draft({ mode: "r2v", images: [...six, IMG] }), 0)), { code: "tooManyImages", params: { model: "Seedance 2.0", max: 6 } });
   const fourVideos = Array.from({ length: 4 }, (_, i) => ({ url: `https://cdn.test/${i}.mp4`, seconds: 1 }));
-  assert.match(blocked(planGeneration(draft({ mode: "r2v", videos: fourVideos }), 0)), /최대 3개/);
-  assert.match(blocked(planGeneration(draft({ family: H3, prompt: "  " }), 0)), /프롬프트/);
-  assert.match(blocked(planGeneration(draft({ family: H3, mode: "i2v", prompt: "", images: [IMG], startFromImage: true }), 0)), /프롬프트/);
-  assert.match(blocked(planGeneration(draft({ prompt: "" }), 0)), /프롬프트/);
+  assert.deepEqual(blocked(planGeneration(draft({ mode: "r2v", videos: fourVideos }), 0)), { code: "tooManyVideos", params: { model: "Seedance 2.0", max: 3 } });
+  assert.deepEqual(blocked(planGeneration(draft({ family: H3, prompt: "  " }), 0)), { code: "promptRequired", params: { model: "MiniMax H3", mode: "t2v" } });
+  assert.deepEqual(blocked(planGeneration(draft({ family: H3, mode: "i2v", prompt: "", images: [IMG], startFromImage: true }), 0)), { code: "promptRequired", params: { model: "MiniMax H3", mode: "i2v" } });
+  assert.deepEqual(blocked(planGeneration(draft({ prompt: "" }), 0)), { code: "promptRequired", params: { model: "Seedance 2.0", mode: "t2v" } });
   const noPrompt = ready(planGeneration(draft({ mode: "r2v", prompt: "", images: [IMG] }), 0));
   assert.equal("prompt" in noPrompt.body, false, "Seedance reference-to-video goes without a prompt");
 });
 
 test("params are checked against the model's ranges, and the prompt is sent trimmed", () => {
-  assert.match(blocked(planGeneration(draft({ params: { duration: 16 } }), 0)), /길이/);
-  assert.match(blocked(planGeneration(draft({ family: H3, params: { duration: 7 } }), 0)), /길이/);
-  assert.match(blocked(planGeneration(draft({ params: { resolution: "2K" } }), 0)), /해상도/);
+  assert.deepEqual(blocked(planGeneration(draft({ params: { duration: 16 } }), 0)), { code: "paramRange", params: { label: "길이(초)", min: 4, max: 15 } });
+  assert.deepEqual(blocked(planGeneration(draft({ family: H3, params: { duration: 7 } }), 0)), { code: "paramChoice", params: { label: "길이(초)", options: "5 | 10 | 15" } });
+  assert.deepEqual(blocked(planGeneration(draft({ params: { resolution: "2K" } }), 0)), { code: "paramChoice", params: { label: "해상도", options: "480p | 720p | 1080p | 4k" } });
   assert.equal(ready(planGeneration(draft({ prompt: "  밤  " }), 0)).body.prompt, "밤");
   assert.equal(ready(planGeneration(draft({ family: H3, params: { duration: "10" } }), 0)).durationS, 10);
 });
 
 test("every reference video needs a length the browser read", () => {
   for (const seconds of [Number.NaN, 0, -1, Number.POSITIVE_INFINITY]) {
-    assert.match(blocked(planGeneration(draft({ mode: "r2v", videos: [{ url: VID, seconds }] }), 0)), /영상 길이/, String(seconds));
+    assert.deepEqual(blocked(planGeneration(draft({ mode: "r2v", videos: [{ url: VID, seconds }] }), 0)), { code: "videoLengthUnknown" }, String(seconds));
   }
 });
 
@@ -264,8 +265,8 @@ test("GPT Image 2: nothing attached goes to generations, any image reference to 
   assert.deepEqual([t2i.endpoint, t2i.mode, t2i.durationS, t2i.offersStartFromImage], ["openai/gpt-image-2/generations", "t2i", 0, false]);
   const r2i = ready(planGeneration(draft({ family: GPT, mode: "r2i", images: [IMG], startFromImage: true }), 0));
   assert.deepEqual([r2i.endpoint, r2i.mode, r2i.offersStartFromImage], ["openai/gpt-image-2/edits", "r2i", false], "an image model has no first-frame mode");
-  assert.match(blocked(planGeneration(draft({ family: GPT, mode: "r2i", videos: [{ url: VID, seconds: 3 }] }), 0)), /영상 레퍼런스를 받지 않습니다/);
-  assert.match(blocked(planGeneration(draft({ family: GPT, mode: "t2v" }), 0)), /새로고침/, "a video mode shown for an image model is refused");
+  assert.deepEqual(blocked(planGeneration(draft({ family: GPT, mode: "r2i", videos: [{ url: VID, seconds: 3 }] }), 0)), { code: "noVideoRefs", params: { model: "GPT Image 2" } });
+  assert.deepEqual(blocked(planGeneration(draft({ family: GPT, mode: "t2v" }), 0)), { code: "modeMismatch", params: { mode: "t2v" } }, "a video mode shown for an image model is refused");
 });
 
 test("GPT Image 2 bodies carry the documented parameters in a fixed order, and edits add the references as image_url", () => {
@@ -302,15 +303,15 @@ test("GPT Image 2 bodies carry the documented parameters in a fixed order, and e
 });
 
 test("GPT Image 2 blockers: a prompt in both modes, at most 16 images and 32,000 characters, transparency only in PNG or WebP", () => {
-  assert.match(blocked(planGeneration(draft({ family: GPT, mode: "t2i", prompt: " " }), 0)), /프롬프트가 필요합니다/);
-  assert.match(blocked(planGeneration(draft({ family: GPT, mode: "r2i", prompt: "", images: [IMG] }), 0)), /프롬프트가 필요합니다/);
+  assert.deepEqual(blocked(planGeneration(draft({ family: GPT, mode: "t2i", prompt: " " }), 0)), { code: "promptRequired", params: { model: "GPT Image 2", mode: "t2i" } });
+  assert.deepEqual(blocked(planGeneration(draft({ family: GPT, mode: "r2i", prompt: "", images: [IMG] }), 0)), { code: "promptRequired", params: { model: "GPT Image 2", mode: "r2i" } });
   const seventeen = Array.from({ length: 17 }, (_, i) => `https://cdn.test/${i}.png`);
-  assert.match(blocked(planGeneration(draft({ family: GPT, mode: "r2i", images: seventeen }), 0)), /최대 16장/);
+  assert.deepEqual(blocked(planGeneration(draft({ family: GPT, mode: "r2i", images: seventeen }), 0)), { code: "tooManyImages", params: { model: "GPT Image 2", max: 16 } });
   ready(planGeneration(draft({ family: GPT, mode: "t2i", prompt: "가".repeat(32_000) }), 0));
-  assert.match(blocked(planGeneration(draft({ family: GPT, mode: "t2i", prompt: "가".repeat(32_001) }), 0)), /32,000자/);
-  assert.match(blocked(planGeneration(draft({ family: GPT, mode: "t2i", params: { background: "transparent", output_format: "jpeg" } }), 0)), /투명 배경/);
+  assert.deepEqual(blocked(planGeneration(draft({ family: GPT, mode: "t2i", prompt: "가".repeat(32_001) }), 0)), { code: "promptTooLong", params: { max: 32_000 } });
+  assert.deepEqual(blocked(planGeneration(draft({ family: GPT, mode: "t2i", params: { background: "transparent", output_format: "jpeg" } }), 0)), { code: "transparentNeedsAlpha" });
   ready(planGeneration(draft({ family: GPT, mode: "t2i", params: { background: "transparent", output_format: "png" } }), 0));
-  assert.match(blocked(planGeneration(draft({ family: GPT, mode: "t2i", params: { quality: "auto" } }), 0)), /품질/);
+  assert.deepEqual(blocked(planGeneration(draft({ family: GPT, mode: "t2i", params: { quality: "auto" } }), 0)), { code: "paramChoice", params: { label: "품질", options: "low | medium | high" } });
 });
 
 function gpt(params: Record<string, unknown>, extra: { promptChars?: number; inputImages?: number; usage?: TokenUsage } = {}) {

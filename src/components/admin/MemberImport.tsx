@@ -2,10 +2,12 @@
 
 import { useState, type ChangeEvent } from "react";
 import { INITIAL_PASSWORD } from "@/lib/credentials";
+import { caught, type Reason } from "@/lib/errors";
 import { MAX_IMPORT_ROWS, type ImportResponse, type ImportResult } from "@/lib/member-import";
 import { membersFromSheet, type SheetMember } from "@/lib/member-sheet";
 import { Badge, Button, ErrorText } from "@/components/ui";
 import { Modal } from "@/components/Modal";
+import { useErrorText } from "@/i18n/errors";
 import { api } from "./AdminPanels";
 
 type Checked = { file: string; members: SheetMember[]; results: ImportResult[] };
@@ -13,9 +15,9 @@ type Checked = { file: string; members: SheetMember[]; results: ImportResult[] }
 type Phase =
   | { step: "idle" }
   | { step: "working"; file: string; doing: string }
-  | ({ step: "preview"; error?: string } & Checked)
+  | ({ step: "preview"; error?: Reason } & Checked)
   | ({ step: "done" } & Checked)
-  | { step: "failed"; file: string; error: string };
+  | { step: "failed"; file: string; error: Reason };
 
 const OUTCOME: Record<ImportResult["outcome"], { label: string; tone: string; order: number }> = {
   invalid: { label: "확인 필요", tone: "bg-rose-500/15 text-rose-300 ring-rose-500/30", order: 0 },
@@ -28,16 +30,13 @@ const OUTCOME: Record<ImportResult["outcome"], { label: string; tone: string; or
 const NOT_XLSX = "엑셀 통합 문서(.xlsx)만 읽을 수 있습니다. 엑셀에서 다른 이름으로 저장 → Excel 통합 문서(.xlsx)로 저장한 뒤 다시 고르세요";
 const UNREADABLE = "파일을 읽지 못했습니다. 엑셀에서 열리는지 확인하고, 암호가 걸려 있으면 풀어서 .xlsx로 다시 저장한 뒤 고르세요";
 
-function message(e: unknown) {
-  return e instanceof Error ? e.message : String(e);
-}
-
 function submit(members: SheetMember[], dryRun: boolean) {
   const rows = members.map(({ nickname, email }) => ({ nickname, email }));
   return api<ImportResponse>("/api/admin/users/import", { method: "POST", body: JSON.stringify({ rows, dryRun }) });
 }
 
 export function MemberImport({ onCreated, onClose }: { onCreated: () => Promise<void>; onClose: () => void }) {
+  const errorText = useErrorText();
   const [phase, setPhase] = useState<Phase>({ step: "idle" });
 
   async function pick(e: ChangeEvent<HTMLInputElement>) {
@@ -45,7 +44,7 @@ export function MemberImport({ onCreated, onClose }: { onCreated: () => Promise<
     e.target.value = "";
     if (!picked) return;
     const file = picked.name;
-    if (!/\.xlsx$/i.test(file)) return setPhase({ step: "failed", file, error: NOT_XLSX });
+    if (!/\.xlsx$/i.test(file)) return setPhase({ step: "failed", file, error: { text: NOT_XLSX } });
 
     setPhase({ step: "working", file, doing: "읽는 중…" });
     let sheet: unknown[][];
@@ -53,17 +52,17 @@ export function MemberImport({ onCreated, onClose }: { onCreated: () => Promise<
       const { readSheet } = await import("read-excel-file/browser");
       sheet = await readSheet(picked, { trim: false });
     } catch {
-      return setPhase({ step: "failed", file, error: UNREADABLE });
+      return setPhase({ step: "failed", file, error: { text: UNREADABLE } });
     }
     const read = membersFromSheet(sheet);
-    if (!read.ok) return setPhase({ step: "failed", file, error: read.error });
+    if (!read.ok) return setPhase({ step: "failed", file, error: { text: read.error } });
 
     setPhase({ step: "working", file, doing: "확인하는 중…" });
     try {
       const { results } = await submit(read.members, true);
       setPhase({ step: "preview", file, members: read.members, results });
     } catch (err) {
-      setPhase({ step: "failed", file, error: message(err) });
+      setPhase({ step: "failed", file, error: caught(err) });
     }
   }
 
@@ -74,7 +73,7 @@ export function MemberImport({ onCreated, onClose }: { onCreated: () => Promise<
       setPhase({ step: "done", file, members, results });
       await onCreated();
     } catch (err) {
-      setPhase({ step: "preview", file, members, results: preview, error: message(err) });
+      setPhase({ step: "preview", file, members, results: preview, error: caught(err) });
     }
   }
 
@@ -93,7 +92,7 @@ export function MemberImport({ onCreated, onClose }: { onCreated: () => Promise<
       onClose={onClose}
       footer={
         phase.step === "preview" ? (
-          <PreviewActions checked={phase} error={phase.error} onCreate={() => create(phase)} onCancel={() => setPhase({ step: "idle" })} />
+          <PreviewActions checked={phase} error={phase.error && errorText(phase.error)} onCreate={() => create(phase)} onCancel={() => setPhase({ step: "idle" })} />
         ) : (
           picker(phase.step === "idle" || busy ? "엑셀 파일 고르기" : "다른 파일 고르기")
         )
@@ -113,7 +112,7 @@ export function MemberImport({ onCreated, onClose }: { onCreated: () => Promise<
         {phase.step === "failed" && (
           <div className="space-y-2">
             <p className="truncate text-xs text-subtle" title={phase.file}>{phase.file}</p>
-            <ErrorText>{phase.error}</ErrorText>
+            <ErrorText>{errorText(phase.error)}</ErrorText>
           </div>
         )}
         {(phase.step === "preview" || phase.step === "done") && <Results checked={phase} />}
@@ -150,7 +149,7 @@ function FormatExample() {
   );
 }
 
-function detail(result: ImportResult, members: SheetMember[]): string {
+function detail(result: ImportResult, members: SheetMember[], errorText: (reason: Reason) => string): string {
   switch (result.outcome) {
     case "create":
     case "created":
@@ -160,11 +159,12 @@ function detail(result: ImportResult, members: SheetMember[]): string {
     case "duplicate":
       return `${members[result.firstIndex].sheetRow}행과 이메일이 같습니다. 첫 행만 만듭니다`;
     case "invalid":
-      return result.reason;
+      return errorText(result.reason);
   }
 }
 
 function Results({ checked }: { checked: Checked & { step: "preview" | "done" } }) {
+  const errorText = useErrorText();
   const { file, members, results } = checked;
   const counts = new Map<ImportResult["outcome"], number>();
   for (const r of results) counts.set(r.outcome, (counts.get(r.outcome) ?? 0) + 1);
@@ -201,7 +201,7 @@ function Results({ checked }: { checked: Checked & { step: "preview" | "done" } 
               <div className="min-w-0">
                 <div className="truncate text-foreground" title={id}>{id}</div>
                 <div className="break-keep text-xs text-muted">
-                  <span className="tabular-nums text-subtle">{member.sheetRow}행</span> · {detail(result, members)}
+                  <span className="tabular-nums text-subtle">{member.sheetRow}행</span> · {detail(result, members, errorText)}
                 </div>
               </div>
               <Badge className={`mt-0.5 ${OUTCOME[result.outcome].tone}`}>{OUTCOME[result.outcome].label}</Badge>

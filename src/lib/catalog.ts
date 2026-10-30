@@ -38,6 +38,8 @@
  * 1024x1024 / 1024x1536 / 1536x1024. gpt-image-2's input-image tokenization is not published.
  */
 
+import { appError, type AppError } from "./errors";
+
 export type Mode = "t2v" | "i2v" | "r2v" | "t2i" | "r2i";
 export const MODES: readonly Mode[] = ["t2v", "i2v", "r2v", "t2i", "r2i"];
 export const MODE_LABEL: Record<Mode, string> = {
@@ -130,7 +132,7 @@ export type Family = {
   /** The provider's JSON body for a checked request. Its key order is part of the bytes stored in request_body. */
   body(r: BodyInput): Record<string, unknown>;
   /** Why this model refuses a request whose params, caps and prompt passed, or null. */
-  check(r: BodyInput): string | null;
+  check(r: BodyInput): AppError | null;
   /** Short facts for the estimate line: ["5s", "720p"] or ["1024×1024", "medium", "레퍼런스 2장"]. */
   facts(b: CostBasis): string[];
   rate: {
@@ -343,8 +345,8 @@ export const FAMILIES: Record<FamilyId, Family> = {
     maxVideos: 0,
     body: gptImage2Body,
     check: ({ prompt, params }) => {
-      if (prompt.length > OPENAI_PROMPT_MAX) return `프롬프트는 ${OPENAI_PROMPT_MAX.toLocaleString("en-US")}자까지입니다`;
-      if (params.background === "transparent" && params.output_format === "jpeg") return "투명 배경은 PNG나 WebP로만 저장됩니다. 파일 형식을 바꾸세요";
+      if (prompt.length > OPENAI_PROMPT_MAX) return appError("promptTooLong", { max: OPENAI_PROMPT_MAX });
+      if (params.background === "transparent" && params.output_format === "jpeg") return appError("transparentNeedsAlpha");
       return null;
     },
     facts: (b) => {
@@ -458,7 +460,8 @@ type PlanBase = {
   costUsd: number;
   facts: readonly string[];
 };
-export type Plan = PlanBase & ({ ready: true; body: WireBody } | { ready: false; blocker: string });
+/** `blocker` is the one reason the cost bar shows and the route answers 400 with, so both read the same sentence. */
+export type Plan = PlanBase & ({ ready: true; body: WireBody } | { ready: false; blocker: AppError });
 export type ReadyPlan = Extract<Plan, { ready: true }>;
 
 /**
@@ -472,11 +475,16 @@ export function planGeneration(draft: Draft, baseRateUsd: number): Plan {
   const mode = routeMode(family.id, images, videos, draft.startFromImage);
   const prompt = draft.prompt.trim();
   const params: Record<string, string | number | boolean> = {};
-  let blocker: string | null = null;
+  let blocker: AppError | null = null;
   for (const p of paramsFor(family.id, mode)) {
     const v = coerce(p, draft.params[p.key]);
     if (v === null) {
-      blocker ??= `${p.label}: ${p.type === "int" ? `${p.min}~${p.max}` : p.type === "enum" ? p.options.join(" | ") : "켬 또는 끔"}`;
+      blocker ??=
+        p.type === "int"
+          ? appError("paramRange", { label: p.label, min: p.min, max: p.max })
+          : p.type === "enum"
+            ? appError("paramChoice", { label: p.label, options: p.options.join(" | ") })
+            : appError("paramOnOff", { label: p.label });
       continue;
     }
     params[p.key] = v;
@@ -499,12 +507,12 @@ export function planGeneration(draft: Draft, baseRateUsd: number): Plan {
     facts: family.facts(costBasis),
   };
   const input: BodyInput = { mode, params, prompt, images: draft.images, videos: base.videoUrls };
-  if (images > family.maxImages) blocker = `${family.name}에는 이미지를 최대 ${family.maxImages}장까지 넣을 수 있습니다`;
-  else if (videos > 0 && family.maxVideos === 0) blocker = `${family.name}은(는) 영상 레퍼런스를 받지 않습니다. 영상을 빼 주세요`;
-  else if (videos > family.maxVideos) blocker = `${family.name}에는 영상을 최대 ${family.maxVideos}개까지 넣을 수 있습니다`;
-  else if (draft.videos.some((v) => !(Number.isFinite(v.seconds) && v.seconds > 0 && v.seconds <= 600))) blocker = "영상 길이를 읽지 못한 레퍼런스가 있습니다. 그 영상을 빼고 다시 올려 주세요";
-  else if (draft.mode !== mode) blocker = `화면의 생성 방식(${MODE_LABEL[draft.mode]})이 첨부와 맞지 않습니다. 페이지를 새로고침하세요`;
-  else if (!blocker && family.promptRequiredIn.includes(mode) && !prompt) blocker = `${family.name} ${MODE_LABEL[mode]}에는 프롬프트가 필요합니다`;
+  if (images > family.maxImages) blocker = appError("tooManyImages", { model: family.name, max: family.maxImages });
+  else if (videos > 0 && family.maxVideos === 0) blocker = appError("noVideoRefs", { model: family.name });
+  else if (videos > family.maxVideos) blocker = appError("tooManyVideos", { model: family.name, max: family.maxVideos });
+  else if (draft.videos.some((v) => !(Number.isFinite(v.seconds) && v.seconds > 0 && v.seconds <= 600))) blocker = appError("videoLengthUnknown");
+  else if (draft.mode !== mode) blocker = appError("modeMismatch", { mode: draft.mode });
+  else if (!blocker && family.promptRequiredIn.includes(mode) && !prompt) blocker = appError("promptRequired", { model: family.name, mode });
   else if (!blocker) blocker = family.check(input);
   if (blocker) return { ...base, ready: false, blocker };
   return { ...base, ready: true, body: JSON.stringify(family.body(input)) as WireBody };
