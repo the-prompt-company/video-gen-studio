@@ -103,7 +103,7 @@
     "nameControl": "{kind, select, nickname {The nickname} other {The team name}} contains a control character such as a line break or tab. Keep it on one line.",
     "nameInvisible": "{kind, select, nickname {The nickname} other {The team name}} contains invisible or text-direction characters. Use visible characters only.",
     "nameNoVisible": "{kind, select, nickname {The nickname} other {The team name}} has no visible characters. Enter at least one.",
-    "nameTooLong": "{kind, select, nickname {A nickname} other {A team name}} can be at most {max, plural, one {# character} other {# characters}} long (it has {length, plural, one {#} other {#}}).",
+    "nameTooLong": "{kind, select, nickname {A nickname} other {A team name}} can be at most {max, plural, one {# character} other {# characters}} long (yours is {length, plural, one {# character} other {# characters}}).",
     "photoTooLarge": "The photo is over {kb} KB. Choose it again in Settings and upload it.",
     "photoRaced": "Your photo was changed in another window first. Reload and try again.",
     "photoStorageOff": "No Vercel Blob store is connected to keep photos. Ask an admin to set BLOB_READ_WRITE_TOKEN.",
@@ -140,7 +140,7 @@
     "tooManyVideos": "{model} takes at most {max, plural, one {# video} other {# videos}}.",
     "videoLengthUnknown": "Couldn't read the length of a video reference. Remove that video and upload it again.",
     "modeMismatch": "The generation mode on screen ({mode, select, t2v {Text to video} i2v {Image to video} r2v {Reference to video} t2i {Text to image} other {Reference to image}}) doesn't match the attachments. Reload the page.",
-    "promptRequired": "{model} {mode, select, t2v {Text to video} i2v {Image to video} r2v {Reference to video} t2i {Text to image} other {Reference to image}} needs a prompt.",
+    "promptRequired": "{model} ({mode, select, t2v {Text to video} i2v {Image to video} r2v {Reference to video} t2i {Text to image} other {Reference to image}}) needs a prompt.",
     "promptTooLong": "A prompt can be at most {max, plural, one {# character} other {# characters}} long.",
     "transparentNeedsAlpha": "A transparent background can only be saved as PNG or WebP. Change the file format.",
     "nothingToChange": "There's nothing to change.",
@@ -179,7 +179,7 @@
     "imageRunnerDied": "The server waiting for OpenAI's answer stopped. You may have been charged, so the estimated cost was recorded. To avoid a double charge, it won't be sent again automatically. Generate again if you need to.",
     "openaiQuota": "The OpenAI usage limit or credits have run out. Contact an admin.",
     "openaiModeration": "OpenAI's safety policy blocked this image. Try a different prompt or references.",
-    "openaiKeyRejected": "OpenAI {status}: the server's OpenAI key or region was rejected. Contact an admin.",
+    "openaiKeyRejected": "OpenAI {status}: the server's OpenAI key or region was rejected ({detail}). Contact an admin.",
     "noResult": "{kind, select, canceled {This generation was canceled.} image {There's no result image.} other {There's no result video.}}"
   }
 }

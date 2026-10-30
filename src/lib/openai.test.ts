@@ -62,13 +62,32 @@ test("quota, moderation, a bad key and a bad request are rejected and never rese
   const blocked = outcomeOf(400, h(), JSON.stringify({ error: { message: "rejected by the safety system", type: "image_generation_user_error", code: "moderation_blocked", moderation_details: { moderation_stage: "output" } } }), "png");
   assert.deepEqual(blocked.kind === "rejected" && [blocked.cause, blocked.reason], ["moderation", { code: "openaiModeration" }]);
   const key = outcomeOf(401, h(), error("invalid_api_key", "invalid_request_error", "Incorrect API key provided: sk-proj-abc***wxyz."), "png");
-  assert.deepEqual(key.kind === "rejected" && [key.cause, key.reason], ["key", { code: "openaiKeyRejected", params: { status: 401 } }]);
-  assert.doesNotMatch(JSON.stringify(key), /sk-|wxyz/, "the outcome never carries a fragment of the key");
+  assert.deepEqual(key.kind === "rejected" && [key.cause, key.reason], [
+    "key",
+    { code: "openaiKeyRejected", params: { status: 401, detail: "Incorrect API key provided: sk-… [code: invalid_api_key, type: invalid_request_error]" } },
+  ]);
+  assert.doesNotMatch(JSON.stringify(key), /sk-proj|abc|wxyz/, "the outcome never carries a fragment of the key");
   assert.equal(outcomeOf(403, h(), error("unsupported_country_region_territory", "request_forbidden"), "png").kind, "rejected");
   const bad = outcomeOf(400, h(), error(null, "invalid_request_error", "Invalid value for size, key sk-live-123456"), "png");
   assert.equal(bad.kind === "rejected" && bad.cause, "request");
   assert.deepEqual(bad.kind === "rejected" && bad.reason, { text: "OpenAI 400: Invalid value for size, key sk-…" }, "OpenAI's own words, shown as given");
   assert.doesNotMatch(JSON.stringify(bad), /sk-live/);
+});
+
+test("a refused key keeps OpenAI's own words, code and type, so an admin can see why, without the key", () => {
+  const body = JSON.stringify({ error: { message: "Incorrect API key provided: sk-proj-abc123. You can find your API key at https://platform.openai.com/account/api-keys.", type: "invalid_request_error", param: null, code: "invalid_api_key" } });
+  const o = outcomeOf(401, h(), body, "png");
+  const detail = o.kind === "rejected" && "code" in o.reason ? String(o.reason.params?.detail) : "";
+  assert.equal(o.kind === "rejected" && "code" in o.reason && o.reason.code, "openaiKeyRejected");
+  assert.match(detail, /^Incorrect API key provided: sk-… You can find your API key at https:\/\/platform\.openai\.com\/account\/api-keys\. \[code: invalid_api_key, type: invalid_request_error\]$/);
+  assert.doesNotMatch(JSON.stringify(o), /sk-proj-abc123/);
+  const region = outcomeOf(403, h(), error("unsupported_country_region_territory", "request_forbidden", "Country, region, or territory not supported"), "png");
+  assert.deepEqual(region.kind === "rejected" && region.reason, {
+    code: "openaiKeyRejected",
+    params: { status: 403, detail: "Country, region, or territory not supported [code: unsupported_country_region_territory, type: request_forbidden]" },
+  });
+  const plain = outcomeOf(401, h(), "Unauthorized: key sk-live-999 revoked", "png");
+  assert.deepEqual(plain.kind === "rejected" && plain.reason, { code: "openaiKeyRejected", params: { status: 401, detail: "Unauthorized: key sk-… revoked" } }, "a body that is not JSON is redacted too");
 });
 
 test("server errors, timeouts the server reports, and an HTML 503 may follow work OpenAI billed: unknown", () => {

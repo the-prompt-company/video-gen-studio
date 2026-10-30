@@ -89,18 +89,23 @@ export function outcomeOf(status: number, headers: Headers, text: string, format
   } catch {}
   const err = (json as ErrorBody | null)?.error;
   const code = typeof err?.code === "string" ? err.code : null;
-  const message = typeof err?.message === "string" ? redact(err.message) : text.slice(0, 200);
+  const type = typeof err?.type === "string" ? err.type : null;
+  const message = redact(typeof err?.message === "string" ? err.message : text.slice(0, 200));
   const detail = `OpenAI ${status}: ${message}`;
   if (status >= 200 && status < 300) return imageOf(json, format);
   if (status === 429) {
-    if (code === "insufficient_quota" || err?.type === "insufficient_quota") return { kind: "rejected", cause: "quota", reason: appError("openaiQuota") };
+    if (code === "insufficient_quota" || type === "insufficient_quota") return { kind: "rejected", cause: "quota", reason: appError("openaiQuota") };
     return { kind: "refused", retryAfterS: retryAfter(headers), detail };
   }
   if (status === 503 && err) return { kind: "refused", retryAfterS: retryAfter(headers), detail };
   if (status === 400 && code === "moderation_blocked") {
     return { kind: "rejected", cause: "moderation", reason: appError("openaiModeration") };
   }
-  if (status === 401 || status === 403) return { kind: "rejected", cause: "key", reason: appError("openaiKeyRejected", { status }) };
+  if (status === 401 || status === 403) {
+    // A wrong key, an IP or organization outside the key's allowance, a missing scope or a region: only OpenAI's words tell which.
+    const fields = [code && `code: ${code}`, type && `type: ${type}`].filter(Boolean).join(", ");
+    return { kind: "rejected", cause: "key", reason: appError("openaiKeyRejected", { status, detail: fields ? `${message} [${fields}]` : message }) };
+  }
   if (status >= 400 && status < 500 && status !== 408 && status !== 409) return { kind: "rejected", cause: "request", reason: { text: detail } };
   return { kind: "unknown", why: { cause: "reply", detail }, usage: null };
 }

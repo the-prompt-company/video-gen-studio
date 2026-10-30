@@ -1643,8 +1643,9 @@ async function imageRejected(owner: Owner, admin: User, upstream: string) {
       const { plan, final } = await submitImage(owner, admin, `거절 ${fail}`);
       const sent = await imageRequests(upstream, plan.prompt);
       check(
-        final.status === status && reasonIs(final, code) && final.costUsd === "0.0000" && sent.length === 1 && !/sk-/.test(reasonShown(final)),
-        `OpenAI's ${fail} refusal ends the row ${status} with the code ${code} at cost 0 after one request, with no key fragment in the reason`,
+        final.status === status && reasonIs(final, code) && final.costUsd === "0.0000" && sent.length === 1 && !/sk-proj|wxyz/.test(reasonShown(final)) &&
+          (fail !== "badkey" || String(final.errorParams?.detail).startsWith("Incorrect API key provided: sk-… You can find your API key")),
+        `OpenAI's ${fail} refusal ends the row ${status} with the code ${code} at cost 0 after one request, keeping OpenAI's own words for a refused key but no key fragment`,
         reasonShown(final),
       );
     } finally {

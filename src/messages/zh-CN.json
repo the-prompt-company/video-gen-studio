@@ -105,13 +105,13 @@
     "nameNoVisible": "{kind, select, nickname {昵称} other {团队名称}}中没有可见字符。请至少输入一个字符。",
     "nameTooLong": "{kind, select, nickname {昵称} other {团队名称}}最多 {max, plural, other {# 个字符}}（当前 {length, plural, other {# 个}}）。",
     "photoTooLarge": "照片超过 {kb} KB。请在设置中重新选择照片并上传。",
-    "photoRaced": "照片已在其他窗口中先被更改。请刷新后重试。",
+    "photoRaced": "照片已在其他窗口中更改。请刷新后重试。",
     "photoStorageOff": "尚未连接用于保存照片的 Vercel Blob 存储。请联系管理员设置 BLOB_READ_WRITE_TOKEN。",
     "photoType": "仅支持上传 WebP、JPEG、PNG 图片。请在设置中重新选择照片。",
     "photoUploadFailed": "照片未能上传到存储。请稍后重新保存。",
     "uploadNoFile": "缺少 file 字段。",
     "uploadTooLarge": "超过 {mb} MB 的文件请使用大文件上传。",
-    "uploadType": "不支持的格式：{type}（{allowed}）",
+    "uploadType": "不支持的格式：{type}（{allowed}）。",
     "providerUploadFailed": "未能将文件上传到 Higgsfield：{detail}",
     "largeUploadOff": "大文件上传已关闭（未连接 Vercel Blob 存储）。只能上传不超过 {mb} MB 的文件。",
     "uploadPath": "上传路径必须是 {prefix} 下由英文字母、数字及 . - _ 组成的文件名。",
@@ -119,7 +119,7 @@
     "tooManyIds": "ids 最多 {max, plural, other {# 个}}。",
     "refNotPublicUrl": "{kind, select, image {图片} other {视频}}：仅允许公开 URL。",
     "refsNotList": "{kind, select, image {图片} other {视频}}：必须是数组。",
-    "tooManyRefs": "{kind, select, image {图片} other {视频}}：最多 {max, plural, other {# 个}}",
+    "tooManyRefs": "{kind, select, image {图片} other {视频}}：最多 {max, plural, other {# 个}}。",
     "unknownModel": "未知模型。请刷新页面。",
     "noMode": "缺少生成方式。请刷新页面。",
     "modelDisabled": "管理员已停用 {model}。",
@@ -179,7 +179,7 @@
     "imageRunnerDied": "等待 OpenAI 响应的服务器已停止。可能已产生费用，因此已记录预计费用。为避免重复计费，系统不会自动重新发送。如有需要，请重新生成。",
     "openaiQuota": "OpenAI 的用量额度或余额已用完。请联系管理员。",
     "openaiModeration": "因触发 OpenAI 安全策略，未生成图片。请尝试更换提示词或参考素材。",
-    "openaiKeyRejected": "OpenAI {status}：服务器的 OpenAI 密钥或所在地区被拒绝。请联系管理员。",
+    "openaiKeyRejected": "OpenAI {status}：服务器的 OpenAI 密钥或所在地区被拒绝（{detail}）。请联系管理员。",
     "noResult": "{kind, select, canceled {该生成任务已取消。} image {没有结果图片。} other {没有结果视频。}}"
   }
 }

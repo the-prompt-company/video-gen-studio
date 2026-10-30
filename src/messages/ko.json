@@ -179,7 +179,7 @@
     "imageRunnerDied": "OpenAI의 답을 기다리던 서버가 멈췄습니다. 요금이 청구됐을 수 있어 예상 비용을 기록했습니다. 두 번 청구되지 않도록 자동으로 다시 보내지 않습니다. 필요하면 다시 생성하세요",
     "openaiQuota": "OpenAI 사용 한도나 크레딧이 바닥났습니다. 관리자에게 문의하세요",
     "openaiModeration": "OpenAI 안전 정책에 걸려 이미지를 만들지 않았습니다. 프롬프트나 레퍼런스를 바꿔 보세요",
-    "openaiKeyRejected": "OpenAI {status}: 서버의 OpenAI 키나 지역이 거부됐습니다. 관리자에게 문의하세요",
+    "openaiKeyRejected": "OpenAI {status}: 서버의 OpenAI 키나 지역이 거부됐습니다({detail}). 관리자에게 문의하세요",
     "noResult": "{kind, select, canceled {취소된 생성입니다.} image {결과 이미지가 없습니다.} other {결과 영상이 없습니다.}}"
   }
 }
