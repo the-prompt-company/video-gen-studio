@@ -414,6 +414,192 @@
       "gptImage2": "One 1024×1024 image at medium quality"
     }
   },
+  "settings": {
+    "lead": "Change the photo and nickname shown in the top menu, the display language, and your sign-in password.",
+    "profile": {
+      "title": "Profile",
+      "lead": "Your photo and nickname show who you are in the top menu. Without a nickname, your ID shows instead."
+    },
+    "account": {
+      "title": "Account",
+      "lead": "You can't change your sign-in ID or team yourself. Ask an admin if either needs to change.",
+      "team": "Team"
+    },
+    "password": {
+      "title": "Password",
+      "lead": "Confirm your current password, then choose a new one. This browser stays signed in, and every other device and browser is signed out."
+    }
+  },
+  "profile": {
+    "avatar": {
+      "current": "Profile photo",
+      "preview": "Preview of the new profile photo"
+    },
+    "photo": {
+      "choose": "Choose photo",
+      "change": "Change photo",
+      "preparing": "Preparing photo…",
+      "save": "Save photo",
+      "remove": "Remove photo",
+      "removing": "Removing…",
+      "cropHint": "When you choose an image file, its center is cropped to a square and resized to {side}×{side} before it's uploaded.",
+      "previewHint": "This is a preview. Select Save photo to apply it.",
+      "storageOff": "Photo storage (Vercel Blob) isn't connected, so you can't change your photo right now. Ask an admin to connect it.",
+      "unreadable": "This file can't be opened as a photo. Choose an image file such as JPG, PNG, or WebP."
+    },
+    "saving": "Saving…",
+    "nickname": {
+      "label": "Nickname",
+      "counter": "{length}/{max}",
+      "save": "Save nickname",
+      "help": "Save it empty to remove your nickname and show your ID instead. It can be the same as someone else's."
+    },
+    "done": {
+      "photoSaved": "Photo saved.",
+      "photoRemoved": "Photo removed. The top menu shows the first letter of your name.",
+      "nicknameSaved": "Nickname saved.",
+      "nicknameCleared": "Nickname removed. The top menu shows your ID."
+    }
+  },
+  "admin": {
+    "lead": "Members and API key assignment, model rates, and all logs.",
+    "stats": {
+      "totalSpend": "Total spend",
+      "generations": "Total generations",
+      "models": "Model count",
+      "modelsSub": "Models used"
+    },
+    "tabs": {
+      "users": "Members · API keys",
+      "teams": "Teams",
+      "models": "Models · rates",
+      "logs": "Logs · history"
+    }
+  },
+  "members": {
+    "title": "{count, plural, one {# member} other {# members}}",
+    "notice": {
+      "added": "Account {id} added.",
+      "assigned": "{count, plural, one {Assigned # member} other {Assigned # members}} to {team}.",
+      "unassigned": "{count, plural, one {Moved # member} other {Moved # members}} to No team."
+    },
+    "filter": {
+      "label": "Filter by team",
+      "all": "All teams ({count, plural, one {# member} other {# members}})",
+      "team": "{team} ({count, plural, one {# member} other {# members}})"
+    },
+    "selected": "{count, plural, one {# selected} other {# selected}}",
+    "selectAll": "Select all shown members",
+    "select": "Select {username}",
+    "edit": "Edit {username}",
+    "empty": {
+      "none": "No members.",
+      "noTeam": "No members without a team.",
+      "team": "No members in this team. Switch to All teams, choose people, then select Assign team."
+    },
+    "field": {
+      "nickname": "Nickname",
+      "team": "Team",
+      "role": "Role",
+      "note": "Note"
+    },
+    "table": {
+      "key": "Key",
+      "generations": "Generations",
+      "cost": "Cost",
+      "lastUsed": "Last used",
+      "status": "Status"
+    },
+    "key": {
+      "assigned": "Assigned",
+      "none": "None"
+    },
+    "active": "Active",
+    "inactive": "Inactive",
+    "temporary": "Temporary password",
+    "add": {
+      "title": "Add member",
+      "submit": "Add",
+      "submitting": "Adding…",
+      "password": "Temporary password",
+      "passwordHint": "{min, plural, one {At least # character} other {At least # characters}} · Changed at first sign-in",
+      "apiKey": "Higgsfield API key",
+      "apiKeyHint": "key-id:key-secret · Can be added later",
+      "optional": "Optional"
+    },
+    "assign": {
+      "title": "Assign team",
+      "submit": "{count, plural, one {Assign # member} other {Assign # members}}",
+      "submitting": "Assigning…",
+      "hint": "A member belongs to one team only",
+      "placeholder": "Choose a team",
+      "noTeams": "No teams yet. Create one on the Teams tab, then open this again.",
+      "chosenLabel": "Chosen members",
+      "chosen": "{count, plural, one {# chosen member} other {# chosen members}}"
+    },
+    "editor": {
+      "apiKey": "API key",
+      "removeKey": "Remove",
+      "temporaryNote": "This member has a temporary password and must choose a new one at the next sign-in.",
+      "deactivate": "Deactivate",
+      "activate": "Activate",
+      "unlock": "Unlock ({failures, plural, one {# failed attempt} other {# failed attempts}})",
+      "unlockUntil": "Unlock ({failures, plural, one {# failed attempt} other {# failed attempts}}, locked until {until})"
+    },
+    "nickname": {
+      "hint": "{max, plural, one {Up to # character} other {Up to # characters}} · Leave empty to remove",
+      "placeholder": "No nickname"
+    },
+    "password": {
+      "temporary": "Temporary password ({min, plural, one {at least # character} other {at least # characters}})",
+      "new": "New password ({min, plural, one {at least # character} other {at least # characters}})",
+      "change": "Change"
+    },
+    "reset": {
+      "title": "Reset to initial password",
+      "body": "Resets the password to the initial password, <mono>{password}</mono>. This member is signed out on every device and must choose a new password at the next sign-in.",
+      "confirm": "Reset"
+    }
+  },
+  "teams": {
+    "none": "No team",
+    "title": "Teams",
+    "count": "{count, plural, one {# team} other {# teams}}",
+    "create": {
+      "title": "Create team",
+      "submit": "Create",
+      "submitting": "Creating…",
+      "hint": "{max, plural, one {Up to # character} other {Up to # characters}} · Names that differ only in case count as the same"
+    },
+    "name": {
+      "label": "Team name",
+      "hint": "{max, plural, one {Up to # character} other {Up to # characters}}"
+    },
+    "notice": {
+      "created": "Team created: {name}. Choose its members on the Members tab, then select Assign team.",
+      "deleted": "Team deleted: {name}.{released, plural, =0 {} one { # member now has no team.} other { # members now have no team.}}"
+    },
+    "empty": "No teams yet. Create one, then choose its members on the Members tab and select Assign team.",
+    "table": {
+      "team": "Team",
+      "size": "Size",
+      "members": "Members"
+    },
+    "edit": "Edit {name}",
+    "size": "{count, plural, one {# member} other {# members}}",
+    "noMembers": "None",
+    "members": {
+      "label": "Members",
+      "count": "{count, plural, one {# member} other {# members}}",
+      "empty": "No members yet. Choose people on the Members tab, then select Assign team."
+    },
+    "delete": {
+      "title": "Delete team",
+      "confirm": "This deletes the team. {count, plural, =0 {} one {# member will have no team. } other {# members will have no team. }}Videos and usage history stay as they are.",
+      "submit": "Delete",
+      "submitting": "Deleting…"
+    }
+  },
   "import": {
     "title": "Create members from Excel",
     "intro": "The first filled row of the first sheet is read as the header row. Each email becomes the member's sign-in ID. Members sign in the first time with the initial password <pw>{password}</pw>, then choose a new one.",

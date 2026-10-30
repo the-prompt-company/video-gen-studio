@@ -161,7 +161,7 @@
     "badTeamId": "teamId 应为团队编号，或以 null 表示未分配团队。",
     "badUserIds": "userIds 应为成员编号列表。",
     "noUsersChosen": "请至少选择一名成员。",
-    "tooManyUsers": "一次最多可指定 {max, plural, other {# 名成员}}。",
+    "tooManyUsers": "一次最多可分配 {max, plural, other {# 名成员}}。",
     "importNoRows": "缺少 rows 数组。",
     "importEmpty": "没有要创建的成员。请在标题行下方每行填写一名成员。",
     "importTooMany": "一次最多可创建 {max, plural, other {# 名成员}}，但此文件有 {count, plural, other {# 名}}。请按每份 {max, plural, other {# 名}}拆分文件后分别上传。",
@@ -412,6 +412,192 @@
       "seedance": "720p 16:9，5 秒",
       "h3": "10 秒",
       "gptImage2": "1 张 1024×1024 中等质量图片"
+    }
+  },
+  "settings": {
+    "lead": "更改顶部菜单中显示的照片和昵称、界面语言以及登录密码。",
+    "profile": {
+      "title": "个人资料",
+      "lead": "顶部菜单通过照片和昵称显示您的身份。未设置昵称时显示 ID。"
+    },
+    "account": {
+      "title": "账号",
+      "lead": "登录 ID 和所属团队无法自行更改。如需更改，请联系管理员。",
+      "team": "团队"
+    },
+    "password": {
+      "title": "密码",
+      "lead": "验证当前密码后即可修改。此浏览器将保持登录状态，其他设备和浏览器将全部退出登录。"
+    }
+  },
+  "profile": {
+    "avatar": {
+      "current": "头像",
+      "preview": "新头像预览"
+    },
+    "photo": {
+      "choose": "选择照片",
+      "change": "更换照片",
+      "preparing": "正在准备照片…",
+      "save": "保存照片",
+      "remove": "删除照片",
+      "removing": "正在删除…",
+      "cropHint": "选择图片文件后，将从中心裁剪为正方形并缩小到 {side}×{side} 再上传。",
+      "previewHint": "这是预览。点击“保存照片”后才会生效。",
+      "storageOff": "照片存储（Vercel Blob）未连接，暂时无法更换照片。请联系管理员进行连接。",
+      "unreadable": "无法将此文件作为照片打开。请选择 JPG、PNG、WebP 等图片文件。"
+    },
+    "saving": "正在保存…",
+    "nickname": {
+      "label": "昵称",
+      "counter": "{length}/{max}",
+      "save": "保存昵称",
+      "help": "留空并保存即可删除昵称，届时将显示 ID。昵称可以与他人相同。"
+    },
+    "done": {
+      "photoSaved": "照片已保存。",
+      "photoRemoved": "照片已删除。顶部菜单将显示名字的第一个字。",
+      "nicknameSaved": "昵称已保存。",
+      "nicknameCleared": "昵称已删除。顶部菜单将显示您的 ID。"
+    }
+  },
+  "admin": {
+    "lead": "成员与 API 密钥分配、模型单价、全部日志。",
+    "stats": {
+      "totalSpend": "总费用",
+      "generations": "总生成次数",
+      "models": "模型数",
+      "modelsSub": "已使用的模型"
+    },
+    "tabs": {
+      "users": "成员 · API 密钥",
+      "teams": "团队",
+      "models": "模型 · 单价",
+      "logs": "日志 · 历史记录"
+    }
+  },
+  "members": {
+    "title": "{count, plural, other {# 名成员}}",
+    "notice": {
+      "added": "已添加账号 {id}。",
+      "assigned": "已将 {count, plural, other {# 名成员}}分配到“{team}”。",
+      "unassigned": "已将 {count, plural, other {# 名成员}}设为未分配团队。"
+    },
+    "filter": {
+      "label": "按团队筛选",
+      "all": "全部团队（{count, plural, other {# 人}}）",
+      "team": "{team}（{count, plural, other {# 人}}）"
+    },
+    "selected": "已选 {count, plural, other {# 人}}",
+    "selectAll": "全选当前显示的成员",
+    "select": "选择 {username}",
+    "edit": "编辑 {username}",
+    "empty": {
+      "none": "没有成员。",
+      "noTeam": "没有未分配团队的成员。",
+      "team": "此团队没有成员。请切换到“全部团队”，选择成员后点击“分配团队”。"
+    },
+    "field": {
+      "nickname": "昵称",
+      "team": "团队",
+      "role": "角色",
+      "note": "备注"
+    },
+    "table": {
+      "key": "密钥",
+      "generations": "生成",
+      "cost": "费用",
+      "lastUsed": "最近使用",
+      "status": "状态"
+    },
+    "key": {
+      "assigned": "已分配",
+      "none": "无"
+    },
+    "active": "已启用",
+    "inactive": "已停用",
+    "temporary": "临时密码",
+    "add": {
+      "title": "添加成员",
+      "submit": "添加",
+      "submitting": "正在添加…",
+      "password": "临时密码",
+      "passwordHint": "{min, plural, other {至少 # 个字符}} · 首次登录时需修改",
+      "apiKey": "Higgsfield API 密钥",
+      "apiKeyHint": "key-id:key-secret · 可稍后填写",
+      "optional": "选填"
+    },
+    "assign": {
+      "title": "分配团队",
+      "submit": "分配 {count, plural, other {# 人}}",
+      "submitting": "正在分配…",
+      "hint": "每人只能属于一个团队",
+      "placeholder": "请选择团队",
+      "noTeams": "还没有团队。请先在“团队”标签页中创建团队，然后重新打开此窗口。",
+      "chosenLabel": "已选成员",
+      "chosen": "已选成员 {count, plural, other {# 人}}"
+    },
+    "editor": {
+      "apiKey": "API 密钥",
+      "removeKey": "移除",
+      "temporaryNote": "此成员正在使用临时密码，下次登录时必须设置新密码才能进入。",
+      "deactivate": "停用",
+      "activate": "启用",
+      "unlock": "解除锁定（失败 {failures, plural, other {# 次}}）",
+      "unlockUntil": "解除锁定（失败 {failures, plural, other {# 次}}，锁定至 {until}）"
+    },
+    "nickname": {
+      "hint": "{max, plural, other {最多 # 个字符}} · 留空则删除",
+      "placeholder": "无昵称"
+    },
+    "password": {
+      "temporary": "临时密码（{min, plural, other {至少 # 个字符}}）",
+      "new": "新密码（{min, plural, other {至少 # 个字符}}）",
+      "change": "修改"
+    },
+    "reset": {
+      "title": "重置为初始密码",
+      "body": "将密码重置为初始密码 <mono>{password}</mono>。该成员将在所有设备上退出登录，下次登录时需设置新密码。",
+      "confirm": "重置"
+    }
+  },
+  "teams": {
+    "none": "未分配团队",
+    "title": "团队",
+    "count": "{count, plural, other {# 个团队}}",
+    "create": {
+      "title": "创建团队",
+      "submit": "创建",
+      "submitting": "正在创建…",
+      "hint": "{max, plural, other {最多 # 个字符}} · 仅大小写不同的名称视为同名"
+    },
+    "name": {
+      "label": "团队名称",
+      "hint": "{max, plural, other {最多 # 个字符}}"
+    },
+    "notice": {
+      "created": "已创建团队：{name}。请在“成员”标签页中选择团队成员，然后点击“分配团队”。",
+      "deleted": "已删除团队：{name}。{released, plural, =0 {} other {该团队的 # 名成员已变为未分配团队。}}"
+    },
+    "empty": "还没有团队。请先创建团队，然后在“成员”标签页中选择成员并点击“分配团队”。",
+    "table": {
+      "team": "团队",
+      "size": "人数",
+      "members": "成员"
+    },
+    "edit": "编辑 {name}",
+    "size": "{count, plural, other {# 人}}",
+    "noMembers": "无",
+    "members": {
+      "label": "团队成员",
+      "count": "团队成员 {count, plural, other {# 人}}",
+      "empty": "还没有团队成员。请在“成员”标签页中选择成员，然后点击“分配团队”。"
+    },
+    "delete": {
+      "title": "删除团队",
+      "confirm": "将删除此团队。{count, plural, =0 {} other {该团队的 # 名成员将变为未分配团队，}}视频和使用记录会保留。",
+      "submit": "删除",
+      "submitting": "正在删除…"
     }
   },
   "import": {
