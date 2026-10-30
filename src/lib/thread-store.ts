@@ -13,18 +13,15 @@ import { EARLIER, threadTitle, type PublicThread, type ThreadId, type ThreadRef 
 /** The member's visible threads, the one with the newest generation first. One statement. */
 export async function listThreads(userId: number): Promise<PublicThread[]> {
   const rows = await getDb().execute<{ id: string; title: string | null }>(sql`
-    select id, title from (
-      select t.id::text as id, t.title,
-        (select max(g.created_at) from generations g where g.user_id = t.user_id and g.thread_id = t.id) as last_at
-      from threads t
-      where t.user_id = ${userId} and t.kind = 'chat' and t.deleted_at is null
-      union all
-      select ${EARLIER}, null,
-        (select max(g.created_at) from generations g where g.user_id = ${userId} and g.thread_id is null)
-      where not exists (select 1 from threads e where e.user_id = ${userId} and e.kind = 'earlier')
-    ) visible
-    where last_at is not null
-    order by last_at desc, id`);
+    select t.id::text as id, t.title, last.at
+    from threads t
+    cross join lateral (select max(g.created_at) as at from generations g where g.user_id = t.user_id and g.thread_id = t.id) last
+    where t.user_id = ${userId} and t.kind = 'chat' and t.deleted_at is null and last.at is not null
+    union all
+    select ${EARLIER}, null, last.at
+    from (select max(g.created_at) as at from generations g where g.user_id = ${userId} and g.thread_id is null) last
+    where last.at is not null and not exists (select 1 from threads e where e.user_id = ${userId} and e.kind = 'earlier')
+    order by at desc, id`);
   return rows.map((r) => (r.id === EARLIER ? { kind: "earlier", id: EARLIER } : { kind: "chat", id: r.id as ThreadId, title: r.title ?? "" }));
 }
 

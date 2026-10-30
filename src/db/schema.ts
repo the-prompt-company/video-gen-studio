@@ -145,7 +145,10 @@ export const generations = pgTable(
   (t) => [
     index("generations_user_created_idx").on(t.userId, t.createdAt),
     index("generations_status_idx").on(t.status),
-    index("generations_user_thread_created_idx").on(t.userId, t.threadId, t.createdAt),
+    // A thread's rows and the earlier history's rows each get their own index: after `thread_id is null` the planner
+    // cannot use a composite index's created_at order, and filtered every newer row of the member instead.
+    index("generations_user_thread_created_idx").on(t.userId, t.threadId, t.createdAt).where(sql`${t.threadId} is not null`),
+    index("generations_user_earlier_created_idx").on(t.userId, t.createdAt).where(sql`${t.threadId} is null`),
     // A row's thread is always its owner's: the pair, not the id alone, must name a thread.
     foreignKey({ name: "generations_thread_owner_fk", columns: [t.threadId, t.userId], foreignColumns: [threads.id, threads.userId] }),
   ],

@@ -1,5 +1,5 @@
 {
-  "id": "6a8e411a-9eaf-4aa3-994b-21e229f3f115",
+  "id": "f63f3f69-b0a9-4662-93ec-41df374069b3",
   "prevId": "6bdad811-ca3b-4181-bda2-826063156ae4",
   "version": "7",
   "dialect": "postgresql",
@@ -243,6 +243,29 @@
             }
           ],
           "isUnique": false,
+          "where": "\"generations\".\"thread_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "generations_user_earlier_created_idx": {
+          "name": "generations_user_earlier_created_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"generations\".\"thread_id\" is null",
           "concurrently": false,
           "method": "btree",
           "with": {}

@@ -15,4 +15,5 @@ ALTER TABLE "threads" ADD CONSTRAINT "threads_user_id_users_id_fk" FOREIGN KEY (
 CREATE UNIQUE INDEX "threads_earlier_key" ON "threads" USING btree ("user_id") WHERE "threads"."kind" = 'earlier';--> statement-breakpoint
 CREATE INDEX "threads_user_idx" ON "threads" USING btree ("user_id");--> statement-breakpoint
 ALTER TABLE "generations" ADD CONSTRAINT "generations_thread_owner_fk" FOREIGN KEY ("thread_id","user_id") REFERENCES "public"."threads"("id","user_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-CREATE INDEX "generations_user_thread_created_idx" ON "generations" USING btree ("user_id","thread_id","created_at");
+CREATE INDEX "generations_user_thread_created_idx" ON "generations" USING btree ("user_id","thread_id","created_at") WHERE "generations"."thread_id" is not null;--> statement-breakpoint
+CREATE INDEX "generations_user_earlier_created_idx" ON "generations" USING btree ("user_id","created_at") WHERE "generations"."thread_id" is null;
