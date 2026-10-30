@@ -44,10 +44,13 @@ export default async function playground({ page, ev, env }) {
 
   await ev.login("/playground");
   // A live item can finish, or another process can replace mock rows, while the journey runs. An id counts as
-  // live when it was live at the start or at the end of the run.
+  // live when it was live at the start or at the end of the run. The stage holds one thread, the URL's, and a new
+  // thread (no `thread`) holds nothing yet.
   const liveIds = new Set();
   const readLive = async () => {
-    const feed = await ev.api("/api/generations?limit=12");
+    const thread = new URL(page.url()).searchParams.get("thread");
+    if (thread === null) return 0;
+    const feed = await ev.api(`/api/generations?thread=${thread}&limit=12`);
     const live = (feed.body?.items ?? []).filter((i) => LIVE.has(i.status));
     for (const i of live) liveIds.add(i.id);
     return live.length;
@@ -175,15 +178,17 @@ export default async function playground({ page, ev, env }) {
     const until = Date.now() + 8_000;
     while (liveIds.size > 0 && ticks(polls).length < 2 && Date.now() < until) await page.waitForTimeout(250);
   }
-  if (env.VGS_POLL_NAV === "1" && liveIds.size > 0) {
+  if (env.VGS_POLL_NAV === "1" && liveAtEnd === 0) ev.note("navigate: skipped, no live row on the stage's thread to poll on return");
+  if (env.VGS_POLL_NAV === "1" && liveAtEnd > 0) {
     const before = polls.length;
     const nav = page.getByRole("navigation", { name: await ev.t("nav.label") });
     await nav.getByRole("link", { name: await ev.t("pages.gallery") }).click();
     await page.waitForURL("**/gallery**");
     await page.waitForTimeout(3_000);
     const away = polls.length - before;
-    await nav.getByRole("link", { name: await ev.t("pages.playground") }).click();
-    await page.waitForURL("**/playground**");
+    // The header link opens a new thread; Back returns to the thread whose rows are live.
+    await page.goBack();
+    await page.waitForURL("**/playground?thread=**");
     const back = Date.now();
     const until = back + 6_000;
     while (polls.length === before + away && Date.now() < until) await page.waitForTimeout(100);
