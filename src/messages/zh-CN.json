@@ -206,7 +206,7 @@
       "expired": "已过期",
       "days": "剩余 {days, plural, other {# 天}}",
       "hours": "剩余 {hours, plural, other {# 小时}}",
-      "until": "保存至 {date} · {left}"
+      "until": "至 {date} · {left}"
     },
     "detail": {
       "title": "生成任务详情",

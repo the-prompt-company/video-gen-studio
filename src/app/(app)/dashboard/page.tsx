@@ -12,42 +12,50 @@ import { pageTitle } from "@/i18n/metadata";
 
 export const generateMetadata = pageTitle("dashboard");
 
+const RECENT = 20;
+
 export default async function DashboardPage() {
   const user = await getCurrentUser();
   if (!user) return null;
-  const [usage, recent, format, tMode] = await Promise.all([
+  const [usage, recent, format, t, tMode, tPages] = await Promise.all([
     usageFor(user.id),
     getDb()
       .select()
       .from(schema.generations)
       .where(eq(schema.generations.userId, user.id))
       .orderBy(desc(schema.generations.createdAt))
-      .limit(20),
+      .limit(RECENT),
     getFormatter(),
+    getTranslations("dashboard"),
     getTranslations("mode"),
+    getTranslations("pages"),
   ]);
 
   return (
     <PageContainer className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">대시보드</h1>
-        <p className="mt-1 text-sm text-muted">{user.username} 님의 사용량. 영상 비용은 생성을 요청할 때 모델 단가와 Higgsfield 요금 규칙으로, 이미지 비용은 OpenAI가 알려 준 토큰 사용량으로 정해지고, 실패·NSFW·취소되면 0으로 돌아갑니다. 이미지가 응답 없이 끝나 청구됐을 수 있는 건은 예상 비용을 남깁니다. 진행 중인 건도 합계에 들어갑니다.</p>
+        <h1 className="text-2xl font-semibold">{tPages("dashboard")}</h1>
+        <p className="mt-1 text-sm text-muted">{t("lead", { name: user.username })}</p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="누적 비용" value={usd(format, usage.totalCostUsd)} sub={`최근 30일 ${usd(format, usage.last30dCostUsd)}`} />
-        <Stat label="생성 횟수" value={usage.generations} sub={`완료 ${usage.completed} · 실패 ${usage.failed}`} />
-        <Stat label="생성한 영상 길이" value={`${usage.totalSeconds}s`} sub="완료 건 합계" />
-        <Stat label="API 키" value={user.apiKeyEnc ? "할당됨" : "미할당"} sub={user.apiKeyEnc ? "관리자가 서버에 보관" : "관리자에게 요청하세요"} />
+        <Stat label={t("stats.totalSpend")} value={usd(format, usage.totalCostUsd)} sub={t("stats.last30", { amount: usd(format, usage.last30dCostUsd) })} />
+        <Stat label={t("stats.generations")} value={usage.generations} sub={t("stats.outcomes", { completed: usage.completed, failed: usage.failed })} />
+        <Stat label={t("stats.videoLength")} value={t("seconds", { seconds: String(usage.totalSeconds) })} sub={t("stats.videoLengthSub")} />
+        <Stat
+          label={t("stats.apiKey")}
+          value={user.apiKeyEnc ? t("stats.keyAssigned") : t("stats.keyMissing")}
+          sub={user.apiKeyEnc ? t("stats.keyAssignedSub") : t("stats.keyMissingSub")}
+        />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
-        <Card title="최근 30일 · 일별 비용">
-          {usage.byDay.length === 0 ? <Empty>아직 데이터가 없습니다.</Empty> : <UsageChart rows={usage.byDay} />}
+        <Card title={t("daily")}>
+          {usage.byDay.length === 0 ? <Empty>{t("noData")}</Empty> : <UsageChart rows={usage.byDay} />}
         </Card>
-        <Card title="모델별">
+        <Card title={t("byModel")}>
           {usage.byModel.length === 0 ? (
-            <Empty>아직 데이터가 없습니다.</Empty>
+            <Empty>{t("noData")}</Empty>
           ) : (
             <ul className="space-y-3">
               {usage.byModel.map((m) => {
@@ -56,9 +64,7 @@ export default async function DashboardPage() {
                   <li key={m.group}>
                     <div className="flex justify-between text-sm">
                       <span className="text-foreground-2">{m.name}</span>
-                      <span className="text-muted">
-                        {m.count}회 · {usd(format, m.costUsd)}
-                      </span>
+                      <span className="text-muted">{t("modelUsage", { count: m.count, cost: usd(format, m.costUsd) })}</span>
                     </div>
                     <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-2">
                       <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
@@ -71,20 +77,20 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
-      <Card title="최근 생성 20건">
+      <Card title={t("recent", { count: RECENT })}>
         {recent.length === 0 ? (
-          <Empty>기록이 없습니다.</Empty>
+          <Empty>{t("noHistory")}</Empty>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="text-left text-xs uppercase tracking-wider text-subtle">
                 <tr>
-                  <th className="py-2 pr-4 font-medium">시각</th>
-                  <th className="py-2 pr-4 font-medium">상태</th>
-                  <th className="py-2 pr-4 font-medium">모델</th>
-                  <th className="py-2 pr-4 font-medium">프롬프트</th>
-                  <th className="py-2 pr-4 text-right font-medium">길이</th>
-                  <th className="py-2 text-right font-medium">비용</th>
+                  <th className="py-2 pr-4 font-medium">{t("table.time")}</th>
+                  <th className="py-2 pr-4 font-medium">{t("table.status")}</th>
+                  <th className="py-2 pr-4 font-medium">{t("table.model")}</th>
+                  <th className="py-2 pr-4 font-medium">{t("table.prompt")}</th>
+                  <th className="py-2 pr-4 text-right font-medium">{t("table.length")}</th>
+                  <th className="py-2 text-right font-medium">{t("table.cost")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -94,7 +100,7 @@ export default async function DashboardPage() {
                     <td className="py-2 pr-4"><StatusBadge status={g.status} /></td>
                     <td className="whitespace-nowrap py-2 pr-4 text-foreground-2">{modelLine(g.modelId, (m) => tMode(m))}</td>
                     <td className="max-w-[320px] truncate py-2 pr-4 text-foreground-2">{g.prompt || "—"}</td>
-                    <td className="py-2 pr-4 text-right tabular-nums text-muted">{g.durationS > 0 ? `${g.durationS}s` : "—"}</td>
+                    <td className="py-2 pr-4 text-right tabular-nums text-muted">{g.durationS > 0 ? t("seconds", { seconds: String(g.durationS) }) : "—"}</td>
                     <td className="py-2 text-right tabular-nums">{usd(format, g.costUsd)}</td>
                   </tr>
                 ))}

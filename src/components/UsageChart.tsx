@@ -1,8 +1,9 @@
-import { useFormatter } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 import { usd } from "@/i18n/format";
 
 /** Tiny dependency-free bar chart: one bar per day, height = cost. */
 export function UsageChart({ rows }: { rows: { day: string; count: number; costUsd: number }[] }) {
+  const t = useTranslations("dashboard");
   const format = useFormatter();
   const max = Math.max(0.0001, ...rows.map((r) => r.costUsd));
   return (
@@ -15,7 +16,7 @@ export function UsageChart({ rows }: { rows: { day: string; count: number; costU
               style={{ height: `${Math.max(4, (r.costUsd / max) * 100)}%` }}
             />
             <div className="pointer-events-none absolute -top-9 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded bg-zinc-800 px-2 py-1 text-[11px] text-foreground group-hover:block">
-              {r.day.slice(5)} · {r.count}회 · {usd(format, r.costUsd)}
+              {t("chartTip", { day: r.day.slice(5), count: r.count, cost: usd(format, r.costUsd) })}
             </div>
           </div>
         ))}
