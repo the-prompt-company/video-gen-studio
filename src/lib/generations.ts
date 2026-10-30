@@ -105,7 +105,6 @@ export function unavailableFor(family: FamilyId, user: Pick<User, "apiKeyEnc">):
  * (accepted), failed (rejected), or still pending (deferred by a 429, 5xx, network error or timeout). A pending row is
  * sent again by the next poll, webhook or sweep, with the same Idempotency-Key, endpoint and body. The plan's estimate
  * is the row's cost from now on: completion keeps it, every other end sets it to 0. OpenAI: see startImage.
- * `threadId` comes from claimThread; null puts the row in the member's earlier history.
  */
 export async function submitGeneration(user: User, plan: ReadyPlan, schedule: Scheduler, threadId: ThreadId | null = null): Promise<Generation> {
   if (FAMILIES[plan.family].provider === "openai") return startImage(user, plan, schedule, threadId);

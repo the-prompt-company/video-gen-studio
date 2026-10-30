@@ -52,7 +52,6 @@ async function member(role: "user" | "admin" = "user"): Promise<number> {
   return u.id;
 }
 
-/** A generation in a thread, the way submitGeneration writes it once claimThread named the thread. */
 async function generate(userId: number, threadId: ThreadId | null, minutesAgo: number, status: Generation["status"] = "completed"): Promise<string> {
   const [r] = await getDb()
     .insert(schema.generations)
@@ -61,7 +60,6 @@ async function generate(userId: number, threadId: ThreadId | null, minutesAgo: n
   return r.id;
 }
 
-/** A generation as master's code inserts it: its INSERT names only the columns master knows, so thread_id is never sent. */
 async function masterRow(userId: number, minutesAgo: number): Promise<string> {
   const [r] = await raw<{ id: string }[]>`
     insert into generations (user_id, model_id, prompt, status, cost_usd, duration_s, created_at)

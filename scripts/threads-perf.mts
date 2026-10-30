@@ -84,7 +84,6 @@ try {
   const migrateMs = performance.now() - t0;
   console.log(`0011 applied over ${rows} rows with no thread in ${migrateMs.toFixed(0)} ms (one run, includes drizzle's journal read)`);
 
-  // Each member's rows, newest first: the first 800 go into 80 threads of 10, the oldest 200 stay earlier history.
   await client`
     with ranked as (
       select id, user_id, row_number() over (partition by user_id order by created_at desc) - 1 as r from generations
@@ -153,7 +152,6 @@ try {
     for (const [name, ms] of Object.entries(results[side])) console.log(`${side.padEnd(9)} ${name.padEnd(11)} ${JSON.stringify({ runs: ms.length, ...stats(ms) })} ms`);
   }
 
-  // Plans and statement counts of one call each, from auto_explain in the server log.
   await setIndex(true);
   const settings = ["session_preload_libraries = 'auto_explain'", "auto_explain.log_min_duration = 0", "auto_explain.log_analyze = on", "auto_explain.log_buffers = on"];
   for (const s of settings) await admin.unsafe(`alter database ${dbName} set ${s}`);

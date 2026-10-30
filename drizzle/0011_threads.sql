@@ -1,3 +1,5 @@
+-- Fail after 5 s instead of queueing every request behind ADD COLUMN's lock while a long query holds generations.
+SET LOCAL lock_timeout = '5s';--> statement-breakpoint
 CREATE TABLE "threads" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"user_id" integer NOT NULL,
@@ -7,7 +9,8 @@ CREATE TABLE "threads" (
 	"deleted_at" timestamp with time zone,
 	CONSTRAINT "threads_id_user_key" UNIQUE("id","user_id"),
 	CONSTRAINT "threads_kind_check" CHECK ("threads"."kind" in ('chat', 'earlier')),
-	CONSTRAINT "threads_title_check" CHECK (("threads"."kind" = 'chat') = ("threads"."title" is not null))
+	CONSTRAINT "threads_title_check" CHECK (("threads"."kind" = 'chat') = ("threads"."title" is not null)),
+	CONSTRAINT "threads_earlier_only_deleted" CHECK ("threads"."kind" = 'chat' or "threads"."deleted_at" is not null)
 );
 --> statement-breakpoint
 ALTER TABLE "generations" ADD COLUMN "thread_id" uuid;--> statement-breakpoint

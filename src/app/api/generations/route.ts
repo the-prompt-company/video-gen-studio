@@ -4,7 +4,7 @@ import { dbNowMs, getDb, schema } from "@/db";
 import type { User } from "@/db/schema";
 import { requireUser, errorResponse, HttpError } from "@/lib/auth";
 import { FAMILIES, isFamilyId, MODES, planGeneration, type Draft, type Mode } from "@/lib/catalog";
-import { isGenerationId, publicGeneration, settle, submitGeneration } from "@/lib/generations";
+import { isGenerationId, publicGeneration, settle, submitGeneration, unavailableFor } from "@/lib/generations";
 import { loadModelSetting } from "@/lib/model-settings";
 import { claimThread, threadFeed } from "@/lib/thread-store";
 import { EARLIER, parseThreadRef, type ThreadRef } from "@/lib/threads";
@@ -15,7 +15,6 @@ export const maxDuration = 300;
 const MAX_IDS = 24;
 const MAX_REFS = 16;
 
-/** A thread named in a request. One the member cannot see answers 404 like any other. */
 function threadRefOf(raw: unknown): ThreadRef {
   const ref = parseThreadRef(raw);
   if (!ref) throw new HttpError(404, "noSuchThread");
@@ -135,6 +134,9 @@ export async function POST(req: Request) {
     const plan = planGeneration(draft, setting.rateUsd);
     if (!plan.ready) throw HttpError.of(400, plan.blocker);
 
+    // Refuse before the claim, so a submit that cannot run never creates and titles a thread.
+    const blocked = unavailableFor(plan.family, user);
+    if (blocked) throw HttpError.of(blocked.status, blocked.error);
     const { threadId, thread } = await claimThread(user.id, ref, plan.prompt);
     const row = await submitGeneration(user, plan, after, threadId);
     return Response.json(

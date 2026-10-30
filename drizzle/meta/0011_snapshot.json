@@ -1,5 +1,5 @@
 {
-  "id": "f63f3f69-b0a9-4662-93ec-41df374069b3",
+  "id": "b63992e9-ade1-407a-aaec-af373d7f467b",
   "prevId": "6bdad811-ca3b-4181-bda2-826063156ae4",
   "version": "7",
   "dialect": "postgresql",
@@ -516,6 +516,10 @@
         "threads_title_check": {
           "name": "threads_title_check",
           "value": "(\"threads\".\"kind\" = 'chat') = (\"threads\".\"title\" is not null)"
+        },
+        "threads_earlier_only_deleted": {
+          "name": "threads_earlier_only_deleted",
+          "value": "\"threads\".\"kind\" = 'chat' or \"threads\".\"deleted_at\" is not null"
         }
       },
       "isRLSEnabled": false

@@ -1,5 +1,3 @@
-// The playground imports this module too, so it must stay free of server-only imports. Queries live in thread-store.ts.
-
 export type ThreadId = string & { readonly __brand: "ThreadId" };
 
 /**
@@ -11,10 +9,8 @@ export type ThreadRef = { kind: "earlier" } | { kind: "chat"; id: ThreadId };
 /** A thread as the playground lists it. An empty title means the first prompt was empty. */
 export type PublicThread = { kind: "earlier"; id: typeof EARLIER } | { kind: "chat"; id: ThreadId; title: string };
 
-/** The earlier history's id in URLs and on the wire. */
 export const EARLIER = "earlier";
 
-/** Graphemes of the first prompt a title keeps before it is cut. */
 export const TITLE_GRAPHEMES = 30;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
