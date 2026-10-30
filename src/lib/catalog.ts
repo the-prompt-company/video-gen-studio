@@ -42,13 +42,6 @@ import { appError, type AppError } from "./errors";
 
 export type Mode = "t2v" | "i2v" | "r2v" | "t2i" | "r2i";
 export const MODES: readonly Mode[] = ["t2v", "i2v", "r2v", "t2i", "r2i"];
-export const MODE_LABEL: Record<Mode, string> = {
-  t2v: "텍스트→영상",
-  i2v: "이미지→영상",
-  r2v: "레퍼런스→영상",
-  t2i: "텍스트→이미지",
-  r2i: "레퍼런스→이미지",
-};
 /** The endpoint id's last segment. An OpenAI id ends in the Images API operation it posts to. */
 const SLUG: Record<Mode, string> = {
   t2v: "text-to-video",
@@ -60,6 +53,15 @@ const SLUG: Record<Mode, string> = {
 
 export type FamilyId = "bytedance/seedance-2.0" | "minimax/h3" | "openai/gpt-image-2";
 export const FAMILY_IDS: readonly FamilyId[] = ["bytedance/seedance-2.0", "minimax/h3", "openai/gpt-image-2"];
+/** A family's name in the message files (`families.<key>`, `prices.basis.<key>`). Message keys cannot hold the "." of an id. */
+export type FamilyKey = "seedance" | "h3" | "gptImage2";
+
+/** What a rate is per: a second of video, or a million image output tokens. */
+export type RateUnit = "second" | "mTokens";
+/** A provider's published figure, offered as a one-click fill. Its label is `prices.preset.<preset>`. */
+export type PricePreset = { preset: "higgsfieldTable"; discount: number; usd: number } | { preset: "list" | "openaiList"; usd: number };
+/** One part of the estimate line. The page words each kind; a token is shown as it is. */
+export type Fact = { kind: "seconds"; seconds: number } | { kind: "inputVideo"; seconds: number } | { kind: "refImages"; count: number } | { kind: "token"; text: string };
 
 /** Who runs the request. higgsfield: a queued job with a request id and an Idempotency-Key. openai: one synchronous call. */
 export type Provider = "higgsfield" | "openai";
@@ -81,12 +83,15 @@ export function isFamilyId(s: string): s is FamilyId {
 /** The exact JSON text the provider receives for one request. Stored on the row and sent verbatim on every attempt. */
 export type WireBody = string & { readonly __brand: "WireBody" };
 
-/** `modes`: the modes whose endpoint schema has this key; absent means every mode of the model. */
+/**
+ * `modes`: the modes whose endpoint schema has this key; absent means every mode of the model. The label is
+ * `params.<key>`, and an option's label is `paramValues.<key>` where that message exists.
+ */
 export type ParamSpec = (
-  | { key: string; label: string; type: "int"; min: number; max: number; default: number }
-  | { key: string; label: string; type: "bool"; default: boolean }
-  /** `numeric` sends the chosen option as a number (e.g. duration 5 | 10 | 15). `labels` names options for the member. */
-  | { key: string; label: string; type: "enum"; options: readonly string[]; default: string; numeric?: true; labels?: Readonly<Record<string, string>> }
+  | { key: string; type: "int"; min: number; max: number; default: number }
+  | { key: string; type: "bool"; default: boolean }
+  /** `numeric` sends the chosen option as a number (e.g. duration 5 | 10 | 15). */
+  | { key: string; type: "enum"; options: readonly string[]; default: string; numeric?: true }
 ) & { modes?: readonly Mode[] };
 
 export type Params = Readonly<Record<string, string | number | boolean>>;
@@ -113,18 +118,16 @@ export type CostBasis = {
 
 type BodyInput = { mode: Mode; params: Params; prompt: string; images: readonly string[]; videos: readonly string[] };
 
+/** Its blurb and note are `families.<key>.blurb` and `.note`. */
 export type Family = {
   id: FamilyId;
+  key: FamilyKey;
   provider: Provider;
   modes: ModeSet;
   name: string;
   vendor: string;
-  blurb: string;
-  note: string;
-  /** What the reference dialog says references do for this model. */
-  refNote: string;
   /** What the image picker accepts. `maxBytes` null keeps the 4 MB server upload / larger Blob upload split. */
-  refImages: { types: readonly string[]; hint: string; maxBytes: number | null };
+  refImages: { types: readonly string[]; maxBytes: number | null };
   params: readonly ParamSpec[];
   promptRequiredIn: readonly Mode[];
   maxImages: number;
@@ -133,19 +136,17 @@ export type Family = {
   body(r: BodyInput): Record<string, unknown>;
   /** Why this model refuses a request whose params, caps and prompt passed, or null. */
   check(r: BodyInput): AppError | null;
-  /** Short facts for the estimate line: ["5s", "720p"] or ["1024×1024", "medium", "레퍼런스 2장"]. */
-  facts(b: CostBasis): string[];
+  /** Short facts for the estimate line: 5 seconds and 720p, or 1024×1024, medium and two reference images. */
+  facts(b: CostBasis): Fact[];
+  /** The admin's one number per `unit`. What it prices is `prices.basis.<key>` ("480p·16:9", "2K", image output). */
   rate: {
-    /** What the admin's one number prices ("480p·16:9", "2K", "이미지 출력"). */
-    basis: string;
-    /** The rate's denominator after a price ("s", "1M 토큰") and in the admin label ("초당", "100만 토큰당"). */
-    per: { short: string; long: string };
+    unit: RateUnit;
     /** The rate while no admin has saved one. */
     defaultUsd: number;
-    /** The provider's published figures in that unit, offered as one-click fills. */
-    published: readonly { label: string; usd: number }[];
-    /** One request the admin page prices at the rate being typed, so the unit reads as money. */
-    example: { label: string; basis: CostBasis };
+    /** The provider's published figures in that unit. */
+    published: readonly PricePreset[];
+    /** One request the admin page prices at the rate being typed, so the unit reads as money. Its label is `prices.example.<key>`. */
+    example: CostBasis;
     /** Billable units of a request, rate-free so any rate can be previewed: the provider's usage when given, else the estimate. */
     units(b: CostBasis): number;
   };
@@ -174,12 +175,10 @@ function seedanceUnits(b: CostBasis): number {
 /** H3 reference-to-video bills $0.08 for each image past this many, so the app takes no more. */
 const H3_IMAGES_WITHOUT_SURCHARGE = 5;
 
-const DURATION_SEEDANCE: ParamSpec = { key: "duration", label: "길이(초)", type: "int", min: 4, max: 15, default: 5 };
+const DURATION_SEEDANCE: ParamSpec = { key: "duration", type: "int", min: 4, max: 15, default: 5 };
 
 const VIDEO_MODES: ModeSet = { output: "video", text: "t2v", firstFrame: "i2v", reference: "r2v" };
-const HIGGSFIELD_REF_NOTE =
-  "레퍼런스는 선택입니다. 없으면 프롬프트만으로 만들고, 이미지 한 장만 올리면 그 이미지로 시작할지 서랍에서 고릅니다. 이미지와 영상은 올린 순서대로 번호가 붙고 그 순서로 모델에 전달됩니다. 영상 레퍼런스는 길이만큼 비용에 더해질 수 있습니다.";
-const HIGGSFIELD_REF_IMAGES = { types: ["image/jpeg", "image/png", "image/webp", "image/gif"], hint: "jpeg · png · webp · gif · 4 MB 이하", maxBytes: null };
+const HIGGSFIELD_REF_IMAGES = { types: ["image/jpeg", "image/png", "image/webp", "image/gif"], maxBytes: null };
 
 /** Params, the trimmed prompt when there is one, then the mode's media fields. */
 function higgsfieldBody({ mode, params, prompt, images, videos }: BodyInput): Record<string, unknown> {
@@ -191,10 +190,10 @@ function higgsfieldBody({ mode, params, prompt, images, videos }: BodyInput): Re
   return body;
 }
 
-function videoFacts(b: CostBasis): string[] {
-  const facts = [`${Number(b.params.duration ?? 0)}s`];
-  if (typeof b.params.resolution === "string") facts.push(b.params.resolution);
-  if (b.inputVideoS > 0 && b.family === "bytedance/seedance-2.0") facts.push(`입력 영상 ${b.inputVideoS.toFixed(1)}s`);
+function videoFacts(b: CostBasis): Fact[] {
+  const facts: Fact[] = [{ kind: "seconds", seconds: Number(b.params.duration ?? 0) }];
+  if (typeof b.params.resolution === "string") facts.push({ kind: "token", text: b.params.resolution });
+  if (b.inputVideoS > 0 && b.family === "bytedance/seedance-2.0") facts.push({ kind: "inputVideo", seconds: b.inputVideoS });
   return facts;
 }
 
@@ -255,19 +254,17 @@ function gptImage2Body({ mode, params, prompt, images }: BodyInput): Record<stri
 export const FAMILIES: Record<FamilyId, Family> = {
   "bytedance/seedance-2.0": {
     id: "bytedance/seedance-2.0",
+    key: "seedance",
     provider: "higgsfield",
     modes: VIDEO_MODES,
     name: "Seedance 2.0",
     vendor: "ByteDance",
-    blurb: "텍스트만으로, 이미지 한 장을 첫 프레임으로, 또는 이미지 최대 6장·영상 최대 3개를 레퍼런스로. 480p~4K, 화면비 선택, 오디오 생성.",
-    note: "비용은 해상도·길이에 비례합니다. 연습은 480p, 납품은 720p 이상을 권합니다.",
-    refNote: HIGGSFIELD_REF_NOTE,
     refImages: HIGGSFIELD_REF_IMAGES,
     params: [
       DURATION_SEEDANCE,
-      { key: "resolution", label: "해상도", type: "enum", options: ["480p", "720p", "1080p", "4k"], default: "480p" },
-      { key: "aspect_ratio", label: "화면비", type: "enum", options: ["16:9", "4:3", "1:1", "3:4", "9:16", "21:9"], default: "16:9", modes: ["t2v", "r2v"] },
-      { key: "generate_audio", label: "오디오 생성", type: "bool", default: false },
+      { key: "resolution", type: "enum", options: ["480p", "720p", "1080p", "4k"], default: "480p" },
+      { key: "aspect_ratio", type: "enum", options: ["16:9", "4:3", "1:1", "3:4", "9:16", "21:9"], default: "16:9", modes: ["t2v", "r2v"] },
+      { key: "generate_audio", type: "bool", default: false },
     ],
     promptRequiredIn: ["t2v"],
     maxImages: 6,
@@ -276,34 +273,28 @@ export const FAMILIES: Record<FamilyId, Family> = {
     check: () => null,
     facts: videoFacts,
     rate: {
-      basis: "480p·16:9",
-      per: { short: "s", long: "초당" },
+      unit: "second",
       defaultUsd: 0,
       published: [
-        { label: "Higgsfield 표 · 30% 할인", usd: 0.0985 },
-        { label: "정가", usd: 0.1406 },
+        { preset: "higgsfieldTable", discount: 30, usd: 0.0985 },
+        { preset: "list", usd: 0.1406 },
       ],
-      example: {
-        label: "720p 16:9 5초",
-        basis: { family: "bytedance/seedance-2.0", mode: "t2v", params: { duration: 5, resolution: "720p", aspect_ratio: "16:9" }, inputVideoS: 0 },
-      },
+      example: { family: "bytedance/seedance-2.0", mode: "t2v", params: { duration: 5, resolution: "720p", aspect_ratio: "16:9" }, inputVideoS: 0 },
       units: seedanceUnits,
     },
   },
   "minimax/h3": {
     id: "minimax/h3",
+    key: "h3",
     provider: "higgsfield",
     modes: VIDEO_MODES,
     name: "MiniMax H3",
     vendor: "MiniMax",
-    blurb: "텍스트만으로, 이미지 한 장을 첫 프레임으로, 또는 이미지 최대 5장·영상 최대 3개를 레퍼런스로. 2K, 5·10·15초.",
-    note: "출력은 2K로 고정입니다. 어떤 방식이든 프롬프트가 필요합니다.",
-    refNote: HIGGSFIELD_REF_NOTE,
     refImages: HIGGSFIELD_REF_IMAGES,
     params: [
-      { key: "duration", label: "길이(초)", type: "enum", options: ["5", "10", "15"], default: "5", numeric: true },
-      { key: "aspect_ratio", label: "화면비", type: "enum", options: ["auto", "21:9", "16:9", "4:3", "1:1", "3:4", "9:16"], default: "auto" },
-      { key: "aigc_watermark", label: "AI 생성 워터마크", type: "bool", default: false },
+      { key: "duration", type: "enum", options: ["5", "10", "15"], default: "5", numeric: true },
+      { key: "aspect_ratio", type: "enum", options: ["auto", "21:9", "16:9", "4:3", "1:1", "3:4", "9:16"], default: "auto" },
+      { key: "aigc_watermark", type: "bool", default: false },
     ],
     promptRequiredIn: ["t2v", "i2v", "r2v"],
     maxImages: H3_IMAGES_WITHOUT_SURCHARGE,
@@ -312,33 +303,29 @@ export const FAMILIES: Record<FamilyId, Family> = {
     check: () => null,
     facts: videoFacts,
     rate: {
-      basis: "2K",
-      per: { short: "s", long: "초당" },
+      unit: "second",
       defaultUsd: 0,
       published: [
-        { label: "Higgsfield 표 · 50% 할인", usd: 0.065 },
-        { label: "정가", usd: 0.13 },
+        { preset: "higgsfieldTable", discount: 50, usd: 0.065 },
+        { preset: "list", usd: 0.13 },
       ],
-      example: { label: "10초", basis: { family: "minimax/h3", mode: "t2v", params: { duration: 10 }, inputVideoS: 0 } },
+      example: { family: "minimax/h3", mode: "t2v", params: { duration: 10 }, inputVideoS: 0 },
       units: (b) => Number(b.params.duration),
     },
   },
   "openai/gpt-image-2": {
     id: "openai/gpt-image-2",
+    key: "gptImage2",
     provider: "openai",
     modes: { output: "image", text: "t2i", firstFrame: null, reference: "r2i" },
     name: "GPT Image 2",
     vendor: "OpenAI",
-    blurb: "프롬프트만으로, 또는 이미지 최대 16장을 레퍼런스로 넣어 이미지를 만듭니다. 화면비 5가지, 품질 3단계, PNG·JPEG·WebP.",
-    note: "레퍼런스가 있으면 OpenAI 편집으로 갑니다. 보통 수십 초에서 2분 걸리고, 비용은 OpenAI가 알려 준 토큰 사용량으로 확정됩니다.",
-    refNote:
-      "레퍼런스는 선택입니다. 없으면 프롬프트만으로 만들고, 이미지를 올리면 OpenAI 편집으로 그 이미지들을 바탕으로 만듭니다. 이미지는 올린 순서대로 번호가 붙고 그 순서로 전달되며, 장마다 입력 비용이 더해집니다.",
-    refImages: { types: ["image/png", "image/jpeg", "image/webp"], hint: "png · jpeg · webp · 50 MB 이하", maxBytes: 50 * 1024 * 1024 },
+    refImages: { types: ["image/png", "image/jpeg", "image/webp"], maxBytes: 50 * 1024 * 1024 },
     params: [
-      { key: "aspect_ratio", label: "화면비", type: "enum", options: Object.keys(GPT_IMAGE_2_SHAPES), default: "1:1" },
-      { key: "quality", label: "품질", type: "enum", options: Object.keys(GPT_IMAGE_2_IMAGE_USD), default: "medium", labels: { low: "낮음 · low", medium: "중간 · medium", high: "높음 · high" } },
-      { key: "output_format", label: "파일 형식", type: "enum", options: ["png", "jpeg", "webp"], default: "png", labels: { png: "PNG", jpeg: "JPEG", webp: "WebP" } },
-      { key: "background", label: "배경", type: "enum", options: ["auto", "opaque", "transparent"], default: "auto", labels: { auto: "자동", opaque: "불투명", transparent: "투명 (PNG·WebP)" } },
+      { key: "aspect_ratio", type: "enum", options: Object.keys(GPT_IMAGE_2_SHAPES), default: "1:1" },
+      { key: "quality", type: "enum", options: Object.keys(GPT_IMAGE_2_IMAGE_USD), default: "medium" },
+      { key: "output_format", type: "enum", options: ["png", "jpeg", "webp"], default: "png" },
+      { key: "background", type: "enum", options: ["auto", "opaque", "transparent"], default: "auto" },
     ],
     promptRequiredIn: ["t2i", "r2i"],
     maxImages: 16,
@@ -350,26 +337,24 @@ export const FAMILIES: Record<FamilyId, Family> = {
       return null;
     },
     facts: (b) => {
-      const facts = [(GPT_IMAGE_2_SHAPES[String(b.params.aspect_ratio)] ?? GPT_IMAGE_2_SHAPES["1:1"]).label, String(b.params.quality)];
-      if (b.inputImages) facts.push(`레퍼런스 ${b.inputImages}장`);
+      const shape = GPT_IMAGE_2_SHAPES[String(b.params.aspect_ratio)] ?? GPT_IMAGE_2_SHAPES["1:1"];
+      const facts: Fact[] = [{ kind: "token", text: shape.label }, { kind: "token", text: String(b.params.quality) }];
+      if (b.inputImages) facts.push({ kind: "refImages", count: b.inputImages });
       return facts;
     },
     rate: {
-      basis: "이미지 출력",
-      per: { short: "1M 토큰", long: "100만 토큰당" },
+      unit: "mTokens",
       defaultUsd: GPT_IMAGE_2_USD_PER_M.out,
-      published: [{ label: "OpenAI 정가", usd: GPT_IMAGE_2_USD_PER_M.out }],
-      example: {
-        label: "1024×1024 중간 품질 1장",
-        basis: { family: "openai/gpt-image-2", mode: "t2i", params: { aspect_ratio: "1:1", quality: "medium" }, inputVideoS: 0 },
-      },
+      published: [{ preset: "openaiList", usd: GPT_IMAGE_2_USD_PER_M.out }],
+      example: { family: "openai/gpt-image-2", mode: "t2i", params: { aspect_ratio: "1:1", quality: "medium" }, inputVideoS: 0 },
       units: gptImage2Units,
     },
   },
 };
 
-const RETIRED: Record<string, { name: string; mode: Mode; labels: Record<string, string> }> = {
-  "minimax/hailuo-2.3/standard/image-to-video": { name: "Hailuo 2.3 Standard", mode: "i2v", labels: { duration: "길이(초)", prompt_optimizer: "프롬프트 자동 보정" } },
+/** Its params read through `params.<key>` like a current model's, so prompt_optimizer keeps a message. */
+const RETIRED: Record<string, { name: string; mode: Mode }> = {
+  "minimax/hailuo-2.3/standard/image-to-video": { name: "Hailuo 2.3 Standard", mode: "i2v" },
 };
 
 /** The model's modes in the order the drawer lists them. */
@@ -458,7 +443,7 @@ type PlanBase = {
   costBasis: CostBasis;
   /** Rounded to 4 decimals, the scale of cost_usd. */
   costUsd: number;
-  facts: readonly string[];
+  facts: readonly Fact[];
 };
 /** `blocker` is the one reason the cost bar shows and the route answers 400 with, so both read the same sentence. */
 export type Plan = PlanBase & ({ ready: true; body: WireBody } | { ready: false; blocker: AppError });
@@ -481,10 +466,10 @@ export function planGeneration(draft: Draft, baseRateUsd: number): Plan {
     if (v === null) {
       blocker ??=
         p.type === "int"
-          ? appError("paramRange", { label: p.label, min: p.min, max: p.max })
+          ? appError("paramRange", { param: p.key, min: p.min, max: p.max })
           : p.type === "enum"
-            ? appError("paramChoice", { label: p.label, options: p.options.join(" | ") })
-            : appError("paramOnOff", { label: p.label });
+            ? appError("paramChoice", { param: p.key, options: p.options.join(" | ") })
+            : appError("paramOnOff", { param: p.key });
       continue;
     }
     params[p.key] = v;
@@ -527,7 +512,6 @@ export type ModelLabel = {
   /** A retired or unknown id reads as a Higgsfield video, which is all the app ever sent before OpenAI. */
   provider: Provider;
   output: Output;
-  paramLabel(key: string): string;
 };
 
 export function describeModel(modelId: string): ModelLabel {
@@ -535,18 +519,18 @@ export function describeModel(modelId: string): ModelLabel {
     const mode = modesOf(family).find((m) => endpointOf(family, m) === modelId);
     if (!mode) continue;
     const f = FAMILIES[family];
-    return { group: family, name: f.name, family, mode, provider: f.provider, output: f.modes.output, paramLabel: (key) => f.params.find((p) => p.key === key)?.label ?? key };
+    return { group: family, name: f.name, family, mode, provider: f.provider, output: f.modes.output };
   }
   const old = { provider: "higgsfield", output: "video" } as const;
   const retired = RETIRED[modelId];
-  if (retired) return { group: modelId, name: retired.name, family: null, mode: retired.mode, ...old, paramLabel: (key) => retired.labels[key] ?? key };
-  return { group: modelId, name: modelId.split("/").slice(0, 2).join("/"), family: null, mode: null, ...old, paramLabel: (key) => key };
+  if (retired) return { group: modelId, name: retired.name, family: null, mode: retired.mode, ...old };
+  return { group: modelId, name: modelId.split("/").slice(0, 2).join("/"), family: null, mode: null, ...old };
 }
 
-/** "Seedance 2.0 · 텍스트→영상": a stored row's model and how it was asked, for lists and captions. */
-export function modelLine(modelId: string): string {
+/** "Seedance 2.0 · Text to video": a stored row's model and how it was asked, for lists and captions. */
+export function modelLine(modelId: string, modeName: (mode: Mode) => string): string {
   const m = describeModel(modelId);
-  return m.mode ? `${m.name} · ${MODE_LABEL[m.mode]}` : m.name;
+  return m.mode ? `${m.name} · ${modeName(m.mode)}` : m.name;
 }
 
 type StoredRequest = { modelId: string; requestBody: WireBody | null; prompt: string; params: Record<string, unknown>; imageRefs: string[]; videoRefs: string[] };

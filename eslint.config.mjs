@@ -14,7 +14,6 @@ const I18N_PENDING = [
   "src/components/Gallery.tsx",
   "src/components/Playground.tsx",
   "src/components/UsageChart.tsx",
-  "src/lib/catalog.ts",
   // Settings, members, teams, import, model rates, logs (i18n PR 4)
   "src/app/(app)/admin/page.tsx",
   "src/app/(app)/settings/page.tsx",

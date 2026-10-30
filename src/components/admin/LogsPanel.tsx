@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useFormatter, useTranslations } from "next-intl";
 import type { PublicGeneration } from "@/lib/generations";
 import { caught, type Reason } from "@/lib/errors";
-import { FAMILIES, FAMILY_IDS, modelLine } from "@/lib/catalog";
+import { FAMILIES, FAMILY_IDS, modelLine, type Mode } from "@/lib/catalog";
 import { GENERATION_STATUSES } from "@/lib/generation-status";
 import { Button, Card, Select, Empty } from "@/components/ui";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -16,6 +16,8 @@ type UserOpt = { id: number; username: string };
 
 export function LogsPanel() {
   const tStatus = useTranslations("status");
+  const tMode = useTranslations("mode");
+  const modeName = (m: Mode) => tMode(m);
   const format = useFormatter();
   const errorText = useErrorText();
   const [users, setUsers] = useState<UserOpt[]>([]);
@@ -108,7 +110,7 @@ export function LogsPanel() {
                   <td className="whitespace-nowrap py-2 pr-3 text-muted">{dateTime(format, g.createdAt)}</td>
                   <td className="py-2 pr-3 text-foreground">{g.username}</td>
                   <td className="py-2 pr-3"><StatusBadge status={g.status} /></td>
-                  <td className="whitespace-nowrap py-2 pr-3 text-foreground-2">{modelLine(g.modelId)}</td>
+                  <td className="whitespace-nowrap py-2 pr-3 text-foreground-2">{modelLine(g.modelId, modeName)}</td>
                   <td className="max-w-[280px] truncate py-2 pr-3 text-foreground-2">{g.prompt || "—"}</td>
                   <td className="py-2 pr-3 text-right tabular-nums text-muted">{g.durationS}s</td>
                   <td className="py-2 text-right tabular-nums">{usd(format, g.costUsd)}</td>
@@ -135,7 +137,7 @@ export function LogsPanel() {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             {open.image && <img src={open.image.url} alt="생성된 이미지" className="max-h-[60dvh] w-full rounded-lg bg-black object-contain" />}
             <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs text-muted">
-              <dt>모델</dt><dd className="text-foreground-2">{modelLine(open.modelId)} <span className="font-mono text-subtle">{open.modelId}</span></dd>
+              <dt>모델</dt><dd className="text-foreground-2">{modelLine(open.modelId, modeName)} <span className="font-mono text-subtle">{open.modelId}</span></dd>
               <dt>프롬프트</dt><dd className="text-foreground-2">{open.prompt || "—"}</dd>
               <dt>파라미터</dt><dd className="font-mono text-foreground-2">{JSON.stringify(open.params)}</dd>
               <dt>이미지</dt><dd className="break-all text-foreground-2">{open.imageRefs.join(", ") || "—"}</dd>

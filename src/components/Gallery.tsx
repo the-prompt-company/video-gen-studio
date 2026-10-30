@@ -4,8 +4,9 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useFormatter, useTranslations } from "next-intl";
 import type { PublicGeneration, PublicVideo } from "@/lib/generations";
-import { describeModel, modelLine } from "@/lib/catalog";
+import { modelLine } from "@/lib/catalog";
 import { Button, Empty } from "@/components/ui";
+import { useParamLabel } from "@/i18n/errors";
 import { ago, dateTime, usd } from "@/i18n/format";
 
 function expiresIn(d: Date | string | null | undefined): string | null {
@@ -41,10 +42,6 @@ function orientationWord(label: string | null) {
   return a > b ? "가로" : a < b ? "세로" : "정사각";
 }
 
-function paramLabel(modelId: string, key: string) {
-  return describeModel(modelId).paramLabel(key);
-}
-
 /* One tile: the video is contained, never cropped, so a 9:16 result reads as 9:16 inside the 16:9 frame. */
 function useVideoSize() {
   const ref = useRef<HTMLVideoElement>(null);
@@ -77,6 +74,7 @@ function useNearViewport<T extends Element>(rootMargin: string) {
 }
 
 function Tile({ g, now, onOpen }: { g: PublicGeneration; now: number; onOpen: () => void }) {
+  const tMode = useTranslations("mode");
   const format = useFormatter();
   const { ref, size, read } = useVideoSize();
   const { ref: tileRef, near } = useNearViewport<HTMLLIElement>("0px 0px 80px 0px");
@@ -113,7 +111,7 @@ function Tile({ g, now, onOpen }: { g: PublicGeneration; now: number; onOpen: ()
         <p className="line-clamp-2 text-sm text-foreground-2">{g.prompt || "(프롬프트 없음)"}</p>
         <div className="flex items-center justify-between gap-2 text-[11px] text-subtle">
           <span className="truncate">
-            {modelLine(g.modelId)} · <span className="tabular-nums">{usd(format, g.costUsd)}</span>
+            {modelLine(g.modelId, (m) => tMode(m))} · <span className="tabular-nums">{usd(format, g.costUsd)}</span>
           </span>
           <span className="shrink-0">{g.username ? `${g.username} · ` : ""}{ago(format, g.createdAt, now)}</span>
         </div>
@@ -125,6 +123,8 @@ function Tile({ g, now, onOpen }: { g: PublicGeneration; now: number; onOpen: ()
 
 function Detail({ g, onClose }: { g: PublicGeneration; onClose: () => void }) {
   const tStatus = useTranslations("status");
+  const tMode = useTranslations("mode");
+  const paramLabel = useParamLabel();
   const format = useFormatter();
   const { ref, size: videoSize, read } = useVideoSize();
   const [imageSize, setImageSize] = useState<{ w: number; h: number } | null>(null);
@@ -166,7 +166,7 @@ function Detail({ g, onClose }: { g: PublicGeneration; onClose: () => void }) {
           <div className="min-w-0 space-y-4">
             <div>
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs text-muted">
-                <span className="text-foreground-2">{modelLine(g.modelId)}</span>
+                <span className="text-foreground-2">{modelLine(g.modelId, (m) => tMode(m))}</span>
                 {label && (
                   <span className="font-display text-[15px] text-sand">
                     {label}
@@ -206,7 +206,7 @@ function Detail({ g, onClose }: { g: PublicGeneration; onClose: () => void }) {
             <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 text-xs">
               {params.map(([k, v]) => (
                 <div key={k} className="contents">
-                  <dt className="text-muted">{paramLabel(g.modelId, k)}</dt>
+                  <dt className="text-muted">{paramLabel(k)}</dt>
                   <dd className="break-words tabular-nums text-foreground-2">{typeof v === "boolean" ? (v ? "켬" : "끔") : String(v)}</dd>
                 </div>
               ))}

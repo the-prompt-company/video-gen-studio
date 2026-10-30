@@ -5,13 +5,15 @@ import { AdminPanels } from "@/components/admin/AdminPanels";
 import { getFormatter } from "next-intl/server";
 import { usd } from "@/i18n/format";
 import { pageTitle } from "@/i18n/metadata";
+import { NextIntlClientProvider } from "next-intl";
+import { pageMessages } from "@/i18n/provider";
 
 export const generateMetadata = pageTitle("admin");
 
 export default async function AdminPage() {
   const user = await getCurrentUser();
   if (!user || user.role !== "admin") return null;
-  const [all, format] = await Promise.all([usageFor(null), getFormatter()]);
+  const [all, format, messages] = await Promise.all([usageFor(null), getFormatter(), pageMessages(["mode", "prices"])]);
 
   return (
     <PageContainer className="space-y-6">
@@ -25,7 +27,9 @@ export default async function AdminPage() {
         <Stat label="생성한 영상 길이" value={`${all.totalSeconds}s`} />
         <Stat label="모델 수" value={all.byModel.length} sub="사용된 모델" />
       </div>
-      <AdminPanels adminId={user.id} />
+      <NextIntlClientProvider messages={messages}>
+        <AdminPanels adminId={user.id} />
+      </NextIntlClientProvider>
     </PageContainer>
   );
 }

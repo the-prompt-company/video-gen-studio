@@ -2,7 +2,7 @@ import { desc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { getCurrentUser } from "@/lib/auth";
 import { usageFor } from "@/lib/stats";
-import { getFormatter } from "next-intl/server";
+import { getFormatter, getTranslations } from "next-intl/server";
 import { modelLine } from "@/lib/catalog";
 import { Card, Stat, Empty, PageContainer } from "@/components/ui";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -15,7 +15,7 @@ export const generateMetadata = pageTitle("dashboard");
 export default async function DashboardPage() {
   const user = await getCurrentUser();
   if (!user) return null;
-  const [usage, recent, format] = await Promise.all([
+  const [usage, recent, format, tMode] = await Promise.all([
     usageFor(user.id),
     getDb()
       .select()
@@ -24,6 +24,7 @@ export default async function DashboardPage() {
       .orderBy(desc(schema.generations.createdAt))
       .limit(20),
     getFormatter(),
+    getTranslations("mode"),
   ]);
 
   return (
@@ -91,7 +92,7 @@ export default async function DashboardPage() {
                   <tr key={g.id}>
                     <td className="whitespace-nowrap py-2 pr-4 text-muted">{dateTime(format, g.createdAt)}</td>
                     <td className="py-2 pr-4"><StatusBadge status={g.status} /></td>
-                    <td className="whitespace-nowrap py-2 pr-4 text-foreground-2">{modelLine(g.modelId)}</td>
+                    <td className="whitespace-nowrap py-2 pr-4 text-foreground-2">{modelLine(g.modelId, (m) => tMode(m))}</td>
                     <td className="max-w-[320px] truncate py-2 pr-4 text-foreground-2">{g.prompt || "—"}</td>
                     <td className="py-2 pr-4 text-right tabular-nums text-muted">{g.durationS > 0 ? `${g.durationS}s` : "—"}</td>
                     <td className="py-2 text-right tabular-nums">{usd(format, g.costUsd)}</td>

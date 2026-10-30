@@ -8,13 +8,13 @@ import {
   defaultParams,
   describeModel,
   FAMILIES,
-  MODE_LABEL,
   modelLine,
   modesOf,
   paramsFor,
   planGeneration,
   routeMode,
   type Draft,
+  type Fact,
   type FamilyId,
   type Mode,
   type ParamSpec,
@@ -25,7 +25,7 @@ import { isLive } from "@/lib/generation-status";
 import { refUploadName } from "@/lib/ref-name";
 import { Button, ErrorText, Field, Input, Select, Textarea } from "@/components/ui";
 import { StatusBadge } from "@/components/StatusBadge";
-import { useErrorText } from "@/i18n/errors";
+import { useErrorText, useParamLabel, type KeyTranslator } from "@/i18n/errors";
 import { usd } from "@/i18n/format";
 
 /**
@@ -92,6 +92,7 @@ function readVideoSeconds(file: File): Promise<number | null> {
 }
 
 const SMALL = 4 * 1024 * 1024;
+const ONE_DECIMAL = { minimumFractionDigits: 1, maximumFractionDigits: 1 };
 const FEED_LIMIT = 12;
 const POLL_FIRST_MS = 2000;
 const POLL_MAX_MS = 10000;
@@ -122,6 +123,11 @@ async function uploadFile(file: File, largeUploadPrefix: string | null, viaBlob:
   return blob.url;
 }
 
+/** "jpeg · png · webp", the way the file pickers list what they take. */
+function typeList(types: readonly string[]) {
+  return types.map((t) => t.replace(/^image\//, "")).join(" · ");
+}
+
 function fmtElapsed(ms: number) {
   const s = Math.max(0, Math.floor(ms / 1000));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
@@ -132,11 +138,13 @@ function prefersReducedMotion() {
 }
 
 function ParamInput({ spec, value, onChange }: { spec: ParamSpec; value: unknown; onChange: (v: unknown) => void }) {
+  const label = useParamLabel()(spec.key);
+  const tValues = useTranslations("paramValues") as unknown as KeyTranslator;
   switch (spec.type) {
     case "int": {
       const isRange = spec.max - spec.min <= 100;
       return (
-        <Field label={spec.label} hint={isRange ? String(value) : `${spec.min}~${spec.max}`}>
+        <Field label={label} hint={isRange ? String(value) : `${spec.min}~${spec.max}`}>
           {isRange ? (
             <input type="range" min={spec.min} max={spec.max} step={1} value={Number(value)} onChange={(e) => onChange(Number(e.target.value))} className="w-full" />
           ) : (
@@ -149,15 +157,15 @@ function ParamInput({ spec, value, onChange }: { spec: ParamSpec; value: unknown
       return (
         <label className="flex min-h-11 items-center gap-2 text-sm text-foreground-2">
           <input type="checkbox" checked={Boolean(value)} onChange={(e) => onChange(e.target.checked)} className="h-4 w-4" />
-          {spec.label}
+          {label}
         </label>
       );
     case "enum":
       return (
-        <Field label={spec.label}>
+        <Field label={label}>
           <Select value={String(value)} onChange={(e) => onChange(e.target.value)}>
             {spec.options.map((o) => (
-              <option key={o} value={o}>{spec.labels?.[o] ?? o}</option>
+              <option key={o} value={o}>{tValues.has(spec.key) ? tValues(spec.key, { value: o }) : o}</option>
             ))}
           </Select>
         </Field>
@@ -399,8 +407,25 @@ function RefDialog({ modelName, refNote, imageHint, imageAccept, refs, images, v
 }
 
 export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers: Offer[]; largeUploadPrefix: string | null; galleryCount: number }) {
+  const t = useTranslations("playground");
+  const tMode = useTranslations("mode");
+  const tFamilies = useTranslations("families");
+  const tPrices = useTranslations("prices");
   const format = useFormatter();
   const errorText = useErrorText();
+  const modeName = (m: Mode) => tMode(m);
+  function factText(f: Fact): string {
+    switch (f.kind) {
+      case "seconds":
+        return t("fact.seconds", { seconds: format.number(f.seconds) });
+      case "inputVideo":
+        return t("fact.inputVideo", { seconds: format.number(f.seconds, ONE_DECIMAL) });
+      case "refImages":
+        return t("fact.refImages", { count: f.count });
+      case "token":
+        return f.text;
+    }
+  }
   const [familyId, setFamilyId] = useState<FamilyId | null>(() => (offers.find((o) => !o.unavailable) ?? offers.find((o) => o.unavailable?.status !== 503) ?? offers[0])?.family ?? null);
   const offer = offers.find((o) => o.family === familyId) ?? offers[0];
   const [params, setParams] = useState<Record<string, unknown>>(() => (offer ? { ...defaultParams(offer.family) } : {}));
@@ -552,8 +577,8 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
     setError(null);
     try {
       for (const f of picked) {
-        const { types, hint, maxBytes } = family.refImages;
-        if (kind === "image" && !types.includes(f.type === "image/jpg" ? "image/jpeg" : f.type)) throw new Error(`${f.name}: ${family.name}이(가) 받지 않는 형식입니다. ${hint}인 파일로 올려 주세요`);
+        const { types, maxBytes } = family.refImages;
+        if (kind === "image" && !types.includes(f.type === "image/jpg" ? "image/jpeg" : f.type)) throw new Error(`${f.name}: ${family.name}이(가) 받지 않는 형식입니다. ${typeList(types)}인 파일로 올려 주세요`);
         if (kind === "image" && maxBytes !== null && f.size > maxBytes) throw new Error(`${f.name}: ${Math.round(maxBytes / 1024 / 1024)} MB를 넘습니다. 줄여서 다시 올려 주세요`);
         const seconds = kind === "video" ? await readVideoSeconds(f) : undefined;
         if (seconds === null) throw new Error(`${f.name}: 영상 길이를 읽지 못했습니다. 다른 mp4로 올려 주세요`);
@@ -640,8 +665,9 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
     return m ? [Number(m[1]), Number(m[2])] : [undefined, undefined];
   })();
   const priced = offer.rateUsd > 0;
-  const ratePer = `${usd(format, offer.rateUsd)}/${family.rate.per.short}`;
-  const estimateNote = [...plan.facts, `단가 ${ratePer}`].join(" · ");
+  const rate = tPrices("rate", { usd: usd(format, offer.rateUsd), unit: family.rate.unit });
+  const facts = plan.facts.map(factText);
+  const estimateNote = [...facts, t("cost.rate", { rate })].join(" · ");
   const canGenerate = !offer.unavailable && !submitting && !uploading && plan.ready;
   const offline = offers.filter((o) => o.unavailable?.status === 503 && o.family !== family.id);
   const canCancel = Boolean(active && (active.status === "pending" || active.status === "queued"));
@@ -678,7 +704,7 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
               )}
             </div>
           ) : (
-            items.map((g, i) => <FeedItem key={g.id} g={g} index={i} total={items.length} active={g.id === active?.id} now={now} modelName={modelLine(g.modelId)} />)
+            items.map((g, i) => <FeedItem key={g.id} g={g} index={i} total={items.length} active={g.id === active?.id} now={now} modelName={modelLine(g.modelId, modeName)} />)
           )}
         </div>
         <div aria-label="결과 동작" className="flex shrink-0 items-center justify-center gap-3 border-t border-border px-2 py-3 sm:gap-5 lg:w-24 lg:flex-col lg:gap-4 lg:border-t-0 lg:border-l lg:py-4">
@@ -755,7 +781,7 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
                     aria-current={m === mode ? "step" : undefined}
                     className={`inline-flex min-h-8 items-center rounded-full px-3 text-xs ${m === mode ? "bg-foreground font-medium text-background" : "text-subtle"}`}
                   >
-                    {MODE_LABEL[m]}
+                    {tMode(m)}
                   </li>
                 ))}
               </ol>
@@ -765,7 +791,7 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
 
           <section className="space-y-3">
             <h2 className="text-xs font-semibold tracking-wider text-muted">2 · 모델과 하이퍼파라미터</h2>
-            <Field label="모델" hint={priced ? `${family.rate.basis} 기준 ${ratePer}` : "단가 미설정"}>
+            <Field label="모델" hint={priced ? t("rateHint", { basis: tPrices(`basis.${family.key}`), rate }) : t("rateUnset")}>
               <Select
                 value={family.id}
                 onChange={(e) => {
@@ -783,7 +809,7 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
                         const off = o.unavailable?.status === 503;
                         return (
                           <option key={o.family} value={o.family} disabled={off}>
-                            {f.name} · {f.vendor}{off ? " · 사용 불가" : o.rateUsd > 0 ? ` · ${usd(format, o.rateUsd)}/${f.rate.per.short}` : ""}
+                            {f.name} · {f.vendor}{off ? " · 사용 불가" : o.rateUsd > 0 ? ` · ${tPrices("rate", { usd: usd(format, o.rateUsd), unit: f.rate.unit })}` : ""}
                           </option>
                         );
                       })}
@@ -801,8 +827,8 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
               </p>
             ))}
             <p className="text-xs leading-relaxed text-muted">
-              {family.blurb}
-              <span className="block text-subtle">{family.note}</span>
+              {tFamilies(`${family.key}.blurb`)}
+              <span className="block text-subtle">{tFamilies(`${family.key}.note`)}</span>
             </p>
             <div className="space-y-1">
               <div className="flex items-baseline justify-between gap-3 text-xs font-medium text-muted">
@@ -861,10 +887,10 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
                 ) : (
                   <span className="font-semibold text-foreground">{priced ? "—" : "미정"}</span>
                 )}
-                <span className="text-xs text-subtle">{MODE_LABEL[mode]}</span>
+                <span className="text-xs text-subtle">{tMode(mode)}</span>
               </div>
               <div className="mt-0.5 truncate text-[11px] text-subtle tabular-nums">
-                {priced ? estimateNote : `관리자가 단가를 넣으면 ${plan.facts.join(" · ")} 기준으로 계산`}
+                {priced ? estimateNote : t("cost.unpriced", { facts: facts.join(" · ") })}
               </div>
             </div>
             <Button size="lg" onClick={generate} disabled={!canGenerate}>
@@ -877,8 +903,8 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
       {refsOpen && (
         <RefDialog
           modelName={family.name}
-          refNote={family.refNote}
-          imageHint={family.refImages.hint}
+          refNote={t("refs.note", { provider: family.provider })}
+          imageHint={t("refs.fileHint", { types: typeList(family.refImages.types), mb: String((family.refImages.maxBytes ?? SMALL) / 1024 / 1024) })}
           imageAccept={family.refImages.types.join(",")}
           refs={refs}
           images={images}
