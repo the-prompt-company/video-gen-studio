@@ -141,14 +141,14 @@ export function LogsPanel() {
             {open.video && <video src={open.video.url} controls className="w-full rounded-lg bg-black" />}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             {open.image && <img src={open.image.url} alt={tGeneration("image")} className="max-h-[60dvh] w-full rounded-lg bg-black object-contain" />}
-            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs text-muted">
-              <dt>{t("field.model")}</dt><dd className="text-foreground-2">{modelLine(open.modelId, modeName)} <span className="font-mono text-subtle">{open.modelId}</span></dd>
-              <dt>{t("field.prompt")}</dt><dd className="text-foreground-2">{open.prompt || "—"}</dd>
-              <dt>{t("field.params")}</dt><dd className="font-mono text-foreground-2">{JSON.stringify(open.params)}</dd>
+            <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 text-xs text-muted [&>dt]:whitespace-nowrap">
+              <dt>{t("field.model")}</dt><dd className="break-words text-foreground-2">{modelLine(open.modelId, modeName)} <span className="break-all font-mono text-subtle">{open.modelId}</span></dd>
+              <dt>{t("field.prompt")}</dt><dd className="break-words text-foreground-2">{open.prompt || "—"}</dd>
+              <dt>{t("field.params")}</dt><dd className="break-all font-mono text-foreground-2">{JSON.stringify(open.params)}</dd>
               <dt>{t("field.images")}</dt><dd className="break-all text-foreground-2">{open.imageRefs.join(", ") || "—"}</dd>
               <dt>{t("field.videos")}</dt><dd className="break-all text-foreground-2">{open.videoRefs.join(", ") || "—"}</dd>
               <dt>{t("field.cost")}</dt><dd className="text-foreground-2">{usd(format, open.costUsd)} ({t("seconds", { seconds: String(open.durationS) })})</dd>
-              {open.reason && (<><dt>{t("field.error")}</dt><dd className="text-rose-300">{errorText(open.reason)}</dd></>)}
+              {open.reason && (<><dt>{t("field.error")}</dt><dd className="break-words text-rose-300">{errorText(open.reason)}</dd></>)}
             </dl>
             <div className="text-right"><Button variant="outline" size="sm" onClick={() => setOpen(null)}>{tCommon("close")}</Button></div>
           </div>

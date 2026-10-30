@@ -551,8 +551,8 @@
       "placeholder": "No nickname"
     },
     "password": {
-      "temporary": "Temporary password ({min, plural, one {at least # character} other {at least # characters}})",
-      "new": "New password ({min, plural, one {at least # character} other {at least # characters}})",
+      "temporary": "Temporary password ({min, plural, one {min. #} other {min. #}})",
+      "new": "New password ({min, plural, one {min. #} other {min. #}})",
       "change": "Change"
     },
     "reset": {
