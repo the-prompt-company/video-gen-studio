@@ -15,6 +15,7 @@ import {
 import { sql } from "drizzle-orm";
 import { LOCALES, type Locale } from "../i18n/locale";
 import type { WireBody } from "../lib/catalog";
+import type { ErrorCode, ErrorParams } from "../lib/errors";
 import { GENERATION_STATUSES } from "../lib/generation-status";
 import type { RequestId } from "../lib/higgsfield";
 import type { ObjectKey } from "../lib/storage";
@@ -100,7 +101,14 @@ export const generations = pgTable(
     expiresAt: timestamp("expires_at", { withTimezone: true }),
     durationS: integer("duration_s").notNull().default(0),
     costUsd: numeric("cost_usd", { precision: 10, scale: 4 }).notNull().default("0"),
+    /**
+     * Why the row failed, or why a pending row waits, in one of two forms that never both hold. `error` is text shown
+     * as written (the provider's own words, or a Korean reason stored before 0010). `error_code` with `error_params` is
+     * a reason the page translates. Only generations.ts writes them, all three at once.
+     */
     error: text("error"),
+    errorCode: text("error_code").$type<ErrorCode>(),
+    errorParams: jsonb("error_params").$type<ErrorParams>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     completedAt: timestamp("completed_at", { withTimezone: true }),
   },

@@ -1,6 +1,6 @@
 import { requireAdmin, errorResponse, HttpError } from "@/lib/auth";
 import { FAMILIES, FAMILY_IDS, isFamilyId } from "@/lib/catalog";
-import { loadModelSettings, saveModelSetting } from "@/lib/model-settings";
+import { loadModelSettings, RATE_USD, saveModelSetting } from "@/lib/model-settings";
 
 /** GET /api/admin/models — the catalog's models with their stored base rate and enabled flag. */
 export async function GET() {
@@ -29,16 +29,16 @@ export async function PATCH(req: Request) {
     await requireAdmin();
     const b = (await req.json().catch(() => ({}))) as Body;
     const family = String(b.modelId ?? "");
-    if (!isFamilyId(family)) throw new HttpError(400, "알 수 없는 모델");
+    if (!isFamilyId(family)) throw new HttpError(400, "unknownModel");
     const patch: Parameters<typeof saveModelSetting>[1] = {};
     if (b.pricePerSecUsd !== undefined) patch.rateUsd = Number(b.pricePerSecUsd);
     if (b.enabled !== undefined) patch.enabled = Boolean(b.enabled);
     if (b.note !== undefined) patch.note = b.note ? String(b.note) : null;
-    if (Object.keys(patch).length === 0) throw new HttpError(400, "바꿀 값이 없습니다");
+    if (Object.keys(patch).length === 0) throw new HttpError(400, "nothingToChange");
     try {
       await saveModelSetting(family, patch);
     } catch (e) {
-      if (e instanceof RangeError) throw new HttpError(400, e.message);
+      if (e instanceof RangeError) throw new HttpError(400, "rateOutOfRange", RATE_USD);
       throw e;
     }
     return Response.json({ ok: true });

@@ -1,4 +1,5 @@
 import { and, desc, eq } from "drizzle-orm";
+import { getNow } from "next-intl/server";
 import { getDb, schema } from "@/db";
 import { getCurrentUser } from "@/lib/auth";
 import { publicGeneration } from "@/lib/generations";
@@ -16,17 +17,20 @@ export default async function GalleryPage({ searchParams }: { searchParams: Prom
 
   const db = getDb();
   const g = schema.generations;
-  const rows = await db
-    .select({ g, username: schema.users.username })
-    .from(g)
-    .innerJoin(schema.users, eq(schema.users.id, g.userId))
-    .where(showAll ? eq(g.status, "completed") : and(eq(g.userId, user.id), eq(g.status, "completed")))
-    .orderBy(desc(g.createdAt))
-    .limit(120);
+  const [rows, now] = await Promise.all([
+    db
+      .select({ g, username: schema.users.username })
+      .from(g)
+      .innerJoin(schema.users, eq(schema.users.id, g.userId))
+      .where(showAll ? eq(g.status, "completed") : and(eq(g.userId, user.id), eq(g.status, "completed")))
+      .orderBy(desc(g.createdAt))
+      .limit(120),
+    getNow(),
+  ]);
 
   return (
     <PageContainer>
-      <Gallery items={rows.map((r) => publicGeneration(r.g, r.username))} isAdmin={user.role === "admin"} showAll={showAll} />
+      <Gallery items={rows.map((r) => publicGeneration(r.g, r.username))} isAdmin={user.role === "admin"} showAll={showAll} now={now.getTime()} />
     </PageContainer>
   );
 }

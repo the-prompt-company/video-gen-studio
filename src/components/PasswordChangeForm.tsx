@@ -4,6 +4,8 @@ import { useState, type FormEvent } from "react";
 import { useTranslations } from "next-intl";
 import { Button, ErrorText, Field, Input } from "@/components/ui";
 import { MIN_PASSWORD_LENGTH } from "@/lib/credentials";
+import { parseAppError } from "@/lib/errors";
+import { useErrorText } from "@/i18n/errors";
 import type { Locale } from "@/i18n/locale";
 
 type Status = { kind: "idle" } | { kind: "sending" } | { kind: "failed"; error: string } | { kind: "changed" };
@@ -21,6 +23,7 @@ export type PasswordChangeFormProps = Known & {
 
 export function PasswordChangeForm({ username, currentPassword, hideId, onChanged, autoFocus, locale }: PasswordChangeFormProps) {
   const t = useTranslations("auth");
+  const errorText = useErrorText();
   const [id, setId] = useState("");
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
@@ -41,13 +44,12 @@ export function PasswordChangeForm({ username, currentPassword, hideId, onChange
         body: JSON.stringify({ username: username ?? id, currentPassword: currentPassword ?? current, newPassword: next, ...(locale && { locale }) }),
         cache: "no-store",
       });
-      const body = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) {
-        setStatus({ kind: "failed", error: body.error ?? t("changeFailed") });
+        setStatus({ kind: "failed", error: errorText(parseAppError(await res.json().catch(() => null), res.status)) });
         return;
       }
     } catch {
-      setStatus({ kind: "failed", error: t("offline") });
+      setStatus({ kind: "failed", error: errorText({ code: "network" }) });
       return;
     }
     setCurrent("");

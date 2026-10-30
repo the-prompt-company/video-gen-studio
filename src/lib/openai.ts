@@ -10,6 +10,7 @@
  * itself. ESLint lets only src/lib/generations.ts import this module, behind the claim that allows one call per row.
  */
 import type { ImageFormat, TokenUsage, WireBody } from "@/lib/catalog";
+import { appError, type Reason } from "@/lib/errors";
 
 const REAL_BASE = "https://api.openai.com/v1";
 const DEFAULT_RETRY_AFTER_S = 5;
@@ -23,14 +24,23 @@ export type ImageOp = "generations" | "edits";
  *   refused   a rate-limit 429 or an overloaded 503 with OpenAI's error body: turned away before any work, not billed.
  *             The only outcome that may be sent again.
  *   rejected  quota, moderation, key, region or a bad request. Not billed, and sending it again would fail the same way.
+ *             `reason` is what the member reads, an error code or OpenAI's own words for a bad request.
  *   unknown   a timeout, a dropped connection, 408, 409, 500, 502, 504, an HTML 503, or a 2xx without a usable image.
  *             OpenAI may have generated and billed it. Never sent again.
  */
 export type ImageOutcome =
   | { kind: "image"; bytes: Uint8Array; usage: TokenUsage | null }
   | { kind: "refused"; retryAfterS: number; detail: string }
-  | { kind: "rejected"; cause: "moderation" | "key" | "quota" | "request"; error: string }
-  | { kind: "unknown"; detail: string; usage: TokenUsage | null };
+  | { kind: "rejected"; cause: "moderation" | "key" | "quota" | "request"; reason: Reason }
+  | { kind: "unknown"; why: Unanswered; usage: TokenUsage | null };
+
+/** Why an answer was unusable. `detail` is OpenAI's or the network's own words. */
+export type Unanswered =
+  | { cause: "timeout"; seconds: number }
+  | { cause: "disconnected"; detail: string }
+  | { cause: "noImage" }
+  | { cause: "wrongFormat"; format: ImageFormat }
+  | { cause: "reply"; detail: string };
 
 function base(): string {
   return (process.env.OPENAI_BASE_URL || REAL_BASE).replace(/\/+$/, "");
@@ -61,8 +71,10 @@ export async function createImage(key: OpenAiKey, op: ImageOp, body: WireBody, o
     text = await res.text();
   } catch (e) {
     const timedOut = e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError");
-    const detail = timedOut ? `OpenAI가 ${Math.round(opts.timeoutMs / 1000)}초 안에 답하지 않았습니다` : `OpenAI 연결이 끊겼습니다: ${redact(e instanceof Error ? e.message : String(e))}`;
-    return { kind: "unknown", detail, usage: null };
+    const why: Unanswered = timedOut
+      ? { cause: "timeout", seconds: Math.round(opts.timeoutMs / 1000) }
+      : { cause: "disconnected", detail: redact(e instanceof Error ? e.message : String(e)) };
+    return { kind: "unknown", why, usage: null };
   }
   return outcomeOf(res.status, res.headers, text, opts.format);
 }
@@ -77,20 +89,25 @@ export function outcomeOf(status: number, headers: Headers, text: string, format
   } catch {}
   const err = (json as ErrorBody | null)?.error;
   const code = typeof err?.code === "string" ? err.code : null;
-  const message = typeof err?.message === "string" ? redact(err.message) : text.slice(0, 200);
+  const type = typeof err?.type === "string" ? err.type : null;
+  const message = redact(typeof err?.message === "string" ? err.message : text.slice(0, 200));
   const detail = `OpenAI ${status}: ${message}`;
   if (status >= 200 && status < 300) return imageOf(json, format);
   if (status === 429) {
-    if (code === "insufficient_quota" || err?.type === "insufficient_quota") return { kind: "rejected", cause: "quota", error: "OpenAI 사용 한도나 크레딧이 바닥났습니다. 관리자에게 문의하세요" };
+    if (code === "insufficient_quota" || type === "insufficient_quota") return { kind: "rejected", cause: "quota", reason: appError("openaiQuota") };
     return { kind: "refused", retryAfterS: retryAfter(headers), detail };
   }
   if (status === 503 && err) return { kind: "refused", retryAfterS: retryAfter(headers), detail };
   if (status === 400 && code === "moderation_blocked") {
-    return { kind: "rejected", cause: "moderation", error: "OpenAI 안전 정책에 걸려 이미지를 만들지 않았습니다. 프롬프트나 레퍼런스를 바꿔 보세요" };
+    return { kind: "rejected", cause: "moderation", reason: appError("openaiModeration") };
   }
-  if (status === 401 || status === 403) return { kind: "rejected", cause: "key", error: `OpenAI ${status}: 서버의 OpenAI 키나 지역이 거부됐습니다. 관리자에게 문의하세요` };
-  if (status >= 400 && status < 500 && status !== 408 && status !== 409) return { kind: "rejected", cause: "request", error: detail };
-  return { kind: "unknown", detail, usage: null };
+  if (status === 401 || status === 403) {
+    // Only OpenAI's words tell whether the key, an IP, an organization, a missing scope or the region was refused.
+    const fields = [code && `code: ${code}`, type && `type: ${type}`].filter(Boolean).join(", ");
+    return { kind: "rejected", cause: "key", reason: appError("openaiKeyRejected", { status, detail: fields ? `${message} [${fields}]` : message }) };
+  }
+  if (status >= 400 && status < 500 && status !== 408 && status !== 409) return { kind: "rejected", cause: "request", reason: { text: detail } };
+  return { kind: "unknown", why: { cause: "reply", detail }, usage: null };
 }
 
 const MAGIC: Record<ImageFormat, (b: Buffer) => boolean> = {
@@ -102,9 +119,9 @@ const MAGIC: Record<ImageFormat, (b: Buffer) => boolean> = {
 function imageOf(json: unknown, format: ImageFormat): ImageOutcome {
   const usage = usageOf((json as { usage?: unknown } | null)?.usage);
   const b64 = (json as { data?: { b64_json?: unknown }[] } | null)?.data?.[0]?.b64_json;
-  if (typeof b64 !== "string" || !b64) return { kind: "unknown", detail: "OpenAI 응답에 이미지가 없습니다", usage };
+  if (typeof b64 !== "string" || !b64) return { kind: "unknown", why: { cause: "noImage" }, usage };
   const bytes = Buffer.from(b64, "base64");
-  if (!MAGIC[format](bytes)) return { kind: "unknown", detail: `OpenAI 응답의 이미지가 요청한 ${format} 형식이 아닙니다`, usage };
+  if (!MAGIC[format](bytes)) return { kind: "unknown", why: { cause: "wrongFormat", format }, usage };
   return { kind: "image", bytes, usage };
 }
 

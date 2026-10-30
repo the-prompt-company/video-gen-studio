@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import { Avatar } from "@/components/Avatar";
 import { Button, ErrorText, Field, Input } from "@/components/ui";
 import { AVATAR_MAX_BYTES, AVATAR_SIDE } from "@/lib/avatar";
+import { parseAppError, type AppError } from "@/lib/errors";
 import { MAX_NICKNAME_LENGTH, parseNickname, type ParsedNickname } from "@/lib/nickname";
+import { useErrorText } from "@/i18n/errors";
 
 type Photo =
   | { kind: "shown" }
@@ -35,9 +37,8 @@ async function squarePhoto(file: File): Promise<Blob> {
   return jpeg;
 }
 
-async function errorOf(res: Response, fallback: string): Promise<string> {
-  const body = (await res.json().catch(() => ({}))) as { error?: string };
-  return body.error ?? fallback;
+async function errorOf(res: Response): Promise<AppError> {
+  return parseAppError(await res.json().catch(() => null), res.status);
 }
 
 export function ProfileEditor({
@@ -52,6 +53,7 @@ export function ProfileEditor({
   photoStorage: boolean;
 }) {
   const router = useRouter();
+  const errorText = useErrorText();
   const picker = useRef<HTMLInputElement>(null);
   const [photoUrl, setPhotoUrl] = useState(avatarUrl);
   const [photo, setPhoto] = useState<Photo>({ kind: "shown" });
@@ -91,7 +93,7 @@ export function ProfileEditor({
       const res = await fetch("/api/me/avatar", { method: "PUT", headers: { "Content-Type": photo.blob.type }, body: photo.blob, cache: "no-store" });
       if (!res.ok) {
         setPhoto({ ...photo, kind: "picked" });
-        setPhotoNote({ tone: "failed", text: await errorOf(res, "사진을 저장하지 못했습니다. 다시 시도하세요") });
+        setPhotoNote({ tone: "failed", text: errorText(await errorOf(res)) });
         return;
       }
       const body = (await res.json()) as { avatarUrl: string | null };
@@ -113,7 +115,7 @@ export function ProfileEditor({
       const res = await fetch("/api/me/avatar", { method: "DELETE", cache: "no-store" });
       setPhoto({ kind: "shown" });
       if (!res.ok) {
-        setPhotoNote({ tone: "failed", text: await errorOf(res, "사진을 지우지 못했습니다. 다시 시도하세요") });
+        setPhotoNote({ tone: "failed", text: errorText(await errorOf(res)) });
         return;
       }
       setPhotoUrl(null);
@@ -132,7 +134,7 @@ export function ProfileEditor({
     e.preventDefault();
     setPhotoNote(null);
     if (!parsed.ok) {
-      setNicknameNote({ tone: "failed", text: parsed.reason });
+      setNicknameNote({ tone: "failed", text: errorText(parsed.reason) });
       return;
     }
     setSavingNickname(true);
@@ -145,7 +147,7 @@ export function ProfileEditor({
         cache: "no-store",
       });
       if (!res.ok) {
-        setNicknameNote({ tone: "failed", text: await errorOf(res, "닉네임을 저장하지 못했습니다. 다시 시도하세요") });
+        setNicknameNote({ tone: "failed", text: errorText(await errorOf(res)) });
         return;
       }
       const body = (await res.json()) as { nickname: string | null };

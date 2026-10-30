@@ -7,6 +7,7 @@ import type { User } from "@/db/schema";
 import { loginId } from "@/lib/credentials";
 import { verifyPassword } from "@/lib/crypto";
 import { errorDetail } from "@/lib/error-detail";
+import { appError, type AppError, type ErrorCode, type ErrorParams } from "@/lib/errors";
 import { SESSION_COOKIE, SESSION_TTL_S, revokedByPasswordChange, signSession, verifySessionToken, type Session, type SessionUser } from "@/lib/session";
 
 export { SESSION_COOKIE, verifySessionToken, type SessionUser };
@@ -33,12 +34,12 @@ const LOCK_MINUTES = 15;
 export async function attemptSignIn(username: string, password: string): Promise<User> {
   const db = getDb();
   const [u] = await db.select().from(schema.users).where(eq(schema.users.username, loginId(username))).limit(1);
-  const wrong = new HttpError(401, "ID 또는 비밀번호가 맞지 않습니다");
+  const wrong = new HttpError(401, "wrongCredentials");
   if (!u) throw wrong;
   if (u.lockedUntil && u.lockedUntil.getTime() > Date.now()) {
-    throw new HttpError(423, `실패가 누적되어 잠겼습니다. ${LOCK_MINUTES}분 후 다시 시도하세요`);
+    throw new HttpError(423, "locked", { minutes: LOCK_MINUTES });
   }
-  if (!u.active) throw new HttpError(403, "비활성화된 계정입니다");
+  if (!u.active) throw new HttpError(403, "inactive");
 
   if (!verifyPassword(password, u.passwordHash)) {
     const failures = u.failedAttempts + 1;
@@ -73,31 +74,40 @@ export async function clearSessionCookie() {
   jar.set(SESSION_COOKIE, "", { httpOnly: true, path: "/", maxAge: 0 });
 }
 
+/** The only way a route refuses a request, with a status and an error code the browser translates. */
 export class HttpError extends Error {
+  readonly error: AppError;
   constructor(
     public status: number,
-    message: string,
+    code: ErrorCode,
+    params?: ErrorParams,
   ) {
-    super(message);
+    super(code);
+    this.error = appError(code, params);
+  }
+
+  /** A refusal a lib function already worded, such as a nickname rule. */
+  static of(status: number, error: AppError): HttpError {
+    return new HttpError(status, error.code, error.params);
   }
 }
 
 export async function requireUser() {
   const u = await getCurrentUser();
-  if (!u) throw new HttpError(401, "로그인이 필요합니다");
+  if (!u) throw new HttpError(401, "signInRequired");
   return u;
 }
 
 export async function requireAdmin() {
   const u = await requireUser();
-  if (u.role !== "admin") throw new HttpError(403, "관리자만 사용할 수 있습니다");
+  if (u.role !== "admin") throw new HttpError(403, "adminOnly");
   return u;
 }
 
 export function errorResponse(e: unknown): Response {
-  if (e instanceof HttpError) return Response.json({ error: e.message }, { status: e.status });
+  if (e instanceof HttpError) return Response.json({ error: e.error }, { status: e.status });
   // An unexpected error can carry SQL text or server paths. The browser gets a reference; the log keeps the detail.
   const ref = randomUUID().slice(0, 8);
   console.error(JSON.stringify({ evt: "unhandled_error", ref, error: errorDetail(e) }));
-  return Response.json({ error: `서버 오류가 발생했습니다 (참조 ${ref})` }, { status: 500 });
+  return Response.json({ error: appError("unexpected", { ref }) }, { status: 500 });
 }

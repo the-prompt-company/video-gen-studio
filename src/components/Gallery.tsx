@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 import type { PublicGeneration, PublicVideo } from "@/lib/generations";
 import { describeModel, modelLine } from "@/lib/catalog";
-import { usd, fmtDate, fmtRelative } from "@/lib/format";
 import { Button, Empty } from "@/components/ui";
+import { ago, dateTime, usd } from "@/i18n/format";
 
 function expiresIn(d: Date | string | null | undefined): string | null {
   if (!d) return null;
@@ -76,7 +76,8 @@ function useNearViewport<T extends Element>(rootMargin: string) {
   return { ref, near };
 }
 
-function Tile({ g, onOpen }: { g: PublicGeneration; onOpen: () => void }) {
+function Tile({ g, now, onOpen }: { g: PublicGeneration; now: number; onOpen: () => void }) {
+  const format = useFormatter();
   const { ref, size, read } = useVideoSize();
   const { ref: tileRef, near } = useNearViewport<HTMLLIElement>("0px 0px 80px 0px");
   const label = aspectLabel(g, size?.w, size?.h);
@@ -112,9 +113,9 @@ function Tile({ g, onOpen }: { g: PublicGeneration; onOpen: () => void }) {
         <p className="line-clamp-2 text-sm text-foreground-2">{g.prompt || "(프롬프트 없음)"}</p>
         <div className="flex items-center justify-between gap-2 text-[11px] text-subtle">
           <span className="truncate">
-            {modelLine(g.modelId)} · <span className="tabular-nums">{usd(g.costUsd)}</span>
+            {modelLine(g.modelId)} · <span className="tabular-nums">{usd(format, g.costUsd)}</span>
           </span>
-          <span className="shrink-0">{g.username ? `${g.username} · ` : ""}{fmtRelative(g.createdAt)}</span>
+          <span className="shrink-0">{g.username ? `${g.username} · ` : ""}{ago(format, g.createdAt, now)}</span>
         </div>
         {keep && <div className={`text-[11px] ${keep === "만료됨" ? "text-rose-300" : "text-subtle"}`}>보관 {keep}</div>}
       </div>
@@ -124,6 +125,7 @@ function Tile({ g, onOpen }: { g: PublicGeneration; onOpen: () => void }) {
 
 function Detail({ g, onClose }: { g: PublicGeneration; onClose: () => void }) {
   const tStatus = useTranslations("status");
+  const format = useFormatter();
   const { ref, size: videoSize, read } = useVideoSize();
   const [imageSize, setImageSize] = useState<{ w: number; h: number } | null>(null);
   const size = videoSize ?? imageSize;
@@ -172,7 +174,7 @@ function Detail({ g, onClose }: { g: PublicGeneration; onClose: () => void }) {
                   </span>
                 )}
                 {size && <span className="tabular-nums">{size.w}×{size.h}</span>}
-                <span className="font-display text-[15px] text-sand">{g.image ? usd(g.costUsd) : `${g.durationS}S · ${usd(g.costUsd)}`}</span>
+                <span className="font-display text-[15px] text-sand">{g.image ? usd(format, g.costUsd) : `${g.durationS}S · ${usd(format, g.costUsd)}`}</span>
                 <span>{tStatus(g.status)}</span>
               </div>
               <p className="mt-2 break-words text-sm leading-relaxed text-foreground">{g.prompt || "(프롬프트 없음)"}</p>
@@ -209,11 +211,11 @@ function Detail({ g, onClose }: { g: PublicGeneration; onClose: () => void }) {
                 </div>
               ))}
               <dt className="text-muted">생성</dt>
-              <dd className="tabular-nums text-foreground-2">{fmtDate(g.createdAt)}</dd>
+              <dd className="tabular-nums text-foreground-2">{dateTime(format, g.createdAt)}</dd>
               {g.completedAt && (
                 <>
                   <dt className="text-muted">완료</dt>
-                  <dd className="tabular-nums text-foreground-2">{fmtDate(g.completedAt)}</dd>
+                  <dd className="tabular-nums text-foreground-2">{dateTime(format, g.completedAt)}</dd>
                 </>
               )}
               {(g.video?.kind === "stored" || g.image) && (
@@ -225,7 +227,7 @@ function Detail({ g, onClose }: { g: PublicGeneration; onClose: () => void }) {
               {g.video?.kind === "provider" && g.video.expiresAt && (
                 <>
                   <dt className="text-muted">보관</dt>
-                  <dd className="tabular-nums text-foreground-2">{fmtDate(g.video.expiresAt)}까지 · {expiresIn(g.video.expiresAt)}</dd>
+                  <dd className="tabular-nums text-foreground-2">{dateTime(format, g.video.expiresAt)}까지 · {expiresIn(g.video.expiresAt)}</dd>
                 </>
               )}
               {g.username && (
@@ -252,7 +254,8 @@ function Detail({ g, onClose }: { g: PublicGeneration; onClose: () => void }) {
   );
 }
 
-export function Gallery({ items, isAdmin, showAll }: { items: PublicGeneration[]; isAdmin: boolean; showAll: boolean }) {
+/** `now` is when the page was rendered, so tiles print the same relative time on the server and in the browser. */
+export function Gallery({ items, isAdmin, showAll, now }: { items: PublicGeneration[]; isAdmin: boolean; showAll: boolean; now: number }) {
   const [open, setOpen] = useState<PublicGeneration | null>(null);
   const expiring = items.some((g) => g.video?.kind === "provider");
 
@@ -284,7 +287,7 @@ export function Gallery({ items, isAdmin, showAll }: { items: PublicGeneration[]
       ) : (
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {items.map((g) => (
-            <Tile key={g.id} g={g} onOpen={() => setOpen(g)} />
+            <Tile key={g.id} g={g} now={now} onOpen={() => setOpen(g)} />
           ))}
         </ul>
       )}

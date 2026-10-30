@@ -1,32 +1,31 @@
 "use client";
 
 import { useEffect, useId, useState, type FormEvent } from "react";
+import { caught, type Reason } from "@/lib/errors";
 import { MAX_TEAM_NAME_LENGTH, type Team, type TeamId } from "@/lib/teams";
 import { Button, Card, Empty, ErrorText, Field, Input } from "@/components/ui";
 import { Modal } from "@/components/Modal";
+import { useErrorText } from "@/i18n/errors";
 import { api } from "./AdminPanels";
 
-type Open = { kind: "create"; busy: boolean; error: string | null } | { kind: "edit"; id: TeamId; error: string | null };
-
-function message(e: unknown) {
-  return e instanceof Error ? e.message : String(e);
-}
+type Open = { kind: "create"; busy: boolean; error: Reason | null } | { kind: "edit"; id: TeamId; error: Reason | null };
 
 const memberName = (m: Team["members"][number]) => m.nickname ?? m.username;
 
 export function TeamsPanel() {
+  const errorText = useErrorText();
   const [teams, setTeams] = useState<Team[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Reason | null>(null);
   const [open, setOpen] = useState<Open | null>(null);
   const [draft, setDraft] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
 
   const load = async () => setTeams((await api<{ items: Team[] }>("/api/admin/teams")).items);
-  const reload = () => load().catch((e) => setError(message(e)));
+  const reload = () => load().catch((e) => setError(caught(e)));
   useEffect(() => {
     api<{ items: Team[] }>("/api/admin/teams")
       .then((b) => setTeams(b.items))
-      .catch((e) => setError(message(e)));
+      .catch((e) => setError(caught(e)));
   }, []);
 
   function show(next: Open) {
@@ -34,7 +33,7 @@ export function TeamsPanel() {
     setOpen(next);
   }
   const close = () => setOpen(null);
-  const editError = (error: string | null) => setOpen((o) => (o?.kind === "edit" ? { ...o, error } : o));
+  const editError = (error: Reason | null) => setOpen((o) => (o?.kind === "edit" ? { ...o, error } : o));
 
   async function create(e: FormEvent) {
     e.preventDefault();
@@ -45,7 +44,7 @@ export function TeamsPanel() {
       setOpen((o) => (o?.kind === "create" ? null : o));
       setNotice(`팀을 만들었습니다: ${team.name}. 사용자 탭에서 팀원을 고른 뒤 팀 지정을 누르세요.`);
     } catch (err) {
-      setOpen((o) => (o?.kind === "create" ? { kind: "create", busy: false, error: message(err) } : o));
+      setOpen((o) => (o?.kind === "create" ? { kind: "create", busy: false, error: caught(err) } : o));
       return;
     }
     await reload();
@@ -57,7 +56,7 @@ export function TeamsPanel() {
       await api(`/api/admin/teams/${id}`, { method: "PATCH", body: JSON.stringify({ name }) });
       await load();
     } catch (e) {
-      editError(message(e));
+      editError(caught(e));
     }
   }
 
@@ -68,7 +67,7 @@ export function TeamsPanel() {
       close();
       setNotice(`팀을 삭제했습니다: ${team.name}.${released > 0 ? ` 팀원 ${released}명이 미소속이 됐습니다.` : ""}`);
     } catch (e) {
-      editError(message(e));
+      editError(caught(e));
       return;
     }
     await reload();
@@ -84,7 +83,7 @@ export function TeamsPanel() {
   return (
     <>
       <Card title={teams ? `팀 ${teams.length}개` : "팀"} action={toolbar}>
-        {error && <div className="mb-3"><ErrorText>{error}</ErrorText></div>}
+        {error && <div className="mb-3"><ErrorText>{errorText(error)}</ErrorText></div>}
         {notice && <p role="status" className="mb-3 break-keep text-sm text-foreground-2">{notice}</p>}
         {teams?.length === 0 && <Empty>아직 팀이 없습니다. 팀을 만든 뒤 사용자 탭에서 팀원을 고르고 팀 지정을 누르세요.</Empty>}
         {teams && teams.length > 0 && (
@@ -127,9 +126,9 @@ export function TeamsPanel() {
         )}
       </Card>
 
-      {open?.kind === "create" && <CreateTeam draft={draft} onChange={setDraft} busy={open.busy} error={open.error} onSubmit={create} onClose={close} />}
+      {open?.kind === "create" && <CreateTeam draft={draft} onChange={setDraft} busy={open.busy} error={open.error && errorText(open.error)} onSubmit={create} onClose={close} />}
       {open?.kind === "edit" && editing && (
-        <TeamEditor key={editing.id} team={editing} error={open.error} onRename={(name) => rename(editing.id, name)} onDelete={() => remove(editing)} onClose={close} />
+        <TeamEditor key={editing.id} team={editing} error={open.error && errorText(open.error)} onRename={(name) => rename(editing.id, name)} onDelete={() => remove(editing)} onClose={close} />
       )}
     </>
   );

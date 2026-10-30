@@ -5,7 +5,9 @@ import { useTranslations } from "next-intl";
 import { Button, ErrorText, Field, Input } from "@/components/ui";
 import { LanguagePicker } from "@/components/LanguagePicker";
 import { PasswordChangeForm } from "@/components/PasswordChangeForm";
+import { useErrorText } from "@/i18n/errors";
 import type { Locale } from "@/i18n/locale";
+import { parseAppError } from "@/lib/errors";
 
 type Mode = { kind: "login" } | { kind: "change" } | { kind: "temporary"; username: string; password: string };
 
@@ -53,6 +55,7 @@ function SignInForm({
   onTemporary: (username: string, password: string) => void;
 }) {
   const t = useTranslations("auth");
+  const errorText = useErrorText();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -62,7 +65,7 @@ function SignInForm({
     e.preventDefault();
     setBusy(true);
     setError(null);
-    let body: { error?: string; mustChangePassword?: boolean };
+    let body: { mustChangePassword?: boolean } | null;
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
@@ -70,18 +73,18 @@ function SignInForm({
         body: JSON.stringify({ username, password, ...(picked && { locale: picked }) }),
         cache: "no-store",
       });
-      body = (await res.json().catch(() => ({}))) as typeof body;
+      body = (await res.json().catch(() => null)) as typeof body;
       if (!res.ok) {
-        setError(body.error ?? t("signInFailed"));
+        setError(errorText(parseAppError(body, res.status)));
         setBusy(false);
         return;
       }
     } catch {
-      setError(t("offline"));
+      setError(errorText({ code: "network" }));
       setBusy(false);
       return;
     }
-    if (body.mustChangePassword) onTemporary(username, password);
+    if (body?.mustChangePassword) onTemporary(username, password);
     else onSignedIn();
   }
 

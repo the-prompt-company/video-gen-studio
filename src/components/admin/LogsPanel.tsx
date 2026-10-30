@@ -1,25 +1,29 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 import type { PublicGeneration } from "@/lib/generations";
+import { caught, type Reason } from "@/lib/errors";
 import { FAMILIES, FAMILY_IDS, modelLine } from "@/lib/catalog";
-import { usd, fmtDate } from "@/lib/format";
 import { GENERATION_STATUSES } from "@/lib/generation-status";
 import { Button, Card, Select, Empty } from "@/components/ui";
 import { StatusBadge } from "@/components/StatusBadge";
+import { useErrorText } from "@/i18n/errors";
+import { dateTime, usd } from "@/i18n/format";
 import { api } from "./AdminPanels";
 
 type UserOpt = { id: number; username: string };
 
 export function LogsPanel() {
   const tStatus = useTranslations("status");
+  const format = useFormatter();
+  const errorText = useErrorText();
   const [users, setUsers] = useState<UserOpt[]>([]);
   const [f, setF] = useState({ userId: "", modelId: "", status: "" });
   const [items, setItems] = useState<PublicGeneration[]>([]);
   const [total, setTotal] = useState(0);
   const [open, setOpen] = useState<PublicGeneration | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Reason | null>(null);
 
   const qs = useCallback(
     (extra: Record<string, string> = {}) => {
@@ -42,7 +46,7 @@ export function LogsPanel() {
         setItems(b.items);
         setTotal(b.total);
       })
-      .catch((e) => setError(e instanceof Error ? e.message : String(e)));
+      .catch((e) => setError(caught(e)));
   }, [qs]);
 
   async function more() {
@@ -81,7 +85,7 @@ export function LogsPanel() {
           ))}
         </Select>
       </div>
-      {error && <p className="mb-3 rounded-lg bg-rose-500/10 px-3 py-2 text-sm text-rose-300">{error}</p>}
+      {error && <p className="mb-3 rounded-lg bg-rose-500/10 px-3 py-2 text-sm text-rose-300">{errorText(error)}</p>}
       {items.length === 0 ? (
         <Empty>조건에 맞는 기록이 없습니다.</Empty>
       ) : (
@@ -101,13 +105,13 @@ export function LogsPanel() {
             <tbody className="divide-y divide-border">
               {items.map((g) => (
                 <tr key={g.id} onClick={() => setOpen(g)} className="cursor-pointer hover:bg-white/5">
-                  <td className="whitespace-nowrap py-2 pr-3 text-muted">{fmtDate(g.createdAt)}</td>
+                  <td className="whitespace-nowrap py-2 pr-3 text-muted">{dateTime(format, g.createdAt)}</td>
                   <td className="py-2 pr-3 text-foreground">{g.username}</td>
                   <td className="py-2 pr-3"><StatusBadge status={g.status} /></td>
                   <td className="whitespace-nowrap py-2 pr-3 text-foreground-2">{modelLine(g.modelId)}</td>
                   <td className="max-w-[280px] truncate py-2 pr-3 text-foreground-2">{g.prompt || "—"}</td>
                   <td className="py-2 pr-3 text-right tabular-nums text-muted">{g.durationS}s</td>
-                  <td className="py-2 text-right tabular-nums">{usd(g.costUsd)}</td>
+                  <td className="py-2 text-right tabular-nums">{usd(format, g.costUsd)}</td>
                 </tr>
               ))}
             </tbody>
@@ -125,7 +129,7 @@ export function LogsPanel() {
           <div className="w-full max-w-2xl space-y-3 rounded-2xl border border-border bg-surface p-5 text-sm" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <StatusBadge status={open.status} />
-              <span className="text-xs text-subtle">{open.username} · {fmtDate(open.createdAt)}</span>
+              <span className="text-xs text-subtle">{open.username} · {dateTime(format, open.createdAt)}</span>
             </div>
             {open.video && <video src={open.video.url} controls className="w-full rounded-lg bg-black" />}
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -136,8 +140,8 @@ export function LogsPanel() {
               <dt>파라미터</dt><dd className="font-mono text-foreground-2">{JSON.stringify(open.params)}</dd>
               <dt>이미지</dt><dd className="break-all text-foreground-2">{open.imageRefs.join(", ") || "—"}</dd>
               <dt>영상</dt><dd className="break-all text-foreground-2">{open.videoRefs.join(", ") || "—"}</dd>
-              <dt>비용</dt><dd className="text-foreground-2">{usd(open.costUsd)} ({open.durationS}s)</dd>
-              {open.error && (<><dt>오류</dt><dd className="text-rose-300">{open.error}</dd></>)}
+              <dt>비용</dt><dd className="text-foreground-2">{usd(format, open.costUsd)} ({open.durationS}s)</dd>
+              {open.reason && (<><dt>오류</dt><dd className="text-rose-300">{errorText(open.reason)}</dd></>)}
             </dl>
             <div className="text-right"><Button variant="outline" size="sm" onClick={() => setOpen(null)}>닫기</Button></div>
           </div>

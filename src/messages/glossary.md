@@ -11,6 +11,7 @@ The operator and the reviewers own the final words. Record every change to a ter
 - Simplified Chinese addresses the reader as 您, to match the polite Korean register (`입력하세요`).
 - Keep `…` (one character) for an action in progress in all three languages (`확인 중…`, `Checking…`, `正在验证…`).
 - Use an ICU argument for every value and `plural` for every count, even when Korean and Chinese need only `other`.
+- Dates, times, relative times and dollar amounts come from `src/i18n/format.ts` (Intl, CLDR) exactly as it prints them, such as `2026/10/29 16:05` and `3分钟前`. The spacing rule above is for the messages, not for these.
 
 ## Never translated
 
@@ -42,6 +43,8 @@ Each language button in the picker shows its own name (`한국어`, `English`, `
 | 텍스트→영상 | Text to video | 文生视频 | Mode |
 | 이미지→영상 | Image to video | 图生视频 | Mode |
 | 레퍼런스→영상 | Reference to video | 参考生视频 | Mode |
+| 텍스트→이미지 | Text to image | 文生图 | Mode |
+| 레퍼런스→이미지 | Reference to image | 参考生图 | Mode |
 | 이 이미지로 시작 | Start from this image | 以此图作为首帧 | Checkbox |
 | 프롬프트 | prompt | 提示词 | |
 | 화면비 | aspect ratio | 画面比例 | |

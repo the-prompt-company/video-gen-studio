@@ -75,7 +75,7 @@ export default async function teams({ page, ev, base, creds, webDir, local }) {
     if (!(await page.locator("header").getByText("ADMIN", { exact: true }).isVisible())) ev.fail(`${creds.username} is not an admin: run with VGS_USER/VGS_PASS of an admin account`);
     for (const username of [memberA, memberB]) {
       const made = await ev.api("/api/admin/users", { method: "POST", body: JSON.stringify({ username, password: INITIAL }) });
-      if (made.status !== 201) ev.fail(`creating ${username} answered ${made.status}: ${made.body?.error}`);
+      if (made.status !== 201) ev.fail(`creating ${username} answered ${made.status}: ${JSON.stringify(made.body?.error)}`);
     }
     ev.note(`members ${memberA} and ${memberB} created through the admin API`);
 
@@ -89,16 +89,16 @@ export default async function teams({ page, ev, base, creds, webDir, local }) {
     await ev.shot("teams-created");
 
     dialog = await createTeam(alpha.toUpperCase());
-    await dialog.getByRole("alert").filter({ hasText: "이미 있는 팀 이름입니다" }).waitFor({ timeout: 10_000 });
+    await dialog.getByRole("alert").filter({ hasText: await ev.t("errors.duplicateTeamName") }).waitFor({ timeout: 10_000 });
     await ev.shot("team-duplicate");
     await dialog.getByLabel(/^팀 이름/).fill("팀".repeat(31));
     await dialog.getByRole("button", { name: "만들기", exact: true }).click();
-    await dialog.getByRole("alert").filter({ hasText: "팀 이름은 30자까지입니다 (지금 31자)" }).waitFor({ timeout: 10_000 });
+    await dialog.getByRole("alert").filter({ hasText: await ev.t("errors.nameTooLong", { kind: "teamName", max: 30, length: 31 }) }).waitFor({ timeout: 10_000 });
     await dialog.getByLabel(/^팀 이름/).fill("");
     await page.keyboard.press("Escape");
     await dialog.waitFor({ state: "hidden", timeout: 5_000 });
     if ((await teamList()).some((t) => t.name.toLowerCase() === alpha.toLowerCase() && t.name !== alpha)) ev.fail("a name differing only in case was stored");
-    ev.note(`adm-teams: created ${alpha} and ${beta}; ${alpha.toUpperCase()} answered 이미 있는 팀 이름입니다 and 31 characters answered the 30-character limit`);
+    ev.note(`adm-teams: created ${alpha} and ${beta}; ${alpha.toUpperCase()} answered duplicateTeamName and 31 characters answered nameTooLong`);
 
     await page.getByRole("button", { name: `${alpha} 편집`, exact: true }).click();
     dialog = page.getByRole("dialog", { name: `${alpha} 편집` });

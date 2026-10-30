@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 import { flushSync } from "react-dom";
 import {
   defaultParams,
@@ -19,12 +19,14 @@ import {
   type Mode,
   type ParamSpec,
 } from "@/lib/catalog";
+import { ApiError, appError, caught, parseAppError } from "@/lib/errors";
 import type { PublicGeneration, Unavailable } from "@/lib/generations";
-import { usd } from "@/lib/format";
 import { isLive } from "@/lib/generation-status";
 import { refUploadName } from "@/lib/ref-name";
 import { Button, ErrorText, Field, Input, Select, Textarea } from "@/components/ui";
 import { StatusBadge } from "@/components/StatusBadge";
+import { useErrorText } from "@/i18n/errors";
+import { usd } from "@/i18n/format";
 
 /**
  * `unavailable` 503: the server cannot run the model at all, so it is listed but cannot be picked. 403: this member
@@ -108,9 +110,11 @@ async function uploadFile(file: File, largeUploadPrefix: string | null, viaBlob:
     const fd = new FormData();
     fd.append("file", file);
     const res = await fetch("/api/uploads", { method: "POST", body: fd });
-    const body = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
-    if (!res.ok || !body.url) throw new Error(body.error ?? (res.status === 413 ? "파일이 너무 큽니다 (4 MB 이하)" : `업로드 실패 (${res.status})`));
-    return body.url;
+    const body = (await res.json().catch(() => null)) as { url?: string } | null;
+    if (res.ok && body?.url) return body.url;
+    const error = parseAppError(body, res.status);
+    // Vercel answers a body over its 4.5 MB limit itself, with no error code.
+    throw new ApiError(error.code === "httpStatus" && res.status === 413 ? appError("uploadTooLarge", { mb: SMALL / 1024 / 1024 }) : error);
   }
   if (largeUploadPrefix === null) throw new Error(viaBlob ? "이미지 레퍼런스는 Blob 스토어가 연결돼야 올릴 수 있습니다" : "4 MB를 넘는 파일은 Blob 스토어가 연결돼야 올릴 수 있습니다");
   const { upload: blobUpload } = await import("@vercel/blob/client");
@@ -205,6 +209,8 @@ const I = {
 
 function FeedItem({ g, index, total, active, now, modelName }: { g: PublicGeneration; index: number; total: number; active: boolean; now: number; modelName: string }) {
   const tStatus = useTranslations("status");
+  const format = useFormatter();
+  const errorText = useErrorText();
   const live = isLive(g.status);
   const isImage = describeModel(g.modelId).output === "image";
   const started = new Date(g.createdAt).getTime();
@@ -243,7 +249,7 @@ function FeedItem({ g, index, total, active, now, modelName }: { g: PublicGenera
           ) : (
             <>
               <span className="text-4xl font-semibold leading-none tracking-tight text-foreground-2 sm:text-5xl">{label}</span>
-              <p className="max-w-md text-sm text-muted">{g.error ?? (g.status === "canceled" ? "취소된 생성입니다." : isImage ? "결과 이미지가 없습니다." : "결과 영상이 없습니다.")}</p>
+              <p className="max-w-md text-sm text-muted">{errorText(g.reason ?? appError("noResult", { kind: g.status === "canceled" ? "canceled" : isImage ? "image" : "video" }))}</p>
             </>
           )}
         </div>
@@ -254,7 +260,7 @@ function FeedItem({ g, index, total, active, now, modelName }: { g: PublicGenera
         <div className="text-xs text-muted">
           <span className="text-foreground-2">{modelName}</span>
           {live && <span className="ml-2">예상</span>}
-          <span className={`font-display text-sm text-sand ${live ? "ml-1" : "ml-2"}`}>{isImage ? usd(g.costUsd) : `${g.durationS}S · ${usd(g.costUsd)}`}</span>
+          <span className={`font-display text-sm text-sand ${live ? "ml-1" : "ml-2"}`}>{isImage ? usd(format, g.costUsd) : `${g.durationS}S · ${usd(format, g.costUsd)}`}</span>
           {/^\d+:\d+$/.test(String((g.params as Record<string, unknown>)?.aspect_ratio)) && (
             <span className="font-display ml-2 text-sm text-sand">{String((g.params as Record<string, unknown>).aspect_ratio)}</span>
           )}
@@ -393,6 +399,8 @@ function RefDialog({ modelName, refNote, imageHint, imageAccept, refs, images, v
 }
 
 export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers: Offer[]; largeUploadPrefix: string | null; galleryCount: number }) {
+  const format = useFormatter();
+  const errorText = useErrorText();
   const [familyId, setFamilyId] = useState<FamilyId | null>(() => (offers.find((o) => !o.unavailable) ?? offers.find((o) => o.unavailable?.status !== 503) ?? offers[0])?.family ?? null);
   const offer = offers.find((o) => o.family === familyId) ?? offers[0];
   const [params, setParams] = useState<Record<string, unknown>>(() => (offer ? { ...defaultParams(offer.family) } : {}));
@@ -554,7 +562,7 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
         setRefs((r) => [...r, { id: crypto.randomUUID(), url, name: f.name, kind, local: URL.createObjectURL(f), w: size?.w, h: size?.h, seconds }]);
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(caught(e)));
     } finally {
       setUploading(false);
     }
@@ -562,7 +570,7 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
 
   async function generate() {
     if (!draft || !plan) return;
-    if (!plan.ready) return setError(plan.blocker);
+    if (!plan.ready) return setError(errorText(plan.blocker));
     setSubmitting(true);
     setError(null);
     try {
@@ -571,8 +579,8 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(draft),
       });
-      const body = (await res.json().catch(() => ({}))) as { item?: PublicGeneration; error?: string };
-      const item = body.item;
+      const body = (await res.json().catch(() => null)) as { item?: PublicGeneration } | null;
+      const item = body?.item;
       if (item) {
         pollDelay.current = POLL_FIRST_MS;
         // The new item must be in the DOM before the scroll, or scroll anchoring keeps the previous item on the stage.
@@ -583,9 +591,10 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
         feedRef.current?.scrollTo({ top: 0, behavior: prefersReducedMotion() ? "auto" : "smooth" });
         feedRef.current?.closest("section")?.scrollIntoView({ block: "start", behavior: prefersReducedMotion() ? "auto" : "smooth" });
       }
-      if (!res.ok || !body.item) throw new Error(body.error ?? `제출 실패 (${res.status})`);
+      // A refused submit still returns its row, whose reason says why it failed.
+      if (!res.ok || !item) setError(errorText(item?.reason ?? parseAppError(body, res.status)));
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(caught(e)));
     } finally {
       setSubmitting(false);
     }
@@ -594,11 +603,11 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
   async function cancel(g: PublicGeneration) {
     try {
       const res = await fetch(`/api/generations/${g.id}`, { method: "DELETE" });
-      const body = (await res.json().catch(() => ({}))) as { item?: PublicGeneration; error?: string };
-      if (body.item) upsert(body.item);
-      else setError(body.error ?? `취소 실패 (${res.status})`);
+      const body = (await res.json().catch(() => null)) as { item?: PublicGeneration } | null;
+      if (body?.item) upsert(body.item);
+      else setError(errorText(parseAppError(body, res.status)));
     } catch {
-      setError("서버에 연결할 수 없습니다. 잠시 후 다시 시도하세요");
+      setError(errorText({ code: "network" }));
     }
   }
 
@@ -631,7 +640,7 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
     return m ? [Number(m[1]), Number(m[2])] : [undefined, undefined];
   })();
   const priced = offer.rateUsd > 0;
-  const ratePer = `${usd(offer.rateUsd)}/${family.rate.per.short}`;
+  const ratePer = `${usd(format, offer.rateUsd)}/${family.rate.per.short}`;
   const estimateNote = [...plan.facts, `단가 ${ratePer}`].join(" · ");
   const canGenerate = !offer.unavailable && !submitting && !uploading && plan.ready;
   const offline = offers.filter((o) => o.unavailable?.status === 503 && o.family !== family.id);
@@ -688,7 +697,7 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
               </button>
             </div>
           )}
-          <Glyph label="생성" counter={priced && plan.ready ? usd(plan.costUsd) : "—"} icon={I.play} active={canGenerate} disabled={!canGenerate} onClick={generate} />
+          <Glyph label="생성" counter={priced && plan.ready ? usd(format, plan.costUsd) : "—"} icon={I.play} active={canGenerate} disabled={!canGenerate} onClick={generate} />
           <Glyph label="취소" counter={canCancel ? fmtElapsed(now - activeStarted) : "—"} icon={I.x} disabled={!canCancel} onClick={() => active && cancel(active)} />
           <Glyph label="다운로드" counter={active?.video ? "MP4" : active?.image ? active.image.format.toUpperCase() : "—"} icon={I.down} disabled={!active?.video && !active?.image} href={(active?.video ?? active?.image)?.downloadUrl} download />
           <Glyph label="갤러리" counter={galleryTotal > 0 ? String(galleryTotal) : "—"} icon={I.grid} href="/gallery" />
@@ -704,7 +713,7 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
           {offer.unavailable && (
             <div role="status" className="flex items-start gap-2.5 rounded-md border border-border bg-surface px-3 py-2 text-xs leading-relaxed text-foreground-2">
               <span aria-hidden className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" />
-              <span>{offer.unavailable.message}</span>
+              <span>{errorText(offer.unavailable.error)}</span>
             </div>
           )}
 
@@ -774,7 +783,7 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
                         const off = o.unavailable?.status === 503;
                         return (
                           <option key={o.family} value={o.family} disabled={off}>
-                            {f.name} · {f.vendor}{off ? " · 사용 불가" : o.rateUsd > 0 ? ` · ${usd(o.rateUsd)}/${f.rate.per.short}` : ""}
+                            {f.name} · {f.vendor}{off ? " · 사용 불가" : o.rateUsd > 0 ? ` · ${usd(format, o.rateUsd)}/${f.rate.per.short}` : ""}
                           </option>
                         );
                       })}
@@ -787,7 +796,7 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
               <p key={o.family} role="status" className="flex items-start gap-2 text-xs leading-relaxed text-foreground-2">
                 <span aria-hidden className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" />
                 <span>
-                  <span className="text-foreground">{FAMILIES[o.family].name}</span> 사용 불가 · {o.unavailable?.message}
+                  <span className="text-foreground">{FAMILIES[o.family].name}</span> 사용 불가 · {o.unavailable && errorText(o.unavailable.error)}
                 </span>
               </p>
             ))}
@@ -840,7 +849,7 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
           {!plan.ready && (
             <p role="status" className="mb-2 flex items-start gap-2 text-xs leading-relaxed text-foreground-2">
               <span aria-hidden className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" />
-              {plan.blocker}
+              {errorText(plan.blocker)}
             </p>
           )}
           <div className="flex items-center justify-between gap-4">
@@ -848,7 +857,7 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
               <div className="flex items-baseline gap-2">
                 <span>예상 비용</span>
                 {priced && plan.ready ? (
-                  <span className="font-display text-2xl leading-none text-sand">{usd(plan.costUsd)}</span>
+                  <span className="font-display text-2xl leading-none text-sand">{usd(format, plan.costUsd)}</span>
                 ) : (
                   <span className="font-semibold text-foreground">{priced ? "—" : "미정"}</span>
                 )}

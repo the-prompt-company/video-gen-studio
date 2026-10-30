@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ApiError, parseAppError } from "@/lib/errors";
 import { UsersPanel } from "./UsersPanel";
 import { TeamsPanel } from "./TeamsPanel";
 import { ModelsPanel } from "./ModelsPanel";
@@ -32,9 +33,15 @@ export function AdminPanels({ adminId }: { adminId: number }) {
   );
 }
 
+/** Every admin request. A refusal or a lost connection throws an ApiError, which the panels show with useErrorText. */
 export async function api<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, { ...init, headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) }, cache: "no-store" });
-  const body = (await res.json().catch(() => ({}))) as T & { error?: string };
-  if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
-  return body;
+  let res: Response;
+  try {
+    res = await fetch(url, { ...init, headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) }, cache: "no-store" });
+  } catch {
+    throw new ApiError({ code: "network" });
+  }
+  const body: unknown = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(parseAppError(body, res.status));
+  return body as T;
 }

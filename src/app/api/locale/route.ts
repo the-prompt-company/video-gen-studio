@@ -12,7 +12,7 @@ export async function POST(req: Request) {
   try {
     const body = (await req.json().catch(() => null)) as { locale?: unknown } | null;
     const locale = parseLocale(body?.locale);
-    if (!locale) throw new HttpError(400, `locale must be one of ${LOCALES.join(", ")}`);
+    if (!locale) throw new HttpError(400, "unknownLocale", { locales: LOCALES.join(", ") });
     const user = await getCurrentUser();
     if (user) await getDb().update(schema.users).set({ locale }).where(eq(schema.users.id, user.id));
     await setLocaleCookie(locale);

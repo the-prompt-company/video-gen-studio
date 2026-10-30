@@ -4,7 +4,7 @@ import { requireAdmin, errorResponse, HttpError, setSessionCookie } from "@/lib/
 import { MIN_PASSWORD_LENGTH } from "@/lib/credentials";
 import { hashPassword, encrypt, decrypt, maskApiKey } from "@/lib/crypto";
 import { parseNickname } from "@/lib/nickname";
-import { NO_SUCH_TEAM, parseTeamId } from "@/lib/teams";
+import { parseTeamId } from "@/lib/teams";
 
 type Ctx = { params: Promise<{ id: string }> };
 type Body = {
@@ -25,7 +25,7 @@ export async function GET(_req: Request, { params }: Ctx) {
     const id = Number((await params).id);
     const db = getDb();
     const [u] = await db.select().from(schema.users).where(eq(schema.users.id, id)).limit(1);
-    if (!u) throw new HttpError(404, "없는 사용자");
+    if (!u) throw new HttpError(404, "noSuchUser");
     return Response.json({
       id: u.id,
       username: u.username,
@@ -57,32 +57,32 @@ export async function PATCH(req: Request, { params }: Ctx) {
       if (raw.trim() === "") patch.nickname = null;
       else {
         const parsed = parseNickname(raw);
-        if (!parsed.ok) throw new HttpError(400, parsed.reason);
+        if (!parsed.ok) throw HttpError.of(400, parsed.reason);
         patch.nickname = parsed.nickname;
       }
     }
 
     if (b.role !== undefined) {
-      if (b.role !== "user" && b.role !== "admin") throw new HttpError(400, "role은 user|admin");
-      if (id === admin.id && b.role !== "admin") throw new HttpError(400, "자기 자신의 관리자 권한은 뺄 수 없습니다");
+      if (b.role !== "user" && b.role !== "admin") throw new HttpError(400, "badRole");
+      if (id === admin.id && b.role !== "admin") throw new HttpError(400, "ownAdminRole");
       patch.role = b.role;
     }
     if (b.teamId !== undefined) {
       const team = parseTeamId(b.teamId);
-      if (!team.ok) throw new HttpError(400, team.reason);
+      if (!team.ok) throw HttpError.of(400, team.reason);
       patch.teamId = team.teamId;
     }
     if (b.active !== undefined) {
-      if (id === admin.id && !b.active) throw new HttpError(400, "자기 자신을 비활성화할 수 없습니다");
+      if (id === admin.id && !b.active) throw new HttpError(400, "deactivateSelf");
       patch.active = Boolean(b.active);
     }
     if (b.apiKey !== undefined) {
       const k = b.apiKey === null ? "" : String(b.apiKey).trim();
-      if (k && !k.includes(":")) throw new HttpError(400, "API 키는 key-id:key-secret 형식");
+      if (k && !k.includes(":")) throw new HttpError(400, "badApiKey");
       patch.apiKeyEnc = k ? encrypt(k) : null;
     }
     if (b.password !== undefined) {
-      if (String(b.password).length < MIN_PASSWORD_LENGTH) throw new HttpError(400, `비밀번호는 ${MIN_PASSWORD_LENGTH}자 이상`);
+      if (String(b.password).length < MIN_PASSWORD_LENGTH) throw new HttpError(400, "passwordMinLength", { min: MIN_PASSWORD_LENGTH });
       patch.passwordHash = hashPassword(String(b.password));
       patch.passwordChangedAt = new Date();
       if (id !== admin.id) patch.mustChangePassword = true;
@@ -92,7 +92,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
       patch.failedAttempts = 0;
       patch.lockedUntil = null;
     }
-    if (Object.keys(patch).length === 0) throw new HttpError(400, "바꿀 내용이 없습니다");
+    if (Object.keys(patch).length === 0) throw new HttpError(400, "nothingToChange");
 
     const db = getDb();
     const [row] = await db
@@ -101,9 +101,9 @@ export async function PATCH(req: Request, { params }: Ctx) {
       .where(eq(schema.users.id, id))
       .returning({ id: schema.users.id })
       .catch((e: unknown) => {
-        throw pgErrorCode(e) === FOREIGN_KEY_VIOLATION ? new HttpError(400, NO_SUCH_TEAM) : e;
+        throw pgErrorCode(e) === FOREIGN_KEY_VIOLATION ? new HttpError(400, "noSuchTeam") : e;
       });
-    if (!row) throw new HttpError(404, "없는 사용자");
+    if (!row) throw new HttpError(404, "noSuchUser");
     const revokedOwnSession = id === admin.id && patch.passwordChangedAt !== undefined;
     if (revokedOwnSession) await setSessionCookie(admin);
     return Response.json({ ok: true });

@@ -20,11 +20,15 @@ export async function loadModelSetting(family: FamilyId): Promise<ModelSetting> 
   return { family, rateUsd: r ? Number(r.pricePerSecUsd) : FAMILIES[family].rate.defaultUsd, enabled: r ? r.enabled : true, note: r?.note ?? null };
 }
 
-/** Upserts one model's settings. A rate outside 0..100 USD throws RangeError. */
+export const RATE_USD = { min: 0, max: 100 } as const;
+
+/** Upserts one model's settings. A rate outside RATE_USD throws RangeError. */
 export async function saveModelSetting(family: FamilyId, patch: { rateUsd?: number; enabled?: boolean; note?: string | null }): Promise<void> {
   const set: Partial<typeof schema.models.$inferInsert> = {};
   if (patch.rateUsd !== undefined) {
-    if (!Number.isFinite(patch.rateUsd) || patch.rateUsd < 0 || patch.rateUsd > 100) throw new RangeError("단가는 0~100 USD");
+    if (!Number.isFinite(patch.rateUsd) || patch.rateUsd < RATE_USD.min || patch.rateUsd > RATE_USD.max) {
+      throw new RangeError(`rate ${patch.rateUsd} is outside ${RATE_USD.min}..${RATE_USD.max} USD`);
+    }
     set.pricePerSecUsd = patch.rateUsd.toFixed(4);
   }
   if (patch.enabled !== undefined) set.enabled = patch.enabled;

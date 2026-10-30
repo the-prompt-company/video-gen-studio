@@ -1,13 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import type { AppError } from "./errors";
 import { MAX_IMPORT_ROWS, parseImportRequest, planImport, settleImport, type ImportResult } from "./member-import";
 
 const NONE = new Set<string>();
 const row = (email: string, nickname = "김민지") => ({ email, nickname });
 
-function reasonOf(result: ImportResult): string {
+function reasonOf(result: ImportResult): AppError | undefined {
   assert.equal(result.outcome, "invalid");
-  return result.outcome === "invalid" ? result.reason : "";
+  return result.outcome === "invalid" ? result.reason : undefined;
 }
 
 test("a new row is create, with the email trimmed and lowercased as the ID and the nickname trimmed", () => {
@@ -34,35 +35,35 @@ test("a repeated existing email is exists once, then duplicate", () => {
   assert.deepEqual(plan.map((p) => p.outcome), ["exists", "duplicate"]);
 });
 
-test("a malformed or empty email is invalid with a Korean reason", () => {
+test("a malformed or empty email is invalid with an email reason", () => {
   const bad = ["", "   ", "kim", "kim@", "@example.com", "kim@example", "kim min@example.com", "김민@example.com", "kim@exa mple.com", "kim@@example.com"];
   for (const email of bad) {
     const [result] = planImport([row(email)], NONE);
-    assert.match(reasonOf(result), /이메일/, JSON.stringify(email));
+    assert.deepEqual(reasonOf(result), { code: email.trim() ? "emailInvalid" : "emailBlank" }, JSON.stringify(email));
   }
 });
 
 test("an email longer than an ID may be (80 characters) is invalid", () => {
   const local = "a".repeat(80 - "@example.com".length);
   assert.equal(planImport([row(`${local}@example.com`)], NONE)[0].outcome, "create");
-  assert.match(reasonOf(planImport([row(`${local}a@example.com`)], NONE)[0]), /80자/);
+  assert.deepEqual(reasonOf(planImport([row(`${local}a@example.com`)], NONE)[0]), { code: "emailTooLong", params: { max: 80 } });
 });
 
 test("a nickname that is empty after trimming is invalid", () => {
   for (const nickname of ["", "   ", "\t \n"]) {
-    assert.match(reasonOf(planImport([row("a@example.com", nickname)], NONE)[0]), /닉네임이 비어/, JSON.stringify(nickname));
+    assert.deepEqual(reasonOf(planImport([row("a@example.com", nickname)], NONE)[0]), { code: "nameBlank", params: { kind: "nickname" } }, JSON.stringify(nickname));
   }
 });
 
 test("a nickname may be 30 characters, counted per Unicode character so an emoji is one, and not 31", () => {
   assert.equal(planImport([row("a@example.com", "가".repeat(30))], NONE)[0].outcome, "create");
   assert.equal(planImport([row("a@example.com", "😀".repeat(30))], NONE)[0].outcome, "create");
-  assert.match(reasonOf(planImport([row("a@example.com", "가".repeat(31))], NONE)[0]), /30자/);
+  assert.deepEqual(reasonOf(planImport([row("a@example.com", "가".repeat(31))], NONE)[0]), { code: "nameTooLong", params: { kind: "nickname", max: 30, length: 31 } });
 });
 
 test("a nickname with a line break, tab or other control character inside is invalid", () => {
   for (const nickname of ["김\n민", "김\r\n민", "김\t민", "김\u0000민", "김\u007f민"]) {
-    assert.match(reasonOf(planImport([row("a@example.com", nickname)], NONE)[0]), /제어 문자/, JSON.stringify(nickname));
+    assert.deepEqual(reasonOf(planImport([row("a@example.com", nickname)], NONE)[0]), { code: "nameControl", params: { kind: "nickname" } }, JSON.stringify(nickname));
   }
 });
 
@@ -91,7 +92,7 @@ test("a request with 200 rows is accepted and one with 201 is refused with the l
   assert.equal(ok.ok && ok.rows.length, 200);
   const tooMany = parseImportRequest({ rows: rows(MAX_IMPORT_ROWS + 1), dryRun: true });
   assert.equal(tooMany.ok, false);
-  assert.match(tooMany.ok ? "" : tooMany.error, /200명.*201명/);
+  assert.deepEqual(tooMany.ok ? undefined : tooMany.error, { code: "importTooMany", params: { max: 200, count: 201 } });
 });
 
 test("a request without rows, or with none, is refused", () => {
