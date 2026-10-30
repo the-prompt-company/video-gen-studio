@@ -411,7 +411,7 @@
     "example": {
       "seedance": "720p 16:9, 5s",
       "h3": "10s",
-      "gptImage2": "One 1024×1024 image at medium quality"
+      "gptImage2": "one 1024×1024 image at medium quality"
     }
   },
   "settings": {
@@ -452,7 +452,7 @@
       "label": "Nickname",
       "counter": "{length}/{max}",
       "save": "Save nickname",
-      "help": "Save it empty to remove your nickname and show your ID instead. It can be the same as someone else's."
+      "help": "Save with the field empty to remove your nickname and show your ID instead. Nicknames don't have to be unique."
     },
     "done": {
       "photoSaved": "Photo saved.",
@@ -489,7 +489,7 @@
       "team": "{team} ({count, plural, one {# member} other {# members}})"
     },
     "selected": "{count, plural, one {# selected} other {# selected}}",
-    "selectAll": "Select all shown members",
+    "selectAll": "Select all visible members",
     "select": "Select {username}",
     "edit": "Edit {username}",
     "empty": {
@@ -533,9 +533,9 @@
       "submitting": "Assigning…",
       "hint": "A member belongs to one team only",
       "placeholder": "Choose a team",
-      "noTeams": "No teams yet. Create one on the Teams tab, then open this again.",
-      "chosenLabel": "Chosen members",
-      "chosen": "{count, plural, one {# chosen member} other {# chosen members}}"
+      "noTeams": "No teams yet. Create one on the Teams tab, then reopen this dialog.",
+      "chosenLabel": "Selected members",
+      "chosen": "{count, plural, one {# selected member} other {# selected members}}"
     },
     "editor": {
       "apiKey": "API key",
@@ -610,7 +610,7 @@
     "working": "{doing, select, reading {Reading <name>{file}</name>…} checking {Checking <name>{file}</name>…} creating {Creating members from <name>{file}</name>…} other {}}",
     "failure": {
       "notXlsx": "Only Excel workbooks (.xlsx) can be read. In Excel, use Save As → Excel Workbook (.xlsx), then choose the file again.",
-      "unreadable": "Couldn't read the file. Check that it opens in Excel. If it's password-protected, remove the password and save it again as .xlsx, then choose it.",
+      "unreadable": "Couldn't read the file. Check that it opens in Excel. If it's password-protected, remove the password and save it again as .xlsx, then choose it again.",
       "empty": "The sheet is empty. In the first row, write the headers {nickname} and {email} (or {nicknameAlias} and {emailAlias}), then list one member per row below them.",
       "missingColumns": "Row {row} was read as the header row, but it has no {missing, select, nickname {{nickname} (or {nicknameAlias})} email {{email} (or {emailAlias})} both {{nickname} (or {nicknameAlias}) or {email} (or {emailAlias})} other {}} column (headers found: {found}). Fix the headers, then choose the file again."
     },
@@ -627,7 +627,7 @@
       "invalid": "Needs a fix",
       "duplicate": "Duplicate in file",
       "exists": "Already exists",
-      "create": "Will create",
+      "create": "Ready to create",
       "created": "Created"
     },
     "row": "Row {row}",
@@ -642,14 +642,14 @@
   },
   "models": {
     "title": "Model rates",
-    "lead": "Higgsfield's responses carry no cost, so for a video the app works out the cost when it sends the request, from this rate and Higgsfield's pricing rules (resolution, aspect ratio, duration, video reference length), and records it. For GPT Image 2 it multiplies the token counts OpenAI reports in its response by this rate (per 1M image output tokens) and OpenAI's input price ratios (text 5/30, image 8/30), and records the estimated cost when no token counts come back. A new rate applies from the next request. What you're actually billed is on each provider's invoice.",
+    "lead": "Higgsfield's responses carry no cost, so for a video the app works out the cost when it sends the request, from this rate and Higgsfield's pricing rules (resolution, aspect ratio, duration, video reference length), and records it. For GPT Image 2 it multiplies the token counts OpenAI reports in its response by this rate (per 1M image output tokens) and OpenAI's input price ratios (text 5/30, image 8/30), and records the estimated cost when no token counts come back. A new rate applies from the next request. Actual charges follow each provider's invoice.",
     "list": "Models",
     "unit": "USD {per} ({basis})",
     "rateLabel": "{model} rate",
     "fill": "Use {label} {rate} as the rate",
     "example": "Example: {example} costs {cost}",
     "exampleEmpty": "Enter a rate to see an example cost",
-    "toggle": "{enabled, select, yes {In use · Turn off} other {Off · Turn on}}"
+    "toggle": "{enabled, select, yes {On · Turn off} other {Off · Turn on}}"
   },
   "logs": {
     "title": "History ({count, plural, one {# generation} other {# generations}})",
@@ -673,6 +673,7 @@
       "error": "Error"
     },
     "empty": "No generations match these filters.",
-    "more": "Show more"
+    "more": "Show more",
+    "seconds": "{seconds}s"
   }
 }

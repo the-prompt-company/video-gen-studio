@@ -418,7 +418,7 @@
     "lead": "更改顶部菜单中显示的照片和昵称、界面语言以及登录密码。",
     "profile": {
       "title": "个人资料",
-      "lead": "顶部菜单通过照片和昵称显示您的身份。未设置昵称时显示 ID。"
+      "lead": "您的照片和昵称会显示在顶部菜单中。未设置昵称时，将显示 ID。"
     },
     "account": {
       "title": "账号",
@@ -505,7 +505,7 @@
     },
     "table": {
       "key": "密钥",
-      "generations": "生成",
+      "generations": "生成次数",
       "cost": "费用",
       "lastUsed": "最近使用",
       "status": "状态"
@@ -617,7 +617,7 @@
     "example": {
       "label": "Excel 格式示例",
       "nickname": "金敏智",
-      "caption": "也可以使用韩文标题 {nicknameAlias} 和 {emailAlias}。其他列不会读取，每次最多创建 {max, plural, other {# 名成员}}。"
+      "caption": "也可以使用韩文标题 {nicknameAlias} 和 {emailAlias}。其他列会被忽略，每次最多创建 {max, plural, other {# 名成员}}。"
     },
     "rowCount": "{count, plural, other {# 行}}",
     "done": "{count, plural, =0 {没有新建成员。} other {已创建 # 名成员。成员列表会将其标记为临时密码。}}",
@@ -649,7 +649,7 @@
     "fill": "填入单价：{label} {rate}",
     "example": "示例：{example}，费用 {cost}",
     "exampleEmpty": "输入单价后显示示例费用",
-    "toggle": "{enabled, select, yes {使用中 · 停用} other {已停用 · 启用}}"
+    "toggle": "{enabled, select, yes {已启用 · 停用} other {已停用 · 启用}}"
   },
   "logs": {
     "title": "历史记录（{count, plural, other {# 条}}）",
@@ -673,6 +673,7 @@
       "error": "错误"
     },
     "empty": "没有符合条件的记录。",
-    "more": "加载更多"
+    "more": "加载更多",
+    "seconds": "{seconds} 秒"
   }
 }

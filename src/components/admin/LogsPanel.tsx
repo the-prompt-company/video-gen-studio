@@ -117,7 +117,7 @@ export function LogsPanel() {
                   <td className="py-2 pr-3"><StatusBadge status={g.status} /></td>
                   <td className="whitespace-nowrap py-2 pr-3 text-foreground-2">{modelLine(g.modelId, modeName)}</td>
                   <td className="max-w-[280px] truncate py-2 pr-3 text-foreground-2">{g.prompt || "—"}</td>
-                  <td className="py-2 pr-3 text-right tabular-nums text-muted">{g.durationS}s</td>
+                  <td className="py-2 pr-3 text-right tabular-nums text-muted">{t("seconds", { seconds: String(g.durationS) })}</td>
                   <td className="py-2 text-right tabular-nums">{usd(format, g.costUsd)}</td>
                 </tr>
               ))}
@@ -147,7 +147,7 @@ export function LogsPanel() {
               <dt>{t("field.params")}</dt><dd className="font-mono text-foreground-2">{JSON.stringify(open.params)}</dd>
               <dt>{t("field.images")}</dt><dd className="break-all text-foreground-2">{open.imageRefs.join(", ") || "—"}</dd>
               <dt>{t("field.videos")}</dt><dd className="break-all text-foreground-2">{open.videoRefs.join(", ") || "—"}</dd>
-              <dt>{t("field.cost")}</dt><dd className="text-foreground-2">{usd(format, open.costUsd)} ({open.durationS}s)</dd>
+              <dt>{t("field.cost")}</dt><dd className="text-foreground-2">{usd(format, open.costUsd)} ({t("seconds", { seconds: String(open.durationS) })})</dd>
               {open.reason && (<><dt>{t("field.error")}</dt><dd className="text-rose-300">{errorText(open.reason)}</dd></>)}
             </dl>
             <div className="text-right"><Button variant="outline" size="sm" onClick={() => setOpen(null)}>{tCommon("close")}</Button></div>
