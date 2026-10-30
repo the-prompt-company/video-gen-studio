@@ -69,7 +69,7 @@ export default async function admin({ page, ev, creds }) {
     await add.waitFor({ state: "hidden", timeout: 5_000 });
     ev.note("adm-modal-add: Esc closed it with focus back on 사용자 추가, the draft survived reopening, and a backdrop click closed it");
   } else {
-    await add.getByRole("button", { name: "닫기" }).click();
+    await add.getByRole("button", { name: await ev.t("common.close") }).click();
     await add.waitFor({ state: "hidden", timeout: 5_000 });
     ev.note("adm-modal-add: Esc closed it with focus back on 사용자 추가, the draft survived reopening, and 닫기 closed it");
   }
@@ -80,7 +80,7 @@ export default async function admin({ page, ev, creds }) {
   if (!(await importer.evaluate((d) => d.contains(document.activeElement)))) ev.fail("opening 엑셀로 회원 만들기 should move focus into it");
   if (!(await importer.getByRole("table", { name: "엑셀 형식 예시" }).isVisible())) ev.fail("the import modal should show the expected format");
   await ev.shot("modal-import");
-  await importer.getByRole("button", { name: "닫기" }).click();
+  await importer.getByRole("button", { name: await ev.t("common.close") }).click();
   await importer.waitFor({ state: "hidden", timeout: 5_000 });
   if (!(await focused(importButton))) ev.fail("닫기 should return focus to 엑셀로 회원 만들기");
   ev.note("adm-modal-import: dialog named 엑셀로 회원 만들기, focus inside, 닫기 closed it with focus back on its button");

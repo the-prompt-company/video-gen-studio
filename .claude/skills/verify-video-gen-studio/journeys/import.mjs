@@ -28,7 +28,7 @@ export default async function importJourney({ page, ev, base, webDir, local }) {
     await importer.waitFor({ timeout: 10_000 });
   };
   const closeImport = async () => {
-    await importer.getByRole("button", { name: "닫기" }).click();
+    await importer.getByRole("button", { name: await ev.t("common.close") }).click();
     await importer.waitFor({ state: "hidden", timeout: 5_000 });
   };
 
@@ -72,8 +72,8 @@ export default async function importJourney({ page, ev, base, webDir, local }) {
   const signIn = async (p, id, pw) => {
     await p.goto(`${base}/login`, { waitUntil: "networkidle" });
     await p.getByLabel("ID").fill(id);
-    await p.getByLabel("비밀번호").fill(pw);
-    await p.getByRole("button", { name: "로그인", exact: true }).click();
+    await p.getByLabel(await ev.t("auth.password", undefined, p)).fill(pw);
+    await p.getByRole("button", { name: await ev.t("auth.signIn", undefined, p), exact: true }).click();
   };
 
   try {
@@ -172,13 +172,13 @@ export default async function importJourney({ page, ev, base, webDir, local }) {
     const memberPage = await ev.newPage();
     watchErrors(memberPage);
     await signIn(memberPage, email(4).toUpperCase(), INITIAL);
-    await memberPage.getByRole("heading", { level: 1, name: "새 비밀번호 정하기" }).waitFor({ timeout: 20_000 });
+    await memberPage.getByRole("heading", { level: 1, name: await ev.t("auth.heading.temporary.title", undefined, memberPage) }).waitFor({ timeout: 20_000 });
     ev.note(`imported member ${email(4)} signing in with ${INITIAL} gets the forced change`);
     await ev.shot("member-forced-change", { page: memberPage });
     const chosen = `chosen-${stamp}-pw`;
-    await memberPage.getByLabel(/^새 비밀번호(?! 확인)/).fill(chosen);
-    await memberPage.getByLabel("새 비밀번호 확인").fill(chosen);
-    await memberPage.getByRole("button", { name: "비밀번호 변경", exact: true }).click();
+    await memberPage.getByLabel(await ev.t("auth.newPassword", undefined, memberPage)).first().fill(chosen);
+    await memberPage.getByLabel(await ev.t("auth.confirmPassword", undefined, memberPage)).fill(chosen);
+    await memberPage.getByRole("button", { name: await ev.t("auth.changePassword", undefined, memberPage), exact: true }).click();
     await memberPage.waitForURL("**/playground", { timeout: 30_000 });
     if ((await member(email(4)))?.mustChangePassword !== false) ev.fail("mustChangePassword should clear after the member's change");
     await ev.shot("member-signed-in", { page: memberPage });
@@ -218,7 +218,7 @@ export default async function importJourney({ page, ev, base, webDir, local }) {
     await signIn(memberPage, email(4), chosen);
     await memberPage.getByRole("alert").filter({ hasText: /맞지 않습니다/ }).waitFor({ timeout: 20_000 });
     await signIn(memberPage, email(4), INITIAL);
-    await memberPage.getByRole("heading", { level: 1, name: "새 비밀번호 정하기" }).waitFor({ timeout: 20_000 });
+    await memberPage.getByRole("heading", { level: 1, name: await ev.t("auth.heading.temporary.title", undefined, memberPage) }).waitFor({ timeout: 20_000 });
     ev.note("after 초기 비밀번호로 되돌리기 the member was signed out, the chosen password stopped working, and oooooooo asks for a new one");
     await ev.shot("reset-forces-change", { page: memberPage });
     if (appErrors.length) ev.fail(`browser errors other than HTTP statuses: ${appErrors.join(" | ").slice(0, 500)}`);
