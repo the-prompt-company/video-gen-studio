@@ -522,7 +522,7 @@
       "submit": "Add",
       "submitting": "Adding…",
       "password": "Temporary password",
-      "passwordHint": "{min, plural, one {At least # character} other {At least # characters}} · Changed at first sign-in",
+      "passwordHint": "{min, plural, one {Min. #} other {Min. #}} · Changed at first sign-in",
       "apiKey": "Higgsfield API key",
       "apiKeyHint": "key-id:key-secret · Can be added later",
       "optional": "Optional"
@@ -547,7 +547,7 @@
       "unlockUntil": "Unlock ({failures, plural, one {# failed attempt} other {# failed attempts}}, locked until {until})"
     },
     "nickname": {
-      "hint": "{max, plural, one {Up to # character} other {Up to # characters}} · Leave empty to remove",
+      "hint": "{max, plural, one {Up to # character} other {Up to # characters}} · Clear to remove",
       "placeholder": "No nickname"
     },
     "password": {
