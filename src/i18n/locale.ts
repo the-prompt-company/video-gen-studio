@@ -2,6 +2,9 @@ export const LOCALES = ["ko", "en", "zh-CN"] as const;
 export type Locale = (typeof LOCALES)[number];
 export const DEFAULT_LOCALE: Locale = "ko";
 
+/** The team works in Seoul, so every member reads Seoul time whatever their browser or the server says. */
+export const TIME_ZONE = "Asia/Seoul";
+
 /** Set only by a choice (the picker, or a sign-in that mirrors the member's choice), never from Accept-Language. */
 export const LOCALE_COOKIE = "vgs_locale";
 

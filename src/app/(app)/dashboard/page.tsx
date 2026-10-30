@@ -2,11 +2,12 @@ import { desc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { getCurrentUser } from "@/lib/auth";
 import { usageFor } from "@/lib/stats";
+import { getFormatter } from "next-intl/server";
 import { modelLine } from "@/lib/catalog";
-import { usd, fmtDate } from "@/lib/format";
 import { Card, Stat, Empty, PageContainer } from "@/components/ui";
 import { StatusBadge } from "@/components/StatusBadge";
 import { UsageChart } from "@/components/UsageChart";
+import { dateTime, usd } from "@/i18n/format";
 import { pageTitle } from "@/i18n/metadata";
 
 export const generateMetadata = pageTitle("dashboard");
@@ -14,7 +15,7 @@ export const generateMetadata = pageTitle("dashboard");
 export default async function DashboardPage() {
   const user = await getCurrentUser();
   if (!user) return null;
-  const [usage, recent] = await Promise.all([
+  const [usage, recent, format] = await Promise.all([
     usageFor(user.id),
     getDb()
       .select()
@@ -22,6 +23,7 @@ export default async function DashboardPage() {
       .where(eq(schema.generations.userId, user.id))
       .orderBy(desc(schema.generations.createdAt))
       .limit(20),
+    getFormatter(),
   ]);
 
   return (
@@ -32,7 +34,7 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="누적 비용" value={usd(usage.totalCostUsd)} sub={`최근 30일 ${usd(usage.last30dCostUsd)}`} />
+        <Stat label="누적 비용" value={usd(format, usage.totalCostUsd)} sub={`최근 30일 ${usd(format, usage.last30dCostUsd)}`} />
         <Stat label="생성 횟수" value={usage.generations} sub={`완료 ${usage.completed} · 실패 ${usage.failed}`} />
         <Stat label="생성한 영상 길이" value={`${usage.totalSeconds}s`} sub="완료 건 합계" />
         <Stat label="API 키" value={user.apiKeyEnc ? "할당됨" : "미할당"} sub={user.apiKeyEnc ? "관리자가 서버에 보관" : "관리자에게 요청하세요"} />
@@ -54,7 +56,7 @@ export default async function DashboardPage() {
                     <div className="flex justify-between text-sm">
                       <span className="text-foreground-2">{m.name}</span>
                       <span className="text-muted">
-                        {m.count}회 · {usd(m.costUsd)}
+                        {m.count}회 · {usd(format, m.costUsd)}
                       </span>
                     </div>
                     <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-2">
@@ -87,12 +89,12 @@ export default async function DashboardPage() {
               <tbody className="divide-y divide-border">
                 {recent.map((g) => (
                   <tr key={g.id}>
-                    <td className="whitespace-nowrap py-2 pr-4 text-muted">{fmtDate(g.createdAt)}</td>
+                    <td className="whitespace-nowrap py-2 pr-4 text-muted">{dateTime(format, g.createdAt)}</td>
                     <td className="py-2 pr-4"><StatusBadge status={g.status} /></td>
                     <td className="whitespace-nowrap py-2 pr-4 text-foreground-2">{modelLine(g.modelId)}</td>
                     <td className="max-w-[320px] truncate py-2 pr-4 text-foreground-2">{g.prompt || "—"}</td>
                     <td className="py-2 pr-4 text-right tabular-nums text-muted">{g.durationS > 0 ? `${g.durationS}s` : "—"}</td>
-                    <td className="py-2 text-right tabular-nums">{usd(g.costUsd)}</td>
+                    <td className="py-2 text-right tabular-nums">{usd(format, g.costUsd)}</td>
                   </tr>
                 ))}
               </tbody>

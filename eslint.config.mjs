@@ -24,7 +24,6 @@ const I18N_PENDING = [
   "src/app/api/uploads/route.ts",
   "src/lib/auth.ts",
   "src/lib/credentials.ts",
-  "src/lib/format.ts",
   "src/lib/generations.ts",
   "src/lib/higgsfield.ts",
   "src/lib/openai.ts",

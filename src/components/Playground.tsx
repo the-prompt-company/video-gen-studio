@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 import { flushSync } from "react-dom";
 import {
   defaultParams,
@@ -20,11 +20,11 @@ import {
   type ParamSpec,
 } from "@/lib/catalog";
 import type { PublicGeneration, Unavailable } from "@/lib/generations";
-import { usd } from "@/lib/format";
 import { isLive } from "@/lib/generation-status";
 import { refUploadName } from "@/lib/ref-name";
 import { Button, ErrorText, Field, Input, Select, Textarea } from "@/components/ui";
 import { StatusBadge } from "@/components/StatusBadge";
+import { usd } from "@/i18n/format";
 
 /**
  * `unavailable` 503: the server cannot run the model at all, so it is listed but cannot be picked. 403: this member
@@ -205,6 +205,7 @@ const I = {
 
 function FeedItem({ g, index, total, active, now, modelName }: { g: PublicGeneration; index: number; total: number; active: boolean; now: number; modelName: string }) {
   const tStatus = useTranslations("status");
+  const format = useFormatter();
   const live = isLive(g.status);
   const isImage = describeModel(g.modelId).output === "image";
   const started = new Date(g.createdAt).getTime();
@@ -254,7 +255,7 @@ function FeedItem({ g, index, total, active, now, modelName }: { g: PublicGenera
         <div className="text-xs text-muted">
           <span className="text-foreground-2">{modelName}</span>
           {live && <span className="ml-2">예상</span>}
-          <span className={`font-display text-sm text-sand ${live ? "ml-1" : "ml-2"}`}>{isImage ? usd(g.costUsd) : `${g.durationS}S · ${usd(g.costUsd)}`}</span>
+          <span className={`font-display text-sm text-sand ${live ? "ml-1" : "ml-2"}`}>{isImage ? usd(format, g.costUsd) : `${g.durationS}S · ${usd(format, g.costUsd)}`}</span>
           {/^\d+:\d+$/.test(String((g.params as Record<string, unknown>)?.aspect_ratio)) && (
             <span className="font-display ml-2 text-sm text-sand">{String((g.params as Record<string, unknown>).aspect_ratio)}</span>
           )}
@@ -393,6 +394,7 @@ function RefDialog({ modelName, refNote, imageHint, imageAccept, refs, images, v
 }
 
 export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers: Offer[]; largeUploadPrefix: string | null; galleryCount: number }) {
+  const format = useFormatter();
   const [familyId, setFamilyId] = useState<FamilyId | null>(() => (offers.find((o) => !o.unavailable) ?? offers.find((o) => o.unavailable?.status !== 503) ?? offers[0])?.family ?? null);
   const offer = offers.find((o) => o.family === familyId) ?? offers[0];
   const [params, setParams] = useState<Record<string, unknown>>(() => (offer ? { ...defaultParams(offer.family) } : {}));
@@ -631,7 +633,7 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
     return m ? [Number(m[1]), Number(m[2])] : [undefined, undefined];
   })();
   const priced = offer.rateUsd > 0;
-  const ratePer = `${usd(offer.rateUsd)}/${family.rate.per.short}`;
+  const ratePer = `${usd(format, offer.rateUsd)}/${family.rate.per.short}`;
   const estimateNote = [...plan.facts, `단가 ${ratePer}`].join(" · ");
   const canGenerate = !offer.unavailable && !submitting && !uploading && plan.ready;
   const offline = offers.filter((o) => o.unavailable?.status === 503 && o.family !== family.id);
@@ -688,7 +690,7 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
               </button>
             </div>
           )}
-          <Glyph label="생성" counter={priced && plan.ready ? usd(plan.costUsd) : "—"} icon={I.play} active={canGenerate} disabled={!canGenerate} onClick={generate} />
+          <Glyph label="생성" counter={priced && plan.ready ? usd(format, plan.costUsd) : "—"} icon={I.play} active={canGenerate} disabled={!canGenerate} onClick={generate} />
           <Glyph label="취소" counter={canCancel ? fmtElapsed(now - activeStarted) : "—"} icon={I.x} disabled={!canCancel} onClick={() => active && cancel(active)} />
           <Glyph label="다운로드" counter={active?.video ? "MP4" : active?.image ? active.image.format.toUpperCase() : "—"} icon={I.down} disabled={!active?.video && !active?.image} href={(active?.video ?? active?.image)?.downloadUrl} download />
           <Glyph label="갤러리" counter={galleryTotal > 0 ? String(galleryTotal) : "—"} icon={I.grid} href="/gallery" />
@@ -774,7 +776,7 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
                         const off = o.unavailable?.status === 503;
                         return (
                           <option key={o.family} value={o.family} disabled={off}>
-                            {f.name} · {f.vendor}{off ? " · 사용 불가" : o.rateUsd > 0 ? ` · ${usd(o.rateUsd)}/${f.rate.per.short}` : ""}
+                            {f.name} · {f.vendor}{off ? " · 사용 불가" : o.rateUsd > 0 ? ` · ${usd(format, o.rateUsd)}/${f.rate.per.short}` : ""}
                           </option>
                         );
                       })}
@@ -848,7 +850,7 @@ export function Playground({ offers, largeUploadPrefix, galleryCount }: { offers
               <div className="flex items-baseline gap-2">
                 <span>예상 비용</span>
                 {priced && plan.ready ? (
-                  <span className="font-display text-2xl leading-none text-sand">{usd(plan.costUsd)}</span>
+                  <span className="font-display text-2xl leading-none text-sand">{usd(format, plan.costUsd)}</span>
                 ) : (
                   <span className="font-semibold text-foreground">{priced ? "—" : "미정"}</span>
                 )}

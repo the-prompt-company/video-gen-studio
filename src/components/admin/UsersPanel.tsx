@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useId, useState, type FormEvent } from "react";
+import { useFormatter } from "next-intl";
 import type { UserUsageRow } from "@/lib/stats";
 import { INITIAL_PASSWORD, loginId } from "@/lib/credentials";
 import { MAX_NICKNAME_LENGTH } from "@/lib/nickname";
 import type { Team, TeamId } from "@/lib/teams";
-import { usd, fmtDate } from "@/lib/format";
 import { Badge, Button, Card, Field, Input, Select, Empty, ErrorText } from "@/components/ui";
 import { Modal } from "@/components/Modal";
+import { dateTime, usd } from "@/i18n/format";
 import { api } from "./AdminPanels";
 import { MemberImport } from "./MemberImport";
 
@@ -33,6 +34,7 @@ function message(e: unknown) {
 }
 
 export function UsersPanel({ adminId }: { adminId: number }) {
+  const format = useFormatter();
   const [rows, setRows] = useState<UserUsageRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<Open | null>(null);
@@ -223,8 +225,8 @@ export function UsersPanel({ adminId }: { adminId: number }) {
                     <td className="py-2 pr-3 text-muted">{r.role}</td>
                     <td className="py-2 pr-3">{r.hasApiKey ? <span className="text-emerald-300">할당</span> : <span className="text-amber-300">없음</span>}</td>
                     <td className="py-2 pr-3 text-right tabular-nums">{r.generations}<span className="text-subtle"> / {r.completed}</span></td>
-                    <td className="py-2 pr-3 text-right tabular-nums">{usd(r.totalCostUsd)}</td>
-                    <td className="whitespace-nowrap py-2 pr-3 text-muted">{fmtDate(r.lastUsedAt)}</td>
+                    <td className="py-2 pr-3 text-right tabular-nums">{usd(format, r.totalCostUsd)}</td>
+                    <td className="whitespace-nowrap py-2 pr-3 text-muted">{dateTime(format, r.lastUsedAt)}</td>
                     <td className="whitespace-nowrap py-2">
                       {r.active ? <span className="text-foreground-2">활성</span> : <span className="text-rose-300">비활성</span>}
                       {r.mustChangePassword && <Badge className={`ml-2 ${TEMPORARY_TONE}`}>임시 비밀번호</Badge>}
@@ -321,6 +323,7 @@ function AssignTeam({ members, teams, busy, error, onAssign, onClose }: { member
 }
 
 function MemberEditor({ member, teams, error, adminId, onPatch, onClose }: { member: Detail; teams: Team[]; error: string | null; adminId: number; onPatch: (body: Record<string, unknown>) => Promise<void>; onClose: () => void }) {
+  const format = useFormatter();
   return (
     <Modal title={`${member.username} 편집`} onClose={onClose}>
       <div className="space-y-3 text-sm">
@@ -355,7 +358,7 @@ function MemberEditor({ member, teams, error, adminId, onPatch, onClose }: { mem
         </div>
         {(member.failedAttempts > 0 || member.lockedUntil) && (
           <Button variant="ghost" size="sm" onClick={() => onPatch({ unlock: true })}>
-            잠금 해제 (실패 {member.failedAttempts}회{member.lockedUntil ? `, ${fmtDate(member.lockedUntil)}까지 잠김` : ""})
+            잠금 해제 (실패 {member.failedAttempts}회{member.lockedUntil ? `, ${dateTime(format, member.lockedUntil)}까지 잠김` : ""})
           </Button>
         )}
       </div>

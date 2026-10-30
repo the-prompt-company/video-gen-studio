@@ -1,14 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useFormatter } from "next-intl";
 import { costUsd, FAMILIES, isFamilyId } from "@/lib/catalog";
-import { usd } from "@/lib/format";
 import { Button, Card, Input } from "@/components/ui";
+import { usd } from "@/i18n/format";
 import { api } from "./AdminPanels";
 
 type Row = { modelId: string; name: string; vendor: string; pricePerSecUsd: number; enabled: boolean; note: string | null };
 
 export function ModelsPanel() {
+  const format = useFormatter();
   const [rows, setRows] = useState<Row[]>([]);
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
@@ -95,7 +97,7 @@ export function ModelsPanel() {
                   )}
                   {family && (
                     <div className="mt-1.5 text-xs tabular-nums text-subtle">
-                      {example === null ? "단가를 넣으면 예시 비용이 보입니다" : `예: ${family.rate.example.label} ${usd(example)}`}
+                      {example === null ? "단가를 넣으면 예시 비용이 보입니다" : `예: ${family.rate.example.label} ${usd(format, example)}`}
                     </div>
                   )}
                 </div>
