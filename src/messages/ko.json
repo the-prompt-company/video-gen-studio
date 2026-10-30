@@ -181,5 +181,235 @@
     "openaiModeration": "OpenAI 안전 정책에 걸려 이미지를 만들지 않았습니다. 프롬프트나 레퍼런스를 바꿔 보세요",
     "openaiKeyRejected": "OpenAI {status}: 서버의 OpenAI 키나 지역이 거부됐습니다({detail}). 관리자에게 문의하세요",
     "noResult": "{kind, select, canceled {취소된 생성입니다.} image {결과 이미지가 없습니다.} other {결과 영상이 없습니다.}}"
+  },
+  "generation": {
+    "noPrompt": "(프롬프트 없음)",
+    "video": "생성된 영상",
+    "image": "생성된 이미지",
+    "download": "다운로드",
+    "imageRef": "이미지 레퍼런스 {n}",
+    "videoRef": "영상 레퍼런스 {n}",
+    "shape": "{shape, select, landscape {가로} portrait {세로} other {정사각}}"
+  },
+  "gallery": {
+    "lead": "완료된 결과 {count, plural, other {#건}}.{expiring, select, yes { 영구 보관이 아닌 결과는 Higgsfield에 7일간만 남으니 필요한 건 다운로드하세요.} other {}}",
+    "scope": {
+      "mine": "내 것",
+      "all": "전체"
+    },
+    "empty": "완료된 결과가 없습니다. <link>플레이그라운드</link>에서 첫 결과를 만들어 보세요.",
+    "openDetail": "{prompt} 자세히 보기",
+    "retention": {
+      "line": "보관 {value}",
+      "label": "보관",
+      "permanent": "영구",
+      "expired": "만료됨",
+      "days": "{days, plural, other {#일}} 남음",
+      "hours": "{hours, plural, other {#시간}} 남음",
+      "until": "{date}까지 · {left}"
+    },
+    "detail": {
+      "title": "생성 상세",
+      "refs": "레퍼런스 · 이미지 {images, plural, other {#}} · 영상 {videos, plural, other {#}}",
+      "created": "생성",
+      "completed": "완료",
+      "member": "사용자",
+      "on": "켬",
+      "off": "끔"
+    }
+  },
+  "dashboard": {
+    "lead": "{name} 님의 사용량. 영상 비용은 생성을 요청할 때 모델 단가와 Higgsfield 요금 규칙으로, 이미지 비용은 OpenAI가 알려 준 토큰 사용량으로 정해지고, 실패·NSFW·취소되면 0으로 돌아갑니다. 이미지가 응답 없이 끝나 청구됐을 수 있는 건은 예상 비용을 남깁니다. 진행 중인 건도 합계에 들어갑니다.",
+    "stats": {
+      "totalSpend": "누적 비용",
+      "last30": "최근 30일 {amount}",
+      "generations": "생성 횟수",
+      "outcomes": "완료 {completed, plural, other {#}} · 실패 {failed, plural, other {#}}",
+      "videoLength": "생성한 영상 길이",
+      "videoLengthSub": "완료 건 합계",
+      "apiKey": "API 키",
+      "keyAssigned": "할당됨",
+      "keyMissing": "미할당",
+      "keyAssignedSub": "관리자가 서버에 보관",
+      "keyMissingSub": "관리자에게 요청하세요"
+    },
+    "seconds": "{seconds}s",
+    "daily": "최근 30일 · 일별 비용",
+    "byModel": "모델별",
+    "modelUsage": "{count, plural, other {#회}} · {cost}",
+    "chartTip": "{day} · {count, plural, other {#회}} · {cost}",
+    "noData": "아직 데이터가 없습니다.",
+    "recent": "최근 생성 {count, plural, other {#건}}",
+    "noHistory": "기록이 없습니다.",
+    "table": {
+      "time": "시각",
+      "status": "상태",
+      "model": "모델",
+      "prompt": "프롬프트",
+      "length": "길이",
+      "cost": "비용"
+    }
+  },
+  "playground": {
+    "drawer": "생성 설정",
+    "stage": "결과 무대",
+    "section": {
+      "prompt": "1 · 프롬프트와 레퍼런스",
+      "model": "2 · 모델과 하이퍼파라미터"
+    },
+    "prompt": "프롬프트",
+    "promptLength": "{count, plural, other {#자}}",
+    "promptPlaceholder": "장면, 카메라 움직임, 분위기를 적어 주세요…",
+    "startFromImage": "이 이미지로 시작",
+    "startFromImageHint": "1번 이미지를 첫 프레임으로",
+    "modes": "생성 방식",
+    "modeSentence": {
+      "text": "레퍼런스 없이 프롬프트만으로 만듭니다.",
+      "firstFrame": "1번 이미지를 첫 프레임으로 씁니다.",
+      "edit": "이미지 {images, plural, other {#장}}을 레퍼런스로 OpenAI 편집에 보냅니다.",
+      "reference": "{refs, select, both {이미지 {images, plural, other {#장}}과 영상 {videos, plural, other {#개}}를} images {이미지 {images, plural, other {#장}}을} other {영상 {videos, plural, other {#개}}를}} 레퍼런스로 씁니다."
+    },
+    "model": "모델",
+    "output": "{output, select, video {영상} other {이미지}}",
+    "unavailable": "사용 불가",
+    "offline": "<model>{name}</model> 사용 불가 · {reason}",
+    "rateHint": "{basis} 기준 {rate}",
+    "rateUnset": "단가 미설정",
+    "aspect": {
+      "label": "출력 화면비",
+      "pill": "{shape} {ratio}",
+      "auto": "자동",
+      "followsImage": "첫 프레임 이미지 비율을 따름",
+      "firstFrameNote": "1번 이미지가 <num>{size}</num> {shape, select, landscape {가로} portrait {세로} other {정사각}} 이미지라 영상도 <em>{shape, select, landscape {가로로} portrait {세로로} other {정사각으로}}</em> 나옵니다. 가로 영상이 필요하면 가로 이미지를 올리세요.",
+      "firstFrameRule": "이미지→영상은 화면비를 따로 고르지 않고 첫 프레임 이미지의 비율을 따릅니다."
+    },
+    "refs": {
+      "add": "레퍼런스 추가",
+      "imageCount": "이미지 {count}/{max}",
+      "videoCount": "영상 {count}/{max}",
+      "optional": "선택",
+      "attached": "첨부한 레퍼런스",
+      "limits": "{model} · 이미지 최대 {images, plural, other {#장}}{videos, plural, =0 {} other { · 영상 최대 #개}} · 선택",
+      "note": "{provider, select, openai {레퍼런스는 선택입니다. 없으면 프롬프트만으로 만들고, 이미지를 올리면 OpenAI 편집으로 그 이미지들을 바탕으로 만듭니다. 이미지는 올린 순서대로 번호가 붙고 그 순서로 전달되며, 장마다 입력 비용이 더해집니다.} other {레퍼런스는 선택입니다. 없으면 프롬프트만으로 만들고, 이미지 한 장만 올리면 그 이미지로 시작할지 서랍에서 고릅니다. 이미지와 영상은 올린 순서대로 번호가 붙고 그 순서로 모델에 전달됩니다. 영상 레퍼런스는 길이만큼 비용에 더해질 수 있습니다.}}",
+      "attachedCount": "첨부됨 · 이미지 {images, plural, other {#}} · 영상 {videos, plural, other {#}}",
+      "none": "아직 첨부한 레퍼런스가 없습니다.",
+      "done": "완료",
+      "remove": "제거",
+      "removeLabel": "{kind, select, image {이미지} other {영상}} 레퍼런스 {tag} {name} 제거",
+      "seconds": "{seconds}s",
+      "fileHint": "{types} · {mb} MB 이하"
+    },
+    "drop": {
+      "off": "{kind, select, image {이미지} other {영상}} 레퍼런스를 받지 않는 모델",
+      "full": "{kind, select, image {이미지 {max, plural, other {#장}}} other {영상 {max, plural, other {#개}}}} 모두 추가됨",
+      "pick": "{kind, select, image {이미지} other {영상}} 파일을 끌어다 놓거나 클릭해서 선택",
+      "add": "{kind, select, image {이미지} other {영상}} 레퍼런스 추가"
+    },
+    "uploading": "업로드 중…",
+    "upload": {
+      "blobForImages": "이미지 레퍼런스는 Blob 스토어가 연결돼야 올릴 수 있습니다",
+      "blobForLarge": "{mb} MB를 넘는 파일은 Blob 스토어가 연결돼야 올릴 수 있습니다",
+      "tooMany": "{kind, select, image {이미지는 최대 {max, plural, other {#장}}} other {영상은 최대 {max, plural, other {#개}}}}",
+      "badType": "{file}: {model} 모델은 이 형식을 받지 않습니다. {types} 파일로 올려 주세요",
+      "tooBig": "{file}: {mb} MB를 넘습니다. 줄여서 다시 올려 주세요",
+      "noLength": "{file}: 영상 길이를 읽지 못했습니다. 다른 mp4로 올려 주세요"
+    },
+    "feed": {
+      "item": "{n}번째 결과: {status}",
+      "elapsed": "{status} · 경과 시간",
+      "pendingNote": "Higgsfield가 요청을 받는 대로 자동으로 시작합니다",
+      "imageNote": "OpenAI가 이미지를 만드는 중입니다. 보통 수십 초에서 2분 걸립니다",
+      "estimated": "예상",
+      "took": "{elapsed} 걸림",
+      "refsLabel": "레퍼런스 이미지 {images, plural, other {#장}}, 영상 {videos, plural, other {#개}}",
+      "refsCount": "레퍼런스 {count, plural, other {#}}",
+      "progress": "생성 진행 중",
+      "progressUnknown": "진행률을 알 수 없음"
+    },
+    "empty": {
+      "title": "첫 영상을 만들어 보세요",
+      "lead": "<wide>왼쪽 서랍</wide><narrow>아래</narrow>에서 프롬프트를 적고 모델을 고른 뒤 생성하면 결과가 이 무대에 올라옵니다.",
+      "toSettings": "생성 설정으로 이동"
+    },
+    "loading": "최근 생성을 불러오는 중",
+    "rail": {
+      "label": "결과 동작",
+      "position": "결과 위치",
+      "previous": "이전 결과",
+      "next": "다음 결과",
+      "generate": "생성",
+      "cancel": "취소",
+      "reuse": "다시"
+    },
+    "noModels": "사용할 수 있는 모델이 없습니다. 관리자에게 문의하세요.",
+    "cost": {
+      "label": "예상 비용",
+      "unset": "미정",
+      "rate": "단가 {rate}",
+      "unpriced": "관리자가 단가를 넣으면 {facts} 기준으로 계산"
+    },
+    "fact": {
+      "seconds": "{seconds}s",
+      "inputVideo": "입력 영상 {seconds}s",
+      "refImages": "레퍼런스 {count, plural, other {#장}}"
+    },
+    "generate": "생성하기",
+    "submitting": "제출 중…"
+  },
+  "mode": {
+    "t2v": "텍스트→영상",
+    "i2v": "이미지→영상",
+    "r2v": "레퍼런스→영상",
+    "t2i": "텍스트→이미지",
+    "r2i": "레퍼런스→이미지"
+  },
+  "params": {
+    "duration": "길이(초)",
+    "resolution": "해상도",
+    "aspect_ratio": "화면비",
+    "generate_audio": "오디오 생성",
+    "aigc_watermark": "AI 생성 워터마크",
+    "quality": "품질",
+    "output_format": "파일 형식",
+    "background": "배경",
+    "prompt_optimizer": "프롬프트 자동 보정"
+  },
+  "paramValues": {
+    "quality": "{value, select, low {낮음 · low} medium {중간 · medium} high {높음 · high} other {{value}}}",
+    "output_format": "{value, select, png {PNG} jpeg {JPEG} webp {WebP} other {{value}}}",
+    "background": "{value, select, auto {자동} opaque {불투명} transparent {투명 (PNG·WebP)} other {{value}}}"
+  },
+  "families": {
+    "seedance": {
+      "blurb": "텍스트만으로, 이미지 한 장을 첫 프레임으로, 또는 이미지 최대 6장·영상 최대 3개를 레퍼런스로. 480p~4K, 화면비 선택, 오디오 생성.",
+      "note": "비용은 해상도·길이에 비례합니다. 연습은 480p, 납품은 720p 이상을 권합니다."
+    },
+    "h3": {
+      "blurb": "텍스트만으로, 이미지 한 장을 첫 프레임으로, 또는 이미지 최대 5장·영상 최대 3개를 레퍼런스로. 2K, 5·10·15초.",
+      "note": "출력은 2K로 고정입니다. 어떤 방식이든 프롬프트가 필요합니다."
+    },
+    "gptImage2": {
+      "blurb": "프롬프트만으로, 또는 이미지 최대 16장을 레퍼런스로 넣어 이미지를 만듭니다. 화면비 5가지, 품질 3단계, PNG·JPEG·WebP.",
+      "note": "레퍼런스가 있으면 OpenAI 편집으로 갑니다. 보통 수십 초에서 2분 걸리고, 비용은 OpenAI가 알려 준 토큰 사용량으로 확정됩니다."
+    }
+  },
+  "prices": {
+    "basis": {
+      "seedance": "480p·16:9",
+      "h3": "2K",
+      "gptImage2": "이미지 출력"
+    },
+    "rate": "{usd}/{unit, select, second {s} other {1M 토큰}}",
+    "per": "{unit, select, second {초당} other {100만 토큰당}}",
+    "preset": {
+      "higgsfieldTable": "Higgsfield 표 · {discount}% 할인",
+      "list": "정가",
+      "openaiList": "OpenAI 정가"
+    },
+    "example": {
+      "seedance": "720p 16:9 5초",
+      "h3": "10초",
+      "gptImage2": "1024×1024 중간 품질 1장"
+    }
   }
 }

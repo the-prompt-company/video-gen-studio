@@ -181,5 +181,235 @@
     "openaiModeration": "因触发 OpenAI 安全策略，未生成图片。请尝试更换提示词或参考素材。",
     "openaiKeyRejected": "OpenAI {status}：服务器的 OpenAI 密钥或所在地区被拒绝（{detail}）。请联系管理员。",
     "noResult": "{kind, select, canceled {该生成任务已取消。} image {没有结果图片。} other {没有结果视频。}}"
+  },
+  "generation": {
+    "noPrompt": "（无提示词）",
+    "video": "生成的视频",
+    "image": "生成的图片",
+    "download": "下载",
+    "imageRef": "参考图 {n}",
+    "videoRef": "参考视频 {n}",
+    "shape": "{shape, select, landscape {横版} portrait {竖版} other {方形}}"
+  },
+  "gallery": {
+    "lead": "已完成的结果共 {count, plural, other {# 个}}。{expiring, select, yes {未永久保存的结果在 Higgsfield 上只保留 7 天，请下载需要的结果。} other {}}",
+    "scope": {
+      "mine": "我的",
+      "all": "全部"
+    },
+    "empty": "还没有已完成的结果。请在<link>创作台</link>生成第一个结果。",
+    "openDetail": "查看详情：{prompt}",
+    "retention": {
+      "line": "保存：{value}",
+      "label": "保存",
+      "permanent": "永久",
+      "expired": "已过期",
+      "days": "剩余 {days, plural, other {# 天}}",
+      "hours": "剩余 {hours, plural, other {# 小时}}",
+      "until": "保存至 {date} · {left}"
+    },
+    "detail": {
+      "title": "生成任务详情",
+      "refs": "参考素材 · 图片 {images, plural, other {#}} · 视频 {videos, plural, other {#}}",
+      "created": "创建时间",
+      "completed": "完成时间",
+      "member": "成员",
+      "on": "开",
+      "off": "关"
+    }
+  },
+  "dashboard": {
+    "lead": "{name} 的用量。视频费用在提交生成时按模型单价和 Higgsfield 计费规则确定，图片费用按 OpenAI 报告的 token 用量确定；生成失败、被 NSFW 拦截或取消后费用归零。图片请求未收到响应但可能已被计费时，保留预计费用。进行中的生成任务也计入合计。",
+    "stats": {
+      "totalSpend": "累计费用",
+      "last30": "近 30 天 {amount}",
+      "generations": "生成次数",
+      "outcomes": "已完成 {completed, plural, other {#}} · 失败 {failed, plural, other {#}}",
+      "videoLength": "已生成视频时长",
+      "videoLengthSub": "已完成任务合计",
+      "apiKey": "API 密钥",
+      "keyAssigned": "已分配",
+      "keyMissing": "未分配",
+      "keyAssignedSub": "由管理员保存在服务器上",
+      "keyMissingSub": "请联系管理员分配"
+    },
+    "seconds": "{seconds} 秒",
+    "daily": "近 30 天 · 每日费用",
+    "byModel": "按模型",
+    "modelUsage": "{count, plural, other {# 次}} · {cost}",
+    "chartTip": "{day} · {count, plural, other {# 次}} · {cost}",
+    "noData": "暂无数据。",
+    "recent": "最近 {count, plural, other {# 个}}生成任务",
+    "noHistory": "暂无记录。",
+    "table": {
+      "time": "时间",
+      "status": "状态",
+      "model": "模型",
+      "prompt": "提示词",
+      "length": "时长",
+      "cost": "费用"
+    }
+  },
+  "playground": {
+    "drawer": "生成设置",
+    "stage": "结果展示区",
+    "section": {
+      "prompt": "1 · 提示词与参考素材",
+      "model": "2 · 模型与参数"
+    },
+    "prompt": "提示词",
+    "promptLength": "{count, plural, other {# 字}}",
+    "promptPlaceholder": "请描述场景、镜头运动和氛围…",
+    "startFromImage": "以此图作为首帧",
+    "startFromImageHint": "第 1 张图片将作为首帧",
+    "modes": "生成方式",
+    "modeSentence": {
+      "text": "不使用参考素材，仅根据提示词生成。",
+      "firstFrame": "将第 1 张图片用作首帧。",
+      "edit": "将 {images, plural, other {# 张图片}}作为参考素材发送给 OpenAI 编辑。",
+      "reference": "{refs, select, both {将 {images, plural, other {# 张图片}}和 {videos, plural, other {# 个视频}}用作参考素材。} images {将 {images, plural, other {# 张图片}}用作参考素材。} other {将 {videos, plural, other {# 个视频}}用作参考素材。}}"
+    },
+    "model": "模型",
+    "output": "{output, select, video {视频} other {图片}}",
+    "unavailable": "不可用",
+    "offline": "<model>{name}</model> 不可用 · {reason}",
+    "rateHint": "按 {basis} 计 {rate}",
+    "rateUnset": "未设置单价",
+    "aspect": {
+      "label": "输出画面比例",
+      "pill": "{shape} {ratio}",
+      "auto": "自动",
+      "followsImage": "跟随首帧图片比例",
+      "firstFrameNote": "第 1 张图片为 <num>{size}</num> 的{shape, select, landscape {横版} portrait {竖版} other {方形}}图片，因此视频也将是<em>{shape, select, landscape {横版} portrait {竖版} other {方形}}</em>。如需横版视频，请上传横版图片。",
+      "firstFrameRule": "图生视频不单独选择画面比例，而是跟随首帧图片的比例。"
+    },
+    "refs": {
+      "add": "添加参考素材",
+      "imageCount": "图片 {count}/{max}",
+      "videoCount": "视频 {count}/{max}",
+      "optional": "可选",
+      "attached": "已添加的参考素材",
+      "limits": "{model} · 最多 {images, plural, other {# 张图片}}{videos, plural, =0 {} other { · 最多 # 个视频}} · 可选",
+      "note": "{provider, select, openai {参考素材为可选项。不添加时仅根据提示词生成图片；添加图片后，将通过 OpenAI 编辑以这些图片为基础生成。图片按上传顺序编号并按此顺序发送，每张图片都会增加输入费用。} other {参考素材为可选项。不添加时仅根据提示词生成；只上传一张图片时，可在生成设置中选择是否以此图作为首帧。图片和视频按上传顺序编号，并按此顺序传给模型。参考视频的时长可能计入费用。}}",
+      "attachedCount": "已添加 · 图片 {images, plural, other {#}} · 视频 {videos, plural, other {#}}",
+      "none": "尚未添加参考素材。",
+      "done": "完成",
+      "remove": "移除",
+      "removeLabel": "移除{kind, select, image {参考图} other {参考视频}} {tag} {name}",
+      "seconds": "{seconds} 秒",
+      "fileHint": "{types} · 不超过 {mb} MB"
+    },
+    "drop": {
+      "off": "此模型不接受{kind, select, image {参考图} other {参考视频}}",
+      "full": "{kind, select, image {已添加全部 {max, plural, other {# 张图片}}} other {已添加全部 {max, plural, other {# 个视频}}}}",
+      "pick": "将{kind, select, image {图片} other {视频}}文件拖到此处，或点击选择",
+      "add": "添加{kind, select, image {参考图} other {参考视频}}"
+    },
+    "uploading": "正在上传…",
+    "upload": {
+      "blobForImages": "需要连接 Blob 存储才能上传参考图",
+      "blobForLarge": "超过 {mb} MB 的文件需要连接 Blob 存储才能上传",
+      "tooMany": "{kind, select, image {图片最多 {max, plural, other {# 张}}} other {视频最多 {max, plural, other {# 个}}}}",
+      "badType": "{file}：{model} 不支持此格式，请上传 {types} 文件",
+      "tooBig": "{file}：超过 {mb} MB，请压缩后重新上传",
+      "noLength": "{file}：无法读取视频时长，请上传其他 MP4 文件"
+    },
+    "feed": {
+      "item": "第 {n} 个结果：{status}",
+      "elapsed": "{status} · 已用时间",
+      "pendingNote": "Higgsfield 接收请求后会自动开始",
+      "imageNote": "OpenAI 正在生成图片，通常需要几十秒到 2 分钟",
+      "estimated": "预计",
+      "took": "用时 {elapsed}",
+      "refsLabel": "参考素材：{images, plural, other {# 张图片}}，{videos, plural, other {# 个视频}}",
+      "refsCount": "参考素材 {count, plural, other {#}}",
+      "progress": "生成进行中",
+      "progressUnknown": "进度未知"
+    },
+    "empty": {
+      "title": "生成您的第一个视频",
+      "lead": "在<wide>左侧面板</wide><narrow>下方</narrow>输入提示词并选择模型，生成后结果会显示在这里。",
+      "toSettings": "前往生成设置"
+    },
+    "loading": "正在加载最近的生成任务",
+    "rail": {
+      "label": "结果操作",
+      "position": "结果位置",
+      "previous": "上一个结果",
+      "next": "下一个结果",
+      "generate": "生成",
+      "cancel": "取消",
+      "reuse": "复用"
+    },
+    "noModels": "没有可用的模型，请联系管理员。",
+    "cost": {
+      "label": "预计费用",
+      "unset": "待定",
+      "rate": "单价 {rate}",
+      "unpriced": "管理员设置单价后，将按 {facts} 计算"
+    },
+    "fact": {
+      "seconds": "{seconds} 秒",
+      "inputVideo": "输入视频 {seconds} 秒",
+      "refImages": "参考图 {count, plural, other {# 张}}"
+    },
+    "generate": "生成",
+    "submitting": "正在提交…"
+  },
+  "mode": {
+    "t2v": "文生视频",
+    "i2v": "图生视频",
+    "r2v": "参考生视频",
+    "t2i": "文生图",
+    "r2i": "参考生图"
+  },
+  "params": {
+    "duration": "时长（秒）",
+    "resolution": "分辨率",
+    "aspect_ratio": "画面比例",
+    "generate_audio": "生成音频",
+    "aigc_watermark": "AI 生成水印",
+    "quality": "质量",
+    "output_format": "文件格式",
+    "background": "背景",
+    "prompt_optimizer": "提示词自动优化"
+  },
+  "paramValues": {
+    "quality": "{value, select, low {低 · low} medium {中 · medium} high {高 · high} other {{value}}}",
+    "output_format": "{value, select, png {PNG} jpeg {JPEG} webp {WebP} other {{value}}}",
+    "background": "{value, select, auto {自动} opaque {不透明} transparent {透明（PNG·WebP）} other {{value}}}"
+  },
+  "families": {
+    "seedance": {
+      "blurb": "可仅用文本生成，也可将一张图片作为首帧，或以最多 6 张图片和 3 个视频作为参考素材。支持 480p~4K、可选画面比例、生成音频。",
+      "note": "费用与分辨率和时长成正比。练习建议用 480p，交付建议用 720p 及以上。"
+    },
+    "h3": {
+      "blurb": "可仅用文本生成，也可将一张图片作为首帧，或以最多 5 张图片和 3 个视频作为参考素材。2K，5、10 或 15 秒。",
+      "note": "输出固定为 2K。所有生成方式都需要提示词。"
+    },
+    "gptImage2": {
+      "blurb": "仅用提示词，或以最多 16 张图片作为参考素材生成图片。5 种画面比例、3 档质量，支持 PNG、JPEG、WebP。",
+      "note": "有参考素材时会使用 OpenAI 编辑。通常需要几十秒到 2 分钟，费用按 OpenAI 报告的 token 用量确定。"
+    }
+  },
+  "prices": {
+    "basis": {
+      "seedance": "480p·16:9",
+      "h3": "2K",
+      "gptImage2": "图片输出"
+    },
+    "rate": "{usd}/{unit, select, second {秒} other {百万 token}}",
+    "per": "{unit, select, second {每秒} other {每百万 token}}",
+    "preset": {
+      "higgsfieldTable": "Higgsfield 价目表 · 优惠 {discount}%",
+      "list": "原价",
+      "openaiList": "OpenAI 原价"
+    },
+    "example": {
+      "seedance": "720p 16:9 5 秒",
+      "h3": "10 秒",
+      "gptImage2": "1 张 1024×1024 中等质量图片"
+    }
   }
 }

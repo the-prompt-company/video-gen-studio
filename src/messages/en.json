@@ -181,5 +181,235 @@
     "openaiModeration": "OpenAI's safety policy blocked this image. Try a different prompt or references.",
     "openaiKeyRejected": "OpenAI {status}: the server's OpenAI key or region was rejected ({detail}). Contact an admin.",
     "noResult": "{kind, select, canceled {This generation was canceled.} image {There's no result image.} other {There's no result video.}}"
+  },
+  "generation": {
+    "noPrompt": "(No prompt)",
+    "video": "Generated video",
+    "image": "Generated image",
+    "download": "Download",
+    "imageRef": "Image reference {n}",
+    "videoRef": "Video reference {n}",
+    "shape": "{shape, select, landscape {Landscape} portrait {Portrait} other {Square}}"
+  },
+  "gallery": {
+    "lead": "{count, plural, one {# finished result.} other {# finished results.}}{expiring, select, yes { Results that aren't kept permanently stay on Higgsfield for only 7 days, so download the ones you need.} other {}}",
+    "scope": {
+      "mine": "Mine",
+      "all": "All"
+    },
+    "empty": "No finished results yet. Make your first one in the <link>Playground</link>.",
+    "openDetail": "View details: {prompt}",
+    "retention": {
+      "line": "Kept: {value}",
+      "label": "Kept",
+      "permanent": "Permanent",
+      "expired": "Expired",
+      "days": "{days, plural, one {# day} other {# days}} left",
+      "hours": "{hours, plural, one {# hour} other {# hours}} left",
+      "until": "Until {date} · {left}"
+    },
+    "detail": {
+      "title": "Generation details",
+      "refs": "References · {images, plural, one {# image} other {# images}} · {videos, plural, one {# video} other {# videos}}",
+      "created": "Created",
+      "completed": "Finished",
+      "member": "Member",
+      "on": "On",
+      "off": "Off"
+    }
+  },
+  "dashboard": {
+    "lead": "Usage for {name}. Video cost is set when you request a generation, from the model's rate and Higgsfield's pricing rules. Image cost comes from the token usage OpenAI reports. Failed, NSFW-blocked and canceled generations go back to $0. An image request that ended without an answer, and may have been billed, keeps its estimated cost. Generations in progress count toward the totals.",
+    "stats": {
+      "totalSpend": "Total spend",
+      "last30": "Last 30 days: {amount}",
+      "generations": "Generations",
+      "outcomes": "{completed, plural, other {# done}} · {failed, plural, other {# failed}}",
+      "videoLength": "Video generated",
+      "videoLengthSub": "Total of finished videos",
+      "apiKey": "API key",
+      "keyAssigned": "Assigned",
+      "keyMissing": "Not assigned",
+      "keyAssignedSub": "Stored on the server by an admin",
+      "keyMissingSub": "Ask an admin for one"
+    },
+    "seconds": "{seconds}s",
+    "daily": "Daily cost · last 30 days",
+    "byModel": "By model",
+    "modelUsage": "{count, plural, one {# generation} other {# generations}} · {cost}",
+    "chartTip": "{day} · {count, plural, one {# generation} other {# generations}} · {cost}",
+    "noData": "No data yet.",
+    "recent": "{count, plural, one {Latest generation} other {Latest # generations}}",
+    "noHistory": "No generations yet.",
+    "table": {
+      "time": "Time",
+      "status": "Status",
+      "model": "Model",
+      "prompt": "Prompt",
+      "length": "Length",
+      "cost": "Cost"
+    }
+  },
+  "playground": {
+    "drawer": "Generation settings",
+    "stage": "Result stage",
+    "section": {
+      "prompt": "1 · Prompt and references",
+      "model": "2 · Model and parameters"
+    },
+    "prompt": "Prompt",
+    "promptLength": "{count, plural, one {# character} other {# characters}}",
+    "promptPlaceholder": "Describe the scene, the camera movement and the mood…",
+    "startFromImage": "Start from this image",
+    "startFromImageHint": "Image 1 becomes the first frame",
+    "modes": "Mode",
+    "modeSentence": {
+      "text": "Generates from the prompt alone, with no references.",
+      "firstFrame": "Uses image 1 as the first frame.",
+      "edit": "Sends {images, plural, one {# image to OpenAI editing as a reference} other {# images to OpenAI editing as references}}.",
+      "reference": "{refs, select, both {Uses {images, plural, one {# image} other {# images}} and {videos, plural, one {# video} other {# videos}} as references.} images {Uses {images, plural, one {# image as a reference} other {# images as references}}.} other {Uses {videos, plural, one {# video as a reference} other {# videos as references}}.}}"
+    },
+    "model": "Model",
+    "output": "{output, select, video {Video} other {Image}}",
+    "unavailable": "Unavailable",
+    "offline": "<model>{name}</model> is unavailable · {reason}",
+    "rateHint": "{rate} at {basis}",
+    "rateUnset": "No rate set",
+    "aspect": {
+      "label": "Output aspect ratio",
+      "pill": "{shape} {ratio}",
+      "auto": "Auto",
+      "followsImage": "Follows the first-frame image",
+      "firstFrameNote": "Image 1 is <num>{size}</num>, a {shape, select, landscape {landscape} portrait {portrait} other {square}} image, so the video comes out <em>{shape, select, landscape {landscape} portrait {portrait} other {square}}</em> too. For a landscape video, upload a landscape image.",
+      "firstFrameRule": "Image to video has no aspect ratio choice. It follows the first-frame image."
+    },
+    "refs": {
+      "add": "Add references",
+      "imageCount": "Images {count}/{max}",
+      "videoCount": "Videos {count}/{max}",
+      "optional": "Optional",
+      "attached": "Attached references",
+      "limits": "{model} · up to {images, plural, one {# image} other {# images}}{videos, plural, =0 {} one { · up to # video} other { · up to # videos}} · optional",
+      "note": "{provider, select, openai {References are optional. Without them, the image comes from the prompt alone. With images, OpenAI editing builds on them. Images are numbered in upload order and sent in that order, and each one adds input cost.} other {References are optional. Without them, the video comes from the prompt alone. With exactly one image, you choose in the settings whether to start from it. Images and videos are numbered in upload order and sent to the model in that order. A video reference can add its length to the cost.}}",
+      "attachedCount": "Attached · {images, plural, one {# image} other {# images}} · {videos, plural, one {# video} other {# videos}}",
+      "none": "No references attached yet.",
+      "done": "Done",
+      "remove": "Remove",
+      "removeLabel": "Remove {kind, select, image {image} other {video}} reference {tag} {name}",
+      "seconds": "{seconds}s",
+      "fileHint": "{types} · up to {mb} MB"
+    },
+    "drop": {
+      "off": "This model takes no {kind, select, image {image} other {video}} references",
+      "full": "{kind, select, image {All {max, plural, one {# image} other {# images}} added} other {All {max, plural, one {# video} other {# videos}} added}}",
+      "pick": "Drag {kind, select, image {image} other {video}} files here or click to choose",
+      "add": "Add {kind, select, image {image} other {video}} references"
+    },
+    "uploading": "Uploading…",
+    "upload": {
+      "blobForImages": "Uploading image references needs a connected Blob store",
+      "blobForLarge": "Files over {mb} MB need a connected Blob store to upload",
+      "tooMany": "{kind, select, image {Up to {max, plural, one {# image} other {# images}}} other {Up to {max, plural, one {# video} other {# videos}}}}",
+      "badType": "{file}: {model} doesn't take this format. Upload a {types} file",
+      "tooBig": "{file}: over {mb} MB. Make it smaller and upload it again",
+      "noLength": "{file}: couldn't read the video's length. Upload a different MP4"
+    },
+    "feed": {
+      "item": "Result {n}: {status}",
+      "elapsed": "{status} · elapsed",
+      "pendingNote": "Starts on its own as soon as Higgsfield accepts the request",
+      "imageNote": "OpenAI is making the image. This usually takes from tens of seconds to 2 minutes",
+      "estimated": "Est.",
+      "took": "took {elapsed}",
+      "refsLabel": "References: {images, plural, one {# image} other {# images}}, {videos, plural, one {# video} other {# videos}}",
+      "refsCount": "{count, plural, one {# reference} other {# references}}",
+      "progress": "Generation in progress",
+      "progressUnknown": "Progress unknown"
+    },
+    "empty": {
+      "title": "Make your first video",
+      "lead": "Write a prompt <wide>in the panel on the left</wide><narrow>below</narrow>, choose a model and generate. The result appears on this stage.",
+      "toSettings": "Go to generation settings"
+    },
+    "loading": "Loading recent generations",
+    "rail": {
+      "label": "Result actions",
+      "position": "Result position",
+      "previous": "Previous result",
+      "next": "Next result",
+      "generate": "Generate",
+      "cancel": "Cancel",
+      "reuse": "Reuse"
+    },
+    "noModels": "No models are available. Contact an admin.",
+    "cost": {
+      "label": "Estimated cost",
+      "unset": "Not set",
+      "rate": "Rate {rate}",
+      "unpriced": "Calculated from {facts} once an admin sets a rate"
+    },
+    "fact": {
+      "seconds": "{seconds}s",
+      "inputVideo": "Input video {seconds}s",
+      "refImages": "{count, plural, one {# reference} other {# references}}"
+    },
+    "generate": "Generate",
+    "submitting": "Submitting…"
+  },
+  "mode": {
+    "t2v": "Text to video",
+    "i2v": "Image to video",
+    "r2v": "Reference to video",
+    "t2i": "Text to image",
+    "r2i": "Reference to image"
+  },
+  "params": {
+    "duration": "Duration (s)",
+    "resolution": "Resolution",
+    "aspect_ratio": "Aspect ratio",
+    "generate_audio": "Generate audio",
+    "aigc_watermark": "AI-generated watermark",
+    "quality": "Quality",
+    "output_format": "File format",
+    "background": "Background",
+    "prompt_optimizer": "Prompt optimizer"
+  },
+  "paramValues": {
+    "quality": "{value, select, low {Low} medium {Medium} high {High} other {{value}}}",
+    "output_format": "{value, select, png {PNG} jpeg {JPEG} webp {WebP} other {{value}}}",
+    "background": "{value, select, auto {Auto} opaque {Opaque} transparent {Transparent (PNG·WebP)} other {{value}}}"
+  },
+  "families": {
+    "seedance": {
+      "blurb": "From text alone, from one image as the first frame, or with up to 6 images and 3 videos as references. 480p to 4K, a choice of aspect ratio, and generated audio.",
+      "note": "Cost scales with resolution and duration. Use 480p for drafts and 720p or higher for delivery."
+    },
+    "h3": {
+      "blurb": "From text alone, from one image as the first frame, or with up to 5 images and 3 videos as references. 2K, 5, 10 or 15 seconds.",
+      "note": "Output is fixed at 2K. Every mode needs a prompt."
+    },
+    "gptImage2": {
+      "blurb": "Makes images from a prompt alone or with up to 16 reference images. 5 aspect ratios, 3 quality levels, and PNG, JPEG or WebP.",
+      "note": "With references, the request goes to OpenAI editing. It usually takes from tens of seconds to 2 minutes, and the cost is set by the token usage OpenAI reports."
+    }
+  },
+  "prices": {
+    "basis": {
+      "seedance": "480p·16:9",
+      "h3": "2K",
+      "gptImage2": "image output"
+    },
+    "rate": "{usd}/{unit, select, second {s} other {1M tokens}}",
+    "per": "{unit, select, second {per second} other {per 1M tokens}}",
+    "preset": {
+      "higgsfieldTable": "Higgsfield table · {discount}% off",
+      "list": "List price",
+      "openaiList": "OpenAI list price"
+    },
+    "example": {
+      "seedance": "720p 16:9, 5 s",
+      "h3": "10 s",
+      "gptImage2": "One 1024×1024 image at medium quality"
+    }
   }
 }
