@@ -376,7 +376,7 @@
       "label": "Delete {title}",
       "title": "Delete thread",
       "body": "This removes “{title}” from your thread list.",
-      "keeps": "Its videos and images stay in the Gallery, and your usage and spend don't change. Generations still running carry on to the end.",
+      "keeps": "Its videos and images stay in the Gallery, and your usage and spend don't change. Generations still running will finish normally.",
       "confirm": "Delete",
       "cancel": "Cancel",
       "deleting": "Deleting…"
