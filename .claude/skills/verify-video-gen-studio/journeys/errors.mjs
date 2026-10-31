@@ -7,6 +7,7 @@
 import { createRequire } from "node:module";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { composerHandles } from "../composer-handles.mjs";
 
 const INITIAL = "oooooooo";
 const LANG = { "ko-KR": "ko", "en-US": "en", "zh-CN": "zh-CN" };
@@ -129,20 +130,22 @@ export default async function errors({ page, ev, base, env, webDir, local }) {
     await fillNewPassword(member, chosenA);
     await member.waitForURL("**/playground", { timeout: 30_000 });
     await member.waitForLoadState("networkidle");
-    const drawer = member.getByRole("complementary", { name: await ev.t("playground.drawer", undefined, member) });
-    // Without a Higgsfield key the drawer starts on the image model, which needs none.
-    await drawer.getByLabel(await ev.t("playground.model", undefined, member)).selectOption("bytedance/seedance-2.0");
-    const noKey = drawer.getByRole("status").filter({ hasText: await ev.t("errors.noKey", undefined, member) });
+    const hm = await composerHandles(ev, member);
+    // Without a Higgsfield key the composer starts on the image model, which needs none.
+    await hm.pickModel("bytedance/seedance-2.0", "video");
+    const noKey = hm.status.filter({ hasText: await ev.t("errors.noKey", undefined, member) });
     await noKey.first().waitFor({ timeout: 20_000 });
-    await drawer.getByLabel(await ev.t("playground.prompt", undefined, member)).fill("");
-    const blocker = drawer.getByRole("status").filter({ hasText: await ev.t("errors.promptRequired", { model: "Seedance 2.0", mode: "t2v" }, member) });
+    await hm.prompt.fill("");
+    const blocker = hm.status.filter({ hasText: await ev.t("errors.promptRequired", { model: "Seedance 2.0", mode: "t2v" }, member) });
     await blocker.first().waitFor({ timeout: 10_000 });
-    ev.note("err-drawer: the no-key line and the cost bar's reason read in the page language");
+    ev.note("err-composer: the no-key line and the composer's reason read in the page language");
     await review("playground-no-key", member, noKey.first());
     await review("playground-blocker", member, blocker.first());
-    const stage = member.getByRole("region", { name: await ev.t("playground.stage", undefined, member) });
+    // The three failed rows have no thread, so they are the earlier history.
+    await member.goto(`${base}/playground?thread=earlier`, { waitUntil: "networkidle" });
+    const stage = (await composerHandles(ev, member)).stream;
     const coded = await ev.t("errors.submitDeadline", { minutes: 30 }, member);
-    await expectText(stage.locator("p"), coded, "the coded failure on the stage");
+    await expectText(stage.locator("p"), coded, "the coded failure in the stream");
     await review("playground-failure", member, stage.getByText(coded).first());
 
     // err-nickname: the nickname rule, checked in the browser before the server, reads the same code.
@@ -185,15 +188,13 @@ export default async function errors({ page, ev, base, env, webDir, local }) {
     const failImage = async (fail, code, surface, check) => {
       await setOpenAi({ fail });
       await admin.goto(`${base}/playground`, { waitUntil: "networkidle" });
-      const adminDrawer = admin.getByRole("complementary", { name: await ev.t("playground.drawer", undefined, admin) });
-      await adminDrawer.getByLabel(await ev.t("playground.model", undefined, admin)).selectOption(GPT);
-      await adminDrawer.getByLabel(await ev.t("playground.prompt", undefined, admin)).fill(`${imagePrompt} ${fail}`);
-      const [res] = await Promise.all([
-        admin.waitForResponse((r) => new URL(r.url()).pathname === "/api/generations" && r.request().method() === "POST"),
-        adminDrawer.getByRole("button", { name: await ev.t("playground.generate", undefined, admin), exact: true }).click(),
-      ]);
-      const id = (await res.json()).item?.id;
-      if (!id) ev.fail(`the ${fail} image submit answered ${res.status()}`);
+      const ha = await composerHandles(ev, admin);
+      await ha.pickModel(GPT, "image");
+      await ha.pickMode("text", "t2i");
+      await ha.prompt.fill(`${imagePrompt} ${fail}`);
+      const { status, body } = await ha.submit();
+      const id = body?.item?.id;
+      if (!id) ev.fail(`the ${fail} image submit answered ${status}`);
       let row;
       for (let i = 0; i < 40 && row?.status !== "failed"; i++) {
         await admin.waitForTimeout(500);
@@ -201,9 +202,9 @@ export default async function errors({ page, ev, base, env, webDir, local }) {
       }
       if (row?.status !== "failed" || row.reason?.code !== code || !check(row.reason.params)) ev.fail(`the ${fail} image row ended ${row?.status} ${JSON.stringify(row?.reason)}`);
       const shown = await ev.t(`errors.${code}`, row.reason.params, admin);
-      const adminStage = admin.getByRole("region", { name: await ev.t("playground.stage", undefined, admin) });
-      await expectText(adminStage.locator("p"), shown, `the ${fail} image failure on the stage`);
-      ev.note(`err-image ${fail}: the row stores ${JSON.stringify(row.reason)} and the stage reads it in the page language`);
+      const adminStage = ha.stream;
+      await expectText(adminStage.locator("p"), shown, `the ${fail} image failure in the stream`);
+      ev.note(`err-image ${fail}: the row stores ${JSON.stringify(row.reason)} and the stream reads it in the page language`);
       await review(surface, admin, adminStage.getByText(shown).first());
     };
     await failImage("server", "imageUnanswered", "playground-image-failure", (p) => p?.cause === "reply");

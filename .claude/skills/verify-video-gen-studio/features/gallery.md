@@ -14,7 +14,7 @@ The gallery shows a member's completed videos and images as tiles that keep thei
 ## How to get to it (user POV)
 
 - Header nav `pages.gallery` (갤러리).
-- The gallery glyph on the playground rail (its counter is the completed count).
+- The gallery link in the playground's stream header or thread bar (its count is the completed count).
 - `/gallery?all=1` as an admin for the team-wide view.
 
 ## Driving it with vgs

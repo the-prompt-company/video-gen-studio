@@ -1,13 +1,16 @@
-/** Feature: playground — drawer, model select, generation mode, reference dialog, generate gate, every mode against the fake, live polling. See features/playground.md. */
+/** Feature: playground — the composer's model menu, modes, settings, references, the generate gate, every mode against the fake, live polling. See features/playground.md. */
 import { readFileSync, writeFileSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { composerHandles, FAMILY_NAME, usd } from "../composer-handles.mjs";
 
 const skillDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const webDir = resolve(skillDir, "..", "..", "..");
 const LIVE = new Set(["queued", "in_progress"]);
 const IMAGES = ["ref-landscape-1.jpg", "ref-landscape-2.jpg"].map((f) => join(webDir, "public", "mock", f));
 const WEBM_AS_MP4 = { name: "clip-3s.mp4", mimeType: "video/mp4", buffer: readFileSync(join(skillDir, "fixtures", "clip-3s.webm")) };
+const SEEDANCE = "bytedance/seedance-2.0";
+const H3 = "minimax/h3";
 
 /** Group poll requests into ticks: requests less than 500 ms apart belong to one tick. */
 function ticks(polls) {
@@ -21,7 +24,7 @@ function ticks(polls) {
 }
 
 export default async function playground({ page, ev, env }) {
-  // Every GET /api/generations/<id> the page makes, with its response, so pg-poll can judge them.
+  // Every poll the page makes, with its response, so pg-poll can judge them.
   const polls = [];
   const lists = [];
   const uploads = [];
@@ -43,9 +46,8 @@ export default async function playground({ page, ev, env }) {
   });
 
   await ev.login("/playground");
-  // A live item can finish, or another process can replace mock rows, while the journey runs. An id counts as
-  // live when it was live at the start or at the end of the run. The stage holds one thread, the URL's, and a new
-  // thread (no `thread`) holds nothing yet.
+  // An id counts as live when it was live at the start or at the end of the run. The stream holds one thread, the
+  // URL's, and a new thread (no `thread`) holds nothing yet.
   const liveIds = new Set();
   const readLive = async () => {
     const thread = new URL(page.url()).searchParams.get("thread");
@@ -56,118 +58,129 @@ export default async function playground({ page, ev, env }) {
     return live.length;
   };
   await readLive();
-  const drawer = page.getByRole("complementary", { name: await ev.t("playground.drawer") });
-  if (!(await drawer.isVisible())) ev.fail("the drawer (playground.drawer) is not visible");
-  await ev.shot("drawer");
-  const stage = page.getByRole("region", { name: await ev.t("playground.stage") });
+  const h = await composerHandles(ev, page);
+  const t = h.t;
+  if (!(await h.box.isVisible())) ev.fail("the composer (playground.composer) is not visible");
+  await ev.shot("composer");
 
-  const model = drawer.getByLabel(await ev.t("playground.model"));
-  const options = await model.locator("option").allTextContents();
+  // pg-model-menu: the video tab lists the enabled video models with their rates; Hailuo is never offered.
+  let menu = await h.openMenu();
+  const outputs = menu.getByRole("group", { name: await t("playground.outputs") });
+  const videoTab = outputs.getByRole("button", { name: await t("playground.output", { output: "video" }) });
+  if ((await videoTab.count()) && (await videoTab.getAttribute("aria-pressed")) !== "true") await videoTab.click();
+  const options = (await menu.getByRole("button", { name: /^(Seedance 2\.0|MiniMax H3|GPT Image 2|Hailuo)/ }).allInnerTexts()).map((s) => s.split("\n")[0].trim());
   ev.note(`model options: ${options.join(" | ")}`);
-  const seedance = options.find((o) => o.startsWith("Seedance 2.0"));
-  const h3 = options.find((o) => o.startsWith("MiniMax H3"));
-  if (options.length === 0) ev.fail("model select has no options (all models disabled in admin?)");
   if (options.some((o) => /Hailuo/.test(o))) ev.fail("Hailuo is still offered");
-
-  const modes = drawer.getByRole("list", { name: await ev.t("playground.modes") });
-  const currentMode = async () => (await modes.locator('[aria-current="step"]').textContent())?.trim();
-  const expectMode = async (mode, why) => {
-    const want = await ev.t(`mode.${mode}`);
-    const got = await currentMode();
-    if (got !== want) ev.fail(`${why}: the mode should read ${want} (mode.${mode}), got ${got}`);
-  };
-  await expectMode("t2v", "nothing attached");
-  if (!(await drawer.getByText(await ev.t("playground.refs.optional"), { exact: true }).first().isVisible())) ev.fail("the reference counter does not mark references optional (playground.refs.optional)");
-
-  // prompt: typing updates the character-count hint.
-  const promptBox = drawer.getByLabel(await ev.t("playground.prompt"));
-  const promptText = "검증용 프롬프트: 비 오는 밤거리, 느린 돌리 인";
-  await promptBox.fill(promptText);
-  if (!(await drawer.getByText(await ev.t("playground.promptLength", { count: promptText.length }), { exact: true }).isVisible())) ev.fail("the prompt length hint (playground.promptLength) did not appear");
-
-  // aspect-pills: Seedance exposes the output aspect ratio as pressable pills; the 9:16 pill flips the hint to portrait.
-  const aspect = drawer.getByRole("group", { name: await ev.t("playground.aspect.label") });
-  const resolution = drawer.getByLabel(await ev.t("params.resolution"));
-  if (seedance) {
-    await model.selectOption({ label: seedance });
-    await aspect.waitFor({ timeout: 5_000 });
-    const portrait = aspect.getByRole("button", { name: /9:16/ });
-    await portrait.click();
-    if ((await portrait.getAttribute("aria-pressed")) !== "true") ev.fail("9:16 pill did not become aria-pressed");
-    const pressed = await aspect.getByRole("button", { pressed: true }).count();
-    if (pressed !== 1) ev.fail(`exactly one aspect pill should be pressed, found ${pressed}`);
-    if (!(await drawer.getByText(await ev.t("generation.shape", { shape: "portrait" }), { exact: true }).isVisible())) ev.fail("the aspect hint does not read portrait (generation.shape) after 9:16");
-    const res = await resolution.locator("option").allTextContents();
-    if (res.join(",") !== "480p,720p,1080p,4k") ev.fail(`Seedance resolutions should be 480p,720p,1080p,4k, got ${res.join(",")}`);
-    await ev.shot("seedance-portrait");
-  } else ev.note("Seedance not offered; aspect-pills skipped (unmet precondition)");
-
-  if (h3) {
-    await model.selectOption({ label: h3 });
-    await aspect.waitFor({ timeout: 5_000 });
-    if ((await aspect.getByRole("button", { name: await ev.t("playground.aspect.auto"), exact: true }).getAttribute("aria-pressed")) !== "true") ev.fail("H3 should start on the auto pill (playground.aspect.auto)");
-    const dur = await drawer.getByLabel(await ev.t("params.duration")).locator("option").allTextContents();
-    if (dur.join(",") !== "5,10,15") ev.fail(`H3 duration options should be 5,10,15, got ${dur.join(",")}`);
-    if (!(await drawer.getByText(await ev.t("families.h3.note")).first().isVisible())) ev.fail("H3 fixed-2K note (families.h3.note) missing");
-    if (await resolution.count()) ev.fail("H3 has no resolution choice");
-    await ev.shot("h3");
-    if (seedance) await model.selectOption({ label: seedance });
-  } else ev.note("MiniMax H3 not offered; model-switch skipped (unmet precondition)");
-
-  // refs-dialog: button opens a modal; the picker is a real <input type=file>; Esc closes and focus returns.
-  const addRefs = await ev.t("playground.refs.add");
-  const attachedName = await ev.t("playground.refs.attached");
-  const refsButton = drawer.getByRole("button", { name: addRefs, exact: true });
-  await refsButton.click();
-  const dialog = page.getByRole("dialog", { name: addRefs });
-  await dialog.waitFor({ timeout: 5_000 });
-  const [videoNote, imageNote] = await Promise.all(["higgsfield", "openai"].map((provider) => ev.t("playground.refs.note", { provider })));
-  if (!(await dialog.getByText(videoNote).or(dialog.getByText(imageNote)).isVisible())) ev.fail("the reference dialog does not say references are optional (playground.refs.note)");
-  await ev.shot("refs-dialog-empty");
-  await dialog.locator('input[type=file][accept^="image/"]').setInputFiles(IMAGES[0]);
-  // Upload goes to Higgsfield storage through /api/uploads and needs the user's API key.
-  // With a key: a thumbnail "1" appears. Without: role=alert explains. Both are real outcomes; record which.
-  const thumb = dialog.getByRole("list", { name: attachedName }).locator("li");
-  const alert = dialog.getByRole("alert");
-  await Promise.race([thumb.first().waitFor({ timeout: 30_000 }), alert.waitFor({ timeout: 30_000 })]).catch(() => ev.fail("neither a thumbnail nor an error appeared within 30s of picking a file"));
-  const attached = (await thumb.count()) > 0;
-  if (attached) ev.note(`reference uploaded: ${await thumb.count()} thumbnail(s)`);
-  else ev.note(`upload refused (expected without an API key): ${await alert.textContent()}`);
-  await ev.shot("refs-dialog-after-pick");
+  const seedance = options.some((o) => o.startsWith(FAMILY_NAME[SEEDANCE]));
+  const h3 = options.some((o) => o.startsWith(FAMILY_NAME[H3]));
+  if (!seedance && !h3) ev.fail("the model menu lists no video model (all disabled in admin?)");
+  await ev.shot("model-menu");
   await page.keyboard.press("Escape");
-  if (await dialog.isVisible().catch(() => false)) ev.fail("Esc did not close the reference dialog");
-  if (!(await refsButton.evaluate((el) => el === document.activeElement))) ev.fail("focus did not return to the add-references button (playground.refs.add) after closing");
+  await menu.waitFor({ state: "detached" });
 
-  const startFrame = drawer.getByRole("checkbox", { name: await ev.t("playground.startFromImage") });
-  if (attached) {
-    await expectMode("r2v", "one image");
-    if (!(await startFrame.isVisible())) ev.fail("the start-from-image checkbox (playground.startFromImage) is not offered for exactly one image");
-    await startFrame.check();
-    await expectMode("i2v", "start from this image");
-    if (seedance && (await aspect.isVisible())) ev.fail("Seedance image-to-video takes no aspect ratio, but the pills show");
-    await ev.shot("start-from-image");
-    await startFrame.uncheck();
-    await removeAll(drawer, attachedName);
-    await expectMode("t2v", "the reference removed");
+  const expectMode = async (family, mode, why) => {
+    const want = await h.modeLabel(family, mode);
+    const got = await h.chipText();
+    if (got !== want) ev.fail(`${why}: the model chip should read ${want}, got ${got}`);
+  };
+
+  // pg-mode: the member picks the mode; text needs nothing, frames a start frame, references at least one.
+  if (seedance) {
+    await h.pickModel(SEEDANCE, "video");
+    await h.pickMode("text", "t2v");
+    await expectMode(SEEDANCE, "t2v", "text");
+    menu = await h.openMenu();
+    const modeRows = await menu.getByRole("button", { name: new RegExp(`· (${[await t("mode.t2v"), await t("mode.i2v"), await t("mode.r2v")].join("|")})`) }).count();
+    if (modeRows !== 3) ev.fail(`Seedance should offer 3 modes, found ${modeRows}`);
+    await page.keyboard.press("Escape");
+    await menu.waitFor({ state: "detached" });
   }
 
-  // generate-gate: without an API key the status banner shows and the Generate button stays disabled.
-  const banner = drawer.getByRole("status").filter({ hasText: await ev.t("errors.noKey") });
-  const generate = drawer.getByRole("button", { name: await ev.t("playground.generate"), exact: true });
+  // pg-aspect-pills: Seedance's aspect ratio is a pill group in the settings; the 9:16 pill reads portrait in the summary.
+  if (seedance) {
+    const settings = await h.openSettings();
+    const aspect = settings.getByRole("group", { name: await t("playground.aspect.label") });
+    const portrait = aspect.getByRole("button", { name: /9:16/ });
+    await portrait.click();
+    if ((await portrait.getAttribute("aria-pressed")) !== "true") ev.fail("the 9:16 pill did not become aria-pressed");
+    const pressed = await aspect.getByRole("button", { pressed: true }).count();
+    if (pressed !== 1) ev.fail(`exactly one aspect pill should be pressed, found ${pressed}`);
+    const res = (await settings.getByRole("group", { name: await t("params.resolution") }).getByRole("button").allInnerTexts()).map((s) => s.trim());
+    if (res.join(",") !== "480p,720p,1080p,4k") ev.fail(`Seedance resolutions should be 480p,720p,1080p,4k, got ${res.join(",")}`);
+    await ev.shot("seedance-portrait");
+    await page.keyboard.press("Escape");
+    await settings.waitFor({ state: "detached" });
+    const summary = await h.box.getByRole("button", { name: new RegExp(`^${await t("playground.settings.open", { summary: "" })}`) }).innerText();
+    const want = await t("playground.aspect.pill", { shape: await t("generation.shape", { shape: "portrait" }), ratio: "9:16" });
+    if (!summary.includes(want)) ev.fail(`the settings chip should read ${want}, reads ${summary}`);
+  } else ev.note("Seedance not offered; aspect-pills skipped (unmet precondition)");
+
+  // pg-model-switch: H3 starts on auto, takes 5, 10 or 15 s, has no resolution, and says its output is fixed at 2K.
+  if (h3) {
+    await h.pickModel(H3, "video");
+    const settings = await h.openSettings();
+    const auto = settings.getByRole("group", { name: await t("playground.aspect.label") }).getByRole("button", { name: await t("playground.aspect.auto"), exact: true });
+    if ((await auto.getAttribute("aria-pressed")) !== "true") ev.fail("H3 should start on the auto pill (playground.aspect.auto)");
+    const dur = (await settings.getByRole("group", { name: await t("params.duration") }).getByRole("button").allInnerTexts()).map((s) => s.trim());
+    const wantDur = await Promise.all(["5", "10", "15"].map((s) => t("playground.summary.duration", { seconds: s })));
+    if (dur.join(",") !== wantDur.join(",")) ev.fail(`H3 durations should be ${wantDur.join(",")}, got ${dur.join(",")}`);
+    if (await settings.getByRole("group", { name: await t("params.resolution") }).count()) ev.fail("H3 has no resolution choice");
+    if (!(await settings.getByText(await t("families.h3.note")).isVisible())) ev.fail("H3 fixed-2K note (families.h3.note) missing");
+    await ev.shot("h3");
+    await page.keyboard.press("Escape");
+    await settings.waitFor({ state: "detached" });
+    if (seedance) await h.pickModel(SEEDANCE, "video");
+  } else ev.note("MiniMax H3 not offered; model-switch skipped (unmet precondition)");
+
+  // pg-refs-add: + opens the add menu, its image row opens the file picker, Esc closes it and focus returns to +.
+  const add = h.box.getByRole("button", { name: await t("playground.refs.add"), exact: true });
+  await add.click();
+  const addMenu = page.getByRole("dialog", { name: await t("playground.refs.add") });
+  await addMenu.waitFor({ timeout: 5_000 });
+  if (!(await addMenu.getByText(await t("playground.refs.menuNote")).isVisible())) ev.fail("the add menu does not explain the order and the drop (playground.refs.menuNote)");
+  await ev.shot("add-menu");
+  const [chooser] = await Promise.all([page.waitForEvent("filechooser"), addMenu.getByRole("button", { name: new RegExp(await t("playground.refs.uploadImages")) }).click()]);
+  await chooser.setFiles(IMAGES[0]);
+  const alert = h.box.getByRole("alert");
+  await Promise.race([h.refs.first().waitFor({ timeout: 30_000 }), alert.waitFor({ timeout: 30_000 })]).catch(() => ev.fail("neither a thumbnail nor an error appeared within 30s of picking a file"));
+  await h.uploaded("the first reference");
+  const attached = (await h.refs.count()) > 0 && !(await alert.isVisible());
+  if (attached) ev.note(`reference uploaded: ${await h.refs.count()} thumbnail(s)`);
+  else ev.note(`upload refused (expected without an API key): ${await alert.textContent()}`);
+  await page.keyboard.press("Escape");
+  if (await addMenu.isVisible().catch(() => false)) ev.fail("Esc did not close the add menu");
+  if (!(await add.evaluate((el) => el === document.activeElement))) ev.fail("focus did not return to + (playground.refs.add) after closing");
+  await ev.shot("after-pick");
+  if (attached && seedance) {
+    await expectMode(SEEDANCE, "r2v", "a reference added in text mode");
+    if (!(await h.box.getByText(await t("playground.note.switched", { mode: "r2v" })).isVisible())) ev.fail("the switch to references should be said (playground.note.switched)");
+    await h.pickMode("firstFrame", "i2v");
+    await expectMode(SEEDANCE, "i2v", "frames");
+    const settings = await h.openSettings();
+    if (await settings.getByRole("group", { name: await t("playground.aspect.label") }).count()) ev.fail("Seedance image-to-video takes no aspect ratio, but the pills show");
+    await ev.shot("start-frame");
+    await page.keyboard.press("Escape");
+    await h.pickMode("text", "t2v");
+    await h.box.getByRole("button", { name: await t("playground.note.undo"), exact: true }).waitFor();
+  }
+
+  // generate-gate: without an API key the status line says so and 생성하기 stays off.
+  const banner = h.status.filter({ hasText: await t("errors.noKey") });
   if (await banner.isVisible()) {
-    if (await generate.isEnabled()) ev.fail("Generate (playground.generate) must be disabled while the no-API-key banner shows");
+    if (await h.generate.isEnabled()) ev.fail("생성하기 (playground.generate) must be disabled while the no-API-key line shows");
     ev.note("no API key on this account: generate correctly disabled; paid submit not exercised");
   } else if (env.VGS_FAKE_HF) {
-    for (const id of await everyMode({ page, ev, drawer, stage, model, promptBox, seedance, h3, generate, expectMode, startFrame, uploads, fake: env.VGS_FAKE_HF })) liveIds.add(id);
+    for (const id of await everyMode({ page, ev, h, seedance, h3, uploads, fake: env.VGS_FAKE_HF })) liveIds.add(id);
   } else if (env.VGS_ALLOW_SPEND === "1") {
-    if (!(await generate.isEnabled())) ev.fail("API key present but Generate (playground.generate) disabled");
-    await generate.click();
-    await stage.getByRole("article").first().waitFor({ timeout: 30_000 });
-    ev.note("generation submitted (VGS_ALLOW_SPEND=1); a queued item is on the stage");
+    await h.prompt.fill("검증용 프롬프트: 비 오는 밤거리, 느린 돌리 인");
+    if (!(await h.generate.isEnabled())) ev.fail("API key present but 생성하기 (playground.generate) disabled");
+    await h.generate.click();
+    await h.turns.first().waitFor({ timeout: 30_000 });
+    ev.note("generation submitted (VGS_ALLOW_SPEND=1); a queued turn is in the stream");
   } else ev.note("API key present; paid submit skipped (set VGS_ALLOW_SPEND=1, or VGS_FAKE_HF against the fake, to exercise it)");
   await ev.shot("generate-gate");
 
-  // pg-poll: each live item on the stage is polled by its own uuid, every poll is a 200, and the body is that item.
+  // pg-poll: every live turn's id is polled in one batch per tick, every poll is a 200, and the answer holds that row.
   // VGS_POLL_WAIT_MS keeps the page open longer so the backoff schedule can be read; VGS_POLL_NAV=1 leaves for the gallery and comes back.
   const liveAtEnd = await readLive();
   const waitMs = Number(env.VGS_POLL_WAIT_MS ?? 0);
@@ -178,11 +191,11 @@ export default async function playground({ page, ev, env }) {
     const until = Date.now() + 8_000;
     while (liveIds.size > 0 && ticks(polls).length < 2 && Date.now() < until) await page.waitForTimeout(250);
   }
-  if (env.VGS_POLL_NAV === "1" && liveAtEnd === 0) ev.note("navigate: skipped, no live row on the stage's thread to poll on return");
+  if (env.VGS_POLL_NAV === "1" && liveAtEnd === 0) ev.note("navigate: skipped, no live row on the stream's thread to poll on return");
   if (env.VGS_POLL_NAV === "1" && liveAtEnd > 0) {
     const before = polls.length;
-    const nav = page.getByRole("navigation", { name: await ev.t("nav.label") });
-    await nav.getByRole("link", { name: await ev.t("pages.gallery") }).click();
+    const nav = page.getByRole("navigation", { name: await t("nav.label") });
+    await nav.getByRole("link", { name: await t("pages.gallery") }).click();
     await page.waitForURL("**/gallery**");
     await page.waitForTimeout(3_000);
     const away = polls.length - before;
@@ -192,7 +205,7 @@ export default async function playground({ page, ev, env }) {
     const back = Date.now();
     const until = back + 6_000;
     while (polls.length === before + away && Date.now() < until) await page.waitForTimeout(100);
-    const listAt = lists.filter((t) => t >= back - 500).at(-1);
+    const listAt = lists.filter((x) => x >= back - 500).at(-1);
     const first = polls.filter((p) => p.t >= back).sort((a, b) => a.t - b.t)[0];
     ev.note(`navigate: ${away} polls while on /gallery; first poll ${first ? Math.round(first.t - (listAt ?? back)) : "none"} ms after the feed reloaded on return`);
     if (away > 0) ev.fail(`${away} poll requests went out while on /gallery`);
@@ -205,7 +218,6 @@ export default async function playground({ page, ev, env }) {
   writeFileSync(join(ev.dir, "poll.json"), JSON.stringify({ liveIds: [...liveIds], polls, ticks: schedule, gaps }, null, 2));
   for (const p of polls) ev.note(`poll GET ${p.path} → ${p.status}${p.itemId === p.id ? "" : ` (body item.id ${p.itemId})`}`);
   // The overlay puts the request log in the screenshot; it is removed right after.
-  await stage.scrollIntoViewIfNeeded();
   const lines = polls.length ? polls.map((p) => `GET ${p.path} → ${p.status}`) : ["no poll requests"];
   await page.evaluate((text) => {
     const el = document.createElement("pre");
@@ -217,53 +229,30 @@ export default async function playground({ page, ev, env }) {
   await ev.shot("poll");
   await page.evaluate(() => document.getElementById("vgs-poll-overlay")?.remove());
   if (liveIds.size === 0) {
-    if (polls.length > 0) ev.fail(`${polls.length} poll requests with no live item on the feed`);
-    ev.note("poll requests 0 (no live item on the feed)");
+    if (polls.length > 0) ev.fail(`${polls.length} poll requests with no live row in the stream`);
+    ev.note("poll requests 0 (no live row in the stream)");
   } else {
-    if (polls.length === 0) ev.fail(`live items ${[...liveIds].join(",")} on the feed but no poll request within 8 s`);
-    if (bad.length) ev.fail(`poll requests not matching a live uuid with a 200 and its own item: ${bad.map((p) => `${p.path} → ${p.status}`).join("; ")}`);
+    if (polls.length === 0) ev.fail(`live rows ${[...liveIds].join(",")} in the stream but no poll request within 8 s`);
+    if (bad.length) ev.fail(`poll requests not matching a live uuid with a 200 and its own row: ${bad.map((p) => `${p.path} → ${p.status}`).join("; ")}`);
     ev.note(`poll requests ${polls.length}, all 200`);
     ev.note(`poll ticks ${schedule.length} (${schedule.map((k) => k.n).join(",")} requests each), gaps ${gaps.join(", ")} ms`);
-    if (liveAtEnd > 0 && !(await stage.getByRole("progressbar", { name: await ev.t("playground.feed.progress") }).first().isVisible())) ev.fail("live item on the feed but no progress bar (playground.feed.progress) on the stage");
+    if (liveAtEnd > 0 && !(await h.stream.getByRole("progressbar", { name: await t("playground.feed.progress") }).first().isVisible())) ev.fail("live row in the stream but no progress line (playground.feed.progress)");
   }
 }
 
-/** Each attached thumbnail holds one button, its remove button. */
-async function removeAll(drawer, attachedName) {
-  const remove = drawer.getByRole("list", { name: attachedName }).getByRole("button");
-  while ((await remove.count()) > 0) await remove.first().click();
-}
-
-async function everyMode({ page, ev, drawer, stage, model, promptBox, seedance, h3, generate, expectMode, startFrame, uploads, fake }) {
+async function everyMode({ page, ev, h, seedance, h3, uploads, fake }) {
   const stats = async () => (await fetch(`${fake}/_stats`)).json();
-  const addRefs = await ev.t("playground.refs.add");
-  const attachedName = await ev.t("playground.refs.attached");
-  const railGenerate = stage.getByRole("button", { name: await ev.t("playground.rail.generate"), exact: true });
+  const t = h.t;
   const submitted = [];
-  const attach = async (images, videos) => {
-    await drawer.getByRole("button", { name: addRefs, exact: true }).click();
-    const dialog = page.getByRole("dialog", { name: addRefs });
-    await dialog.waitFor({ timeout: 5_000 });
-    const list = dialog.getByRole("list", { name: attachedName }).locator("li");
-    const want = (await list.count()) + images.length + videos.length;
-    if (images.length) await dialog.locator('input[type=file][accept^="image/"]').setInputFiles(images);
-    for (const v of videos) await dialog.locator('input[type=file][accept="video/mp4"]').setInputFiles(v);
-    const until = Date.now() + 30_000;
-    while ((await list.count()) < want && Date.now() < until) {
-      if (await dialog.getByRole("alert").isVisible()) ev.fail(`attach failed: ${await dialog.getByRole("alert").textContent()}`);
-      await page.waitForTimeout(200);
-    }
-    if ((await list.count()) < want) ev.fail(`only ${await list.count()} of ${want} references attached`);
-    await page.keyboard.press("Escape");
+  const clearRefs = async () => {
+    const remove = h.refs.getByRole("button");
+    while ((await remove.count()) > 0) await remove.first().click();
   };
   const submitAndRead = async (label, want, checkBody) => {
     const before = (await stats()).submits.length;
-    const counter = (await railGenerate.locator("xpath=following-sibling::span[1]").textContent())?.trim();
-    const answer = page.waitForResponse((r) => r.request().method() === "POST" && new URL(r.url()).pathname === "/api/generations", { timeout: 30_000 });
-    await generate.click();
-    const res = await answer;
-    const body = await res.json();
-    if (res.status() !== 201 || body.item?.modelId !== want) ev.fail(`${label}: POST answered ${res.status()} with ${body.item?.modelId ?? JSON.stringify(body.error)}`);
+    const shown = await h.cost();
+    const { status, body } = await h.submit();
+    if (status !== 201 || body?.item?.modelId !== want) ev.fail(`${label}: POST answered ${status} with ${body?.item?.modelId ?? JSON.stringify(body?.error)}`);
     submitted.push(body.item.id);
     const until = Date.now() + 10_000;
     let sent;
@@ -273,51 +262,58 @@ async function everyMode({ page, ev, drawer, stage, model, promptBox, seedance, 
     }
     if (!sent) ev.fail(`${label}: the fake saw no submit for row ${body.item.id}`);
     if (sent.endpoint !== want || sent.status !== 200) ev.fail(`${label}: the fake got ${sent.endpoint} → ${sent.status}, wanted ${want}`);
-    const problem = checkBody(sent.body);
+    const problem = checkBody(sent.body, body.item);
     if (problem) ev.fail(`${label}: ${problem} in ${JSON.stringify(sent.body)}`);
-    const shown = counter === "—" ? null : counter;
-    if (shown !== null && shown !== usd(body.estimatedCostUsd)) ev.fail(`${label}: the rail's generate counter showed ${shown} but the row's cost is ${body.estimatedCostUsd}`);
-    ev.note(`pg-generate-modes ${label}: ${sent.endpoint} ← ${JSON.stringify(sent.body)}; the rail counter showed ${shown ?? "— (no rate)"}, row cost ${body.estimatedCostUsd}`);
+    const priced = shown.startsWith("$");
+    if (priced && shown !== usd(body.estimatedCostUsd)) ev.fail(`${label}: the composer showed ${shown} but the row's cost is ${body.estimatedCostUsd}`);
+    ev.note(`pg-generate-modes ${label}: ${sent.endpoint} ← ${JSON.stringify(sent.body)}; the composer showed ${priced ? shown : "no rate"}, row cost ${body.estimatedCostUsd}`);
     await ev.shot(`generated-${label.replace(/[^\w-]+/g, "-")}`);
   };
   const urls = (b, key) => (Array.isArray(b[key]) ? b[key] : []);
 
-  for (const option of [seedance, h3].filter(Boolean)) {
-    await model.selectOption({ label: option });
-    const family = option.startsWith("Seedance") ? "bytedance/seedance-2.0" : "minimax/h3";
-    const short = family === "minimax/h3" ? "h3" : "seedance";
-    await removeAll(drawer, attachedName);
-    if (family === "minimax/h3") {
-      await promptBox.fill("");
-      const blocker = drawer.getByRole("status").filter({ hasText: await ev.t("errors.promptRequired", { model: "MiniMax H3", mode: "t2v" }) });
-      if (!(await blocker.isVisible()) || (await generate.isEnabled())) ev.fail("H3 without a prompt should say why (errors.promptRequired) and keep Generate disabled");
-      ev.note(`pg-blocker: ${await blocker.textContent()}`);
-      await ev.shot("h3-needs-prompt");
+  for (const family of [seedance && SEEDANCE, h3 && H3].filter(Boolean)) {
+    const short = family === H3 ? "h3" : "seedance";
+    await h.pickModel(family, "video");
+    await h.pickMode("reference", "r2v");
+    await clearRefs();
+    if (family === H3) {
+      await h.prompt.fill("");
+      const blocker = h.status.filter({ hasText: await t("errors.promptRequired", { model: "MiniMax H3", mode: "r2v" }) });
+      if (!(await blocker.isVisible()) || (await h.generate.isEnabled())) {
+        const reference = h.status.filter({ hasText: await t("errors.referenceRequired", { mode: "r2v" }) });
+        if (!(await reference.isVisible()) || (await h.generate.isEnabled())) ev.fail("H3 references with nothing attached and no prompt should say why and keep 생성하기 off");
+      }
+      ev.note(`pg-blocker: ${(await h.status.allInnerTexts()).join(" | ")}`);
+      await ev.shot("h3-blocked");
     }
-    await promptBox.fill(`검증 ${short}: 등대 위로 천천히 상승하는 카메라`);
+    await h.prompt.fill(`검증 ${short}: 등대 위로 천천히 상승하는 카메라`);
 
-    await attach(IMAGES, [WEBM_AS_MP4]);
-    if (!uploads.every((u) => typeof u === "string" && u.startsWith(fake))) ev.fail(`uploads did not go to the fake ${fake}: ${uploads.join(", ")}; refusing to click Generate`);
-    await expectMode("r2v", "two images and a video");
-    if (family === "bytedance/seedance-2.0" && !(await drawer.getByText(await ev.t("playground.fact.inputVideo", { seconds: "3.0" })).isVisible())) ev.fail("the estimate line does not count the 3 s reference video (playground.fact.inputVideo)");
+    await h.imageInput.setInputFiles(IMAGES);
+    await h.videoInput.setInputFiles(WEBM_AS_MP4);
+    await h.uploaded(`${short} references`);
+    if ((await h.refs.count()) !== 3) ev.fail(`${short}: three references should be attached, found ${await h.refs.count()}`);
+    if (!uploads.every((u) => typeof u === "string" && u.startsWith(fake))) ev.fail(`uploads did not go to the fake ${fake}: ${uploads.join(", ")}; refusing to click 생성하기`);
+    if (family === SEEDANCE && !(await h.box.getByText(await t("playground.fact.inputVideo", { seconds: "3.0" })).isVisible())) ev.fail("the estimate line does not count the 3 s reference video (playground.fact.inputVideo)");
     await ev.shot(`${short}-references`);
     await submitAndRead(`${short} reference`, `${family}/reference-to-video`, (b) =>
       urls(b, "image_urls").length !== 2 ? "image_urls should hold 2 urls" : urls(b, "video_urls").length !== 1 ? "video_urls should hold 1 url" : "image_url" in b ? "image_url must not be sent" : null,
     );
 
-    await removeAll(drawer, attachedName);
-    await attach([IMAGES[0]], []);
-    await startFrame.check();
-    await expectMode("i2v", "start from this image");
-    await submitAndRead(`${short} first frame`, `${family}/image-to-video`, (b) =>
-      typeof b.image_url !== "string" ? "image_url missing" : "image_urls" in b ? "image_urls must not be sent" : family === "bytedance/seedance-2.0" && "aspect_ratio" in b ? "Seedance image-to-video takes no aspect_ratio" : null,
+    await h.pickMode("firstFrame", "i2v");
+    await submitAndRead(`${short} first and end frame`, `${family}/image-to-video`, (b, item) =>
+      typeof b.image_url !== "string" || b.image_url !== item.imageRefs[0]
+        ? "image_url should be the start frame"
+        : b.end_image_url !== item.imageRefs[1]
+          ? "end_image_url should be the end frame"
+          : "image_urls" in b
+            ? "image_urls must not be sent"
+            : family === SEEDANCE && "aspect_ratio" in b
+              ? "Seedance image-to-video takes no aspect_ratio"
+              : null,
     );
 
-    await removeAll(drawer, attachedName);
-    await expectMode("t2v", "no reference");
-    await submitAndRead(`${short} text`, `${family}/text-to-video`, (b) =>
-      !b.prompt ? "prompt missing" : ["image_url", "image_urls", "video_urls"].some((k) => k in b) ? "text-to-video must carry no media" : null,
-    );
+    await h.pickMode("text", "t2v");
+    await submitAndRead(`${short} text`, `${family}/text-to-video`, (b) => (!b.prompt ? "prompt missing" : ["image_url", "end_image_url", "image_urls", "video_urls"].some((k) => k in b) ? "text-to-video must carry no media" : null));
   }
 
   const until = Date.now() + 60_000;
@@ -336,9 +332,4 @@ async function everyMode({ page, ev, drawer, stage, model, promptBox, seedance, 
   if (ended.some((r) => r.status !== "completed")) ev.fail(`not every row completed: ${ended.map((r) => `${r.modelId} ${r.status} ${JSON.stringify(r.reason ?? "")}`).join("; ")}`);
   ev.note(`pg-generate-modes: all ${ended.length} rows completed; costs kept: ${ended.map((r) => r.costUsd).join(", ")}`);
   return submitted;
-}
-
-function usd(n) {
-  const v = Number(n ?? 0);
-  return `$${v.toFixed(v >= 100 ? 0 : v >= 1 ? 2 : 4)}`;
 }
