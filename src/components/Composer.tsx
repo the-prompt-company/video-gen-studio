@@ -18,6 +18,7 @@ import {
 import { ApiError, appError, caught, parseAppError, type Reason } from "@/lib/errors";
 import type { PublicGeneration, Unavailable } from "@/lib/generations";
 import { refUploadName } from "@/lib/ref-name";
+import { threadTitle } from "@/lib/threads";
 import { Button, ErrorText } from "@/components/ui";
 import { Icon } from "@/components/icons";
 import { Popover } from "@/components/Popover";
@@ -29,27 +30,37 @@ export type Offer = { family: FamilyId; rateUsd: number; unavailable: Unavailabl
 
 /** A 503 means the server cannot run the model at all; a 403 (no key for this member) can still be picked and says why. */
 const pickable = (o: Offer) => o.unavailable?.status !== 503;
-export type ComposerHandle = { reuse: (g: PublicGeneration) => void };
+/** `reuse` puts back a result's model, mode, prompt and settings. `attachResult` attaches the result itself. */
+export type ComposerHandle = { reuse: (g: PublicGeneration) => void; attachResult: (g: PublicGeneration) => void };
 
 const SMALL = 4 * 1024 * 1024;
 const ONE_DECIMAL = { minimumFractionDigits: 1, maximumFractionDigits: 1 };
 const SLOTS: readonly Slot[] = ["start", "end"];
 const KINDS: readonly ModeKind[] = ["text", "firstFrame", "reference"];
 
-function readImageSize(file: File): Promise<{ w: number; h: number } | null> {
+function imageSize(src: string): Promise<{ w: number; h: number } | null> {
   return new Promise((resolve) => {
     const img = new Image();
-    const url = URL.createObjectURL(file);
+    const timer = window.setTimeout(() => resolve(null), 10_000);
     img.onload = () => {
+      window.clearTimeout(timer);
       resolve({ w: img.naturalWidth, h: img.naturalHeight });
-      URL.revokeObjectURL(url);
     };
     img.onerror = () => {
+      window.clearTimeout(timer);
       resolve(null);
-      URL.revokeObjectURL(url);
     };
-    img.src = url;
+    img.src = src;
   });
+}
+
+async function readImageSize(file: File): Promise<{ w: number; h: number } | null> {
+  const url = URL.createObjectURL(file);
+  try {
+    return await imageSize(url);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
 
 function readVideoSeconds(file: File): Promise<number | null> {
@@ -284,6 +295,33 @@ export function Composer({
     };
   }, []);
 
+  function refusalText(r: Refusal): string {
+    switch (r.reason) {
+      case "full":
+        return t("upload.tooMany", { kind: r.kind, max: r.max });
+      case "noVideos":
+        return errorText(appError("noVideoRefs", { model: family.name }));
+      case "framesTakeImages":
+        return t("upload.framesTakeImages");
+      case "framesFull":
+        return t("upload.framesFull");
+      case "attached":
+        return t("upload.attached");
+    }
+  }
+
+  async function attachResult(g: PublicGeneration) {
+    const ref = g.ref;
+    if (!ref) return;
+    setError(null);
+    const base = { id: crypto.randomUUID(), name: threadTitle(g.prompt) || tGeneration(ref.kind), preview: ref.url, url: ref.url, refUpload: false };
+    const a: Attachment = ref.kind === "video" ? { ...base, kind: "video", seconds: ref.seconds } : { ...base, kind: "image", ...((await imageSize(ref.url)) ?? { w: null, h: null }) };
+    const fitted = fit(latest.current, [a]);
+    latest.current = fitted.composer;
+    if (fitted.refused.length > 0) setError({ text: fitted.refused.map(refusalText).join(" · ") });
+    if (fitted.placed.length > 0) dispatch({ type: "add", items: fitted.placed });
+  }
+
   useImperativeHandle(
     ref,
     () => ({
@@ -296,22 +334,9 @@ export function Composer({
         setOpen(null);
         promptRef.current?.focus();
       },
+      attachResult: (g) => void attachResult(g),
     }),
-    [offers],
   );
-
-  function refusalText(r: Refusal): string {
-    switch (r.reason) {
-      case "full":
-        return t("upload.tooMany", { kind: r.kind, max: r.max });
-      case "noVideos":
-        return errorText(appError("noVideoRefs", { model: family.name }));
-      case "framesTakeImages":
-        return t("upload.framesTakeImages");
-      case "framesFull":
-        return t("upload.framesFull");
-    }
-  }
 
   async function attach(files: File[], slot?: Slot) {
     const current = FAMILIES[latest.current.family];
@@ -334,7 +359,7 @@ export function Composer({
         problems.push(current.provider === "openai" ? t("upload.blobForImages") : t("upload.blobForLarge", { mb: String(SMALL / 1024 / 1024) }));
         continue;
       }
-      const base = { id: crypto.randomUUID(), name: file.name, preview: URL.createObjectURL(file), url: null, blob: viaBlob };
+      const base = { id: crypto.randomUUID(), name: file.name, preview: URL.createObjectURL(file), url: null, refUpload: viaBlob };
       if (isVideo) {
         const seconds = await readVideoSeconds(file);
         if (seconds === null) {

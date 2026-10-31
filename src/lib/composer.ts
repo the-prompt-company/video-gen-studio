@@ -1,10 +1,10 @@
 import { defaultParams, FAMILIES, paramsWithDefaults, type Draft, type FamilyId, type Mode, type ModeKind } from "@/lib/catalog";
 
 /**
- * `url` is null until the upload answers. `blob`: uploaded to our Blob store, whose references a Higgsfield row
- * deletes when it ends.
+ * `url` is null until the upload answers. `refUpload`: uploaded under the member's refs/<id>/ in our Blob store, which a
+ * Higgsfield row deletes when it ends.
  */
-type AttachmentBase = { id: string; name: string; preview: string; url: string | null; blob: boolean };
+type AttachmentBase = { id: string; name: string; preview: string; url: string | null; refUpload: boolean };
 
 export type Attachment = AttachmentBase & ({ kind: "image"; w: number | null; h: number | null } | { kind: "video"; seconds: number });
 
@@ -24,7 +24,13 @@ export type Note =
 
 export type Composer = { family: FamilyId; params: Readonly<Record<string, unknown>>; attach: Attachments; note: Note | null };
 
-export type Refusal = { reason: "full"; kind: "image" | "video"; max: number } | { reason: "noVideos" } | { reason: "framesTakeImages" } | { reason: "framesFull" };
+export type Refusal =
+  | { reason: "full"; kind: "image" | "video"; max: number }
+  | { reason: "noVideos" }
+  | { reason: "framesTakeImages" }
+  | { reason: "framesFull" }
+  /** The references already hold this URL. */
+  | { reason: "attached" };
 
 export type Action =
   | { type: "family"; family: FamilyId }
@@ -125,6 +131,7 @@ export function fit(c: Composer, items: readonly Attachment[], slot?: Slot): { c
     for (const item of items) {
       const max = item.kind === "image" ? family.maxImages : family.maxVideos;
       if (item.kind === "video" && max === 0) refused.push({ reason: "noVideos" });
+      else if (item.url !== null && list.some((x) => x.url === item.url)) refused.push({ reason: "attached" });
       else if (list.filter((x) => x.kind === item.kind).length >= max) refused.push({ reason: "full", kind: item.kind, max });
       else {
         list.push(item);
@@ -178,8 +185,8 @@ export function composerReducer(c: Composer, action: Action): Composer {
       return c.note?.kind === "removed" ? { ...c, attach: c.note.restore, note: null } : c;
     case "sent": {
       if (FAMILIES[c.family].provider !== "higgsfield") return c.note ? { ...c, note: null } : c;
-      const spent = attachmentsOf(c.attach).filter((x) => x.blob).length;
-      return { ...c, attach: mapAttachments(c.attach, (x) => (x.blob ? null : x)), note: spent > 0 ? { kind: "spent", count: spent } : null };
+      const spent = attachmentsOf(c.attach).filter((x) => x.refUpload).length;
+      return { ...c, attach: mapAttachments(c.attach, (x) => (x.refUpload ? null : x)), note: spent > 0 ? { kind: "spent", count: spent } : null };
     }
     case "reuse": {
       const kind = FAMILIES[action.family].modes[action.kind] ? action.kind : "reference";

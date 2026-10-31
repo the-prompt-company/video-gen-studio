@@ -426,6 +426,12 @@ test("every model has a note, a price basis and an example, and every published 
   }
 });
 
+test("every format an image result is stored in is one each model takes as an image reference, so reusing a result needs no type check", () => {
+  const spec = FAMILIES["openai/gpt-image-2"].params.find((p) => p.key === "output_format");
+  assert.ok(spec?.type === "enum");
+  for (const f of FAMILY_IDS) for (const format of spec.options) assert.ok(FAMILIES[f].refImages.types.includes(`image/${format}`), `${f} takes image/${format}`);
+});
+
 test("every mode has a name in all three languages", () => {
   for (const { locale, tree } of MESSAGES) for (const m of MODES) assert.ok(message(tree, `mode.${m}`), `${locale} mode.${m}`);
 });

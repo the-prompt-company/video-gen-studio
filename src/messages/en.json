@@ -341,7 +341,8 @@
       "tooBig": "{file} is over {mb} MB. Make it smaller and upload it again",
       "noLength": "{file}: couldn't read the video's length. Upload a different MP4",
       "framesTakeImages": "Frames take images only",
-      "framesFull": "Both frames are filled. Remove one to replace it"
+      "framesFull": "Both frames are filled. Remove one to replace it",
+      "attached": "That result is already added"
     },
     "note": {
       "switched": "Switched to {mode, select, r2v {Reference to video} other {Reference to image}} for the reference.",
@@ -379,7 +380,9 @@
     "actions": {
       "cancel": "Cancel",
       "reuse": "Reuse",
-      "reuseLabel": "Generate again with this result's settings"
+      "reuseLabel": "Generate again with this result's settings",
+      "attach": "Use as reference",
+      "attachLabel": "Add this result to the box below as a reference, or as a frame in Frames mode"
     },
     "older": {
       "load": "Show earlier results",

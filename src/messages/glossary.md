@@ -40,6 +40,8 @@ Each language button in the picker shows its own name (`한국어`, `English`, `
 | 생성하기 (button) | Generate | 生成 | |
 | 레퍼런스 | reference | 参考素材 | An attached image or video |
 | 이미지 레퍼런스, 영상 레퍼런스 | image reference, video reference | 参考图, 参考视频 | |
+| 결과 | result | 结果 | What a generation made: a video or an image |
+| 레퍼런스로 | Use as reference | 用作参考素材 | The action on a finished turn that attaches its result to the composer: a reference, or a frame in Frames mode |
 | 텍스트→영상 | Text to video | 文生视频 | Mode |
 | 이미지→영상 | Image to video | 图生视频 | Mode |
 | 레퍼런스→영상 | Reference to video | 参考生视频 | Mode |

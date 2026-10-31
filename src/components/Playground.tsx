@@ -252,6 +252,7 @@ export function Playground({
     }
   }, [stageThreadRef]);
   const reuse = useCallback((g: PublicGeneration) => composer.current?.reuse(g), [composer]);
+  const attach = useCallback((g: PublicGeneration) => composer.current?.attachResult(g), [composer]);
 
   function pickThread(id: string) {
     if (id !== threadParam) showThread(id, "push");
@@ -315,7 +316,7 @@ export function Playground({
           <p className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{title}</p>
           {gallery}
         </div>
-        <Stream ref={stream} threadKey={stageThread} rows={items} more={(feed?.more ?? false) && answered === stageThread} offset={clockOffset} empty={empty} onOlder={loadOlder} onCancel={cancel} onReuse={reuse} />
+        <Stream ref={stream} threadKey={stageThread} rows={items} more={(feed?.more ?? false) && answered === stageThread} offset={clockOffset} empty={empty} onOlder={loadOlder} onCancel={cancel} onReuse={reuse} onAttach={attach} />
         {cancelError && (
           <div className="mx-auto w-full max-w-[820px] px-3 sm:px-4">
             <ErrorText>{errorText(cancelError)}</ErrorText>
