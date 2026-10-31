@@ -55,9 +55,16 @@ function RefThumb({ url, video, label }: { url: string; video: boolean; label: s
   );
 }
 
-type TurnProps = { g: PublicGeneration; n: number; offset: RefObject<number>; onCancel: (g: PublicGeneration) => void; onReuse: (g: PublicGeneration) => void };
+type TurnProps = {
+  g: PublicGeneration;
+  n: number;
+  offset: RefObject<number>;
+  onCancel: (g: PublicGeneration) => void;
+  onReuse: (g: PublicGeneration) => void;
+  onAttach: (g: PublicGeneration) => void;
+};
 
-const Turn = memo(function Turn({ g, n, offset, onCancel, onReuse }: TurnProps) {
+const Turn = memo(function Turn({ g, n, offset, onCancel, onReuse, onAttach }: TurnProps) {
   const t = useTranslations("playground");
   const tGeneration = useTranslations("generation");
   const tStatus = useTranslations("status");
@@ -132,24 +139,31 @@ const Turn = memo(function Turn({ g, n, offset, onCancel, onReuse }: TurnProps) 
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
           <StatusBadge status={g.status} />
           {!live && g.completedAt && <span className="tabular-nums">{t("feed.took", { elapsed: fmtElapsed(new Date(g.completedAt).getTime() - started) })}</span>}
-          <span className="flex-1" />
-          {(g.status === "pending" || g.status === "queued") && (
-            <button type="button" onClick={() => onCancel(g)} className={ACTION}>
-              <Icon name="x" />
-              {t("actions.cancel")}
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-y-1 sm:gap-x-2">
+            {(g.status === "pending" || g.status === "queued") && (
+              <button type="button" onClick={() => onCancel(g)} className={ACTION}>
+                <Icon name="x" />
+                {t("actions.cancel")}
+              </button>
+            )}
+            {media && (
+              <a href={media.downloadUrl} download target="_blank" rel="noreferrer" className={ACTION}>
+                <Icon name="down" />
+                {tGeneration("download")}
+                <span className="font-display text-sm leading-none text-sand">{g.image ? g.image.format.toUpperCase() : "MP4"}</span>
+              </a>
+            )}
+            {g.ref && (
+              <button type="button" title={t("actions.attachLabel")} onClick={() => onAttach(g)} className={ACTION}>
+                <Icon name="plus" />
+                {t("actions.attach")}
+              </button>
+            )}
+            <button type="button" title={t("actions.reuseLabel")} onClick={() => onReuse(g)} className={ACTION}>
+              <Icon name="redo" />
+              {t("actions.reuse")}
             </button>
-          )}
-          {media && (
-            <a href={media.downloadUrl} download target="_blank" rel="noreferrer" className={ACTION}>
-              <Icon name="down" />
-              {tGeneration("download")}
-              <span className="font-display text-sm leading-none text-sand">{g.image ? g.image.format.toUpperCase() : "MP4"}</span>
-            </a>
-          )}
-          <button type="button" title={t("actions.reuseLabel")} onClick={() => onReuse(g)} className={ACTION}>
-            <Icon name="redo" />
-            {t("actions.reuse")}
-          </button>
+          </div>
         </div>
       </div>
     </article>
@@ -167,6 +181,7 @@ export function Stream({
   onOlder,
   onCancel,
   onReuse,
+  onAttach,
 }: {
   ref?: Ref<StreamHandle>;
   threadKey: string;
@@ -178,6 +193,7 @@ export function Stream({
   onOlder: () => Promise<boolean>;
   onCancel: (g: PublicGeneration) => void;
   onReuse: (g: PublicGeneration) => void;
+  onAttach: (g: PublicGeneration) => void;
 }) {
   const t = useTranslations("playground");
   const scroller = useRef<HTMLDivElement>(null);
@@ -280,7 +296,7 @@ export function Stream({
                 )}
               </div>
               {chronological.map((g, i) => (
-                <Turn key={g.id} g={g} n={i + 1} offset={offset} onCancel={onCancel} onReuse={onReuse} />
+                <Turn key={g.id} g={g} n={i + 1} offset={offset} onCancel={onCancel} onReuse={onReuse} onAttach={onAttach} />
               ))}
             </>
           )}

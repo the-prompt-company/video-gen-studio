@@ -122,6 +122,9 @@
     "refNotPublicUrl": "{kind, select, image {Images} other {Videos}}: only public URLs are allowed.",
     "refsNotList": "{kind, select, image {Images} other {Videos}}: must be a list.",
     "tooManyRefs": "{kind, select, image {Images} other {Videos}}: at most {max, plural, one {# item} other {# items}}.",
+    "refNotYours": "{kind, select, image {Image} other {Video}} references can only be files you uploaded or your own results. Remove that reference and generate again.",
+    "resultGone": "A result you added as a reference is no longer available. Results kept only on Higgsfield are deleted 7 days after they finish. Remove it and add another result.",
+    "refMismatch": "A result you added as a reference doesn't match the stored result's type or length. Remove it and add it again.",
     "unknownModel": "Unknown model. Reload the page.",
     "noMode": "No generation mode was sent. Reload the page.",
     "modelDisabled": "An admin turned off {model}.",
@@ -268,7 +271,7 @@
     "stream": "Generations",
     "composer": "Generation input",
     "prompt": "Prompt",
-    "promptPlaceholder": "Describe the scene, the camera movement and the mood…",
+    "promptPlaceholder": "Describe the scene, camera movement and mood. Type @ to add a result",
     "modelMenu": "Model and mode",
     "outputs": "Output",
     "output": "{output, select, video {Video} other {Image}}",
@@ -311,7 +314,7 @@
       "uploadImages": "Upload images",
       "uploadVideos": "Upload videos",
       "full": "{kind, select, image {All {max, plural, one {# image} other {# images}} added} other {All {max, plural, one {# video} other {# videos}} added}}",
-      "menuNote": "You can also drop files onto the input. They're numbered in the order you add them and sent to the model in that order.",
+      "menuNote": "You can also drop files onto the input. They're numbered in the order you add them and sent to the model in that order. Type @ in the prompt to pick one of your results.",
       "dropHint": "{videos, select, yes {Drop images or videos here, or add them with the + button} other {Drop images here, or add them with the + button}}",
       "imageCount": "Images {count}/{max}",
       "videoCount": "Videos {count}/{max}",
@@ -328,6 +331,19 @@
       "add": "{slot, select, start {Add a start frame} other {Add an end frame}}",
       "remove": "Remove the {slot, select, start {start frame} other {end frame}} {name}"
     },
+    "picker": {
+      "label": "Pick a reference from your results",
+      "hint": "↑↓ to choose · Enter to add · Esc to close",
+      "thread": "This thread",
+      "recent": "Recent results",
+      "loading": "Loading recent results…",
+      "failed": "Couldn't load recent results. Type @ again to retry",
+      "empty": "No results to use as references yet. Once you make a video or an image, you can pick it here",
+      "noMatch": "No results match “{query}”",
+      "kind": "{kind, select, image {Image} other {Video, {seconds}s}}",
+      "attached": "Added",
+      "hidden": "{reason, select, frames {Frames take images only, so video results are hidden} other {{model} doesn't take videos, so video results are hidden}}"
+    },
     "dropHere": "{kind, select, firstFrame {Drop to use as frames} other {Drop to add as references}}",
     "uploading": "Uploading…",
     "upload": {
@@ -338,7 +354,8 @@
       "tooBig": "{file} is over {mb} MB. Make it smaller and upload it again",
       "noLength": "{file}: couldn't read the video's length. Upload a different MP4",
       "framesTakeImages": "Frames take images only",
-      "framesFull": "Both frames are filled. Remove one to replace it"
+      "framesFull": "Both frames are filled. Remove one to replace it",
+      "attached": "That result is already added"
     },
     "note": {
       "switched": "Switched to {mode, select, r2v {Reference to video} other {Reference to image}} for the reference.",
@@ -376,7 +393,9 @@
     "actions": {
       "cancel": "Cancel",
       "reuse": "Reuse",
-      "reuseLabel": "Generate again with this result's settings"
+      "reuseLabel": "Generate again with this result's settings",
+      "attach": "Use as reference",
+      "attachLabel": "Add this result to the box below as a reference, or as a frame in Frames mode"
     },
     "older": {
       "load": "Show earlier results",

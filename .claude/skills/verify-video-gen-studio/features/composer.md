@@ -1,6 +1,6 @@
 # Composer
 
-The playground reads like a chat. Each generation of the thread is a turn: the prompt card the member sent (prompt, reference thumbnails, model, mode, settings summary, cost) with its result under it (status badge, elapsed or took time, cancel, download, reuse). The newest turn is at the bottom, and the composer is docked under the stream: the member picks the mode in the model menu, fills the frame slots or the references the mode takes, sets the parameters in a popover (a bottom sheet under 640 px), and generates.
+The playground reads like a chat. Each generation of the thread is a turn: the prompt card the member sent (prompt, reference thumbnails, model, mode, settings summary, cost) with its result under it (status badge, elapsed or took time, cancel, download, 레퍼런스로, reuse). Reusing a result as a reference, by 레퍼런스로 or by "@" in the prompt, is its own feature: [Reuse](./reuse.md). The newest turn is at the bottom, and the composer is docked under the stream: the member picks the mode in the model menu, fills the frame slots or the references the mode takes, sets the parameters in a popover (a bottom sheet under 640 px), and generates.
 
 Every handle is a message key the journey reads with `ev.t`; the Korean text follows in parentheses.
 

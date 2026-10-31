@@ -16,9 +16,10 @@ import {
 } from "@/lib/catalog";
 import { decrypt, signToken, verifyToken } from "@/lib/crypto";
 import { appError, type AppError, type Reason } from "@/lib/errors";
-import { isLive, LIVE_STATUSES, predecessorsOf, RANK, type GenerationStatus } from "@/lib/generation-status";
+import { isLive, LIVE_STATUSES, predecessorsOf, RANK, SUBMIT_DEADLINE_MIN, type GenerationStatus } from "@/lib/generation-status";
 import * as hf from "@/lib/higgsfield";
 import * as openai from "@/lib/openai";
+import { resultRef } from "@/lib/references";
 import * as storage from "@/lib/storage";
 import type { ThreadId } from "@/lib/threads";
 
@@ -42,8 +43,6 @@ const SUBMIT_LEASE_S = 30;
 /** Higgsfield's Retry-After, clamped, is how long a deferred submit waits before anyone sends it again. */
 const RESUBMIT_MIN_S = 5;
 const RESUBMIT_MAX_S = 300;
-/** The operator's call: a pending row older than this fails instead of starting a paid generation nobody expects now. */
-const SUBMIT_DEADLINE_MIN = 30;
 const SUBMIT_DEADLINE = appError("submitDeadline", { minutes: SUBMIT_DEADLINE_MIN });
 /** A row Higgsfield may hold a job for, whose owner has no key, looks for the key again this often until the deadline. */
 const NO_KEY_RETRY_S = 60;
@@ -281,6 +280,7 @@ export function publicGeneration(g: Generation, username?: string) {
     status: g.status,
     video: isImage ? null : publicVideo(g),
     image: isImage ? publicImage(g) : null,
+    ref: resultRef(g),
     durationS: g.durationS,
     costUsd: Number(g.costUsd),
     reason: reasonOf(g),

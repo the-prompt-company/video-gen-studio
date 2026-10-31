@@ -1,15 +1,15 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { defaultParams, planGeneration, type FamilyId } from "./catalog";
-import { attachmentsOf, composerReducer, draftOf, fit, modeOfComposer, newComposer, uploading, type Action, type Attachment, type Composer } from "./composer";
+import { attachmentsOf, composerReducer, draftOf, fit, modeOfComposer, newComposer, takes, uploading, type Action, type Attachment, type Composer } from "./composer";
 
 const SEEDANCE: FamilyId = "bytedance/seedance-2.0";
 const H3: FamilyId = "minimax/h3";
 const GPT: FamilyId = "openai/gpt-image-2";
 
 let n = 0;
-const image = (url: string | null = `https://cdn.test/i${++n}.jpg`, blob = false): Attachment => ({ id: `img-${++n}`, kind: "image", name: "a.jpg", preview: `blob:${n}`, url, blob, w: 1280, h: 720 });
-const video = (seconds = 3, blob = false): Attachment => ({ id: `vid-${++n}`, kind: "video", name: "c.mp4", preview: `blob:${n}`, url: `https://cdn.test/v${n}.mp4`, blob, seconds });
+const image = (url: string | null = `https://cdn.test/i${++n}.jpg`, refUpload = false): Attachment => ({ id: `img-${++n}`, kind: "image", name: "a.jpg", preview: `blob:${n}`, url, refUpload, w: 1280, h: 720 });
+const video = (seconds = 3, refUpload = false): Attachment => ({ id: `vid-${++n}`, kind: "video", name: "c.mp4", preview: `blob:${n}`, url: `https://cdn.test/v${n}.mp4`, refUpload, seconds });
 const run = (c: Composer, ...actions: Action[]) => actions.reduce(composerReducer, c);
 const ids = (c: Composer) => attachmentsOf(c.attach).map((a) => a.id);
 
@@ -154,4 +154,46 @@ test("a second attach in a row keeps the note that the first one switched to ref
 test("다시 keeps only the settings the model takes, so a stored 20 s falls back to the default", () => {
   const reused = run(newComposer(SEEDANCE), { type: "reuse", family: SEEDANCE, kind: "text", params: { duration: 20, resolution: "720p", seed: 7 } });
   assert.deepEqual(reused.params, { ...defaultParams(SEEDANCE), resolution: "720p" });
+});
+
+const result = (kind: "image" | "video", url: string): Attachment =>
+  kind === "image" ? { id: `res-${++n}`, kind, name: "결과", preview: url, url, refUpload: false, w: 1536, h: 1024 } : { id: `res-${++n}`, kind, name: "결과", preview: url, url, refUpload: false, seconds: 5 };
+
+test("a reused result lands where an upload would: references in text mode, the start frame then the end, never a video in frames", () => {
+  const still = result("image", "https://blob.test/images/a.png");
+  const clip = result("video", "https://blob.test/videos/b.mp4");
+  const refs = fit(newComposer(SEEDANCE), [still, clip]);
+  assert.deepEqual([modeOfComposer(refs.composer), ids(refs.composer), refs.refused], ["r2v", [still.id, clip.id], []]);
+  assert.deepEqual(draftOf(refs.composer, "").videos, [{ url: clip.url, seconds: 5 }], "the video counts its stored length");
+
+  const frames = run(newComposer(H3), { type: "mode", kind: "firstFrame" });
+  const start = fit(frames, [clip, still]);
+  assert.deepEqual(start.refused, [{ reason: "framesTakeImages" }]);
+  const end = fit(start.composer, [result("image", "https://blob.test/images/c.png")]).composer.attach;
+  assert.ok(end.kind === "firstFrame");
+  assert.deepEqual([end.start?.id, end.end?.url], [still.id, "https://blob.test/images/c.png"]);
+
+  assert.deepEqual(fit(newComposer(GPT), [clip]).refused, [{ reason: "noVideos" }]);
+});
+
+test("the same result twice is refused in the references, but frames may start and end on one image", () => {
+  const url = "https://blob.test/images/a.png";
+  const once = run(newComposer(SEEDANCE), { type: "add", items: [result("image", url)] });
+  const twice = fit(once, [result("image", url)]);
+  assert.deepEqual([twice.refused, attachmentsOf(twice.composer.attach).length], [[{ reason: "attached" }], 1]);
+  const loop = fit(run(newComposer(SEEDANCE), { type: "mode", kind: "firstFrame" }), [result("image", url), result("image", url)]).composer.attach;
+  assert.ok(loop.kind === "firstFrame");
+  assert.deepEqual([loop.start?.url, loop.end?.url], [url, url]);
+});
+
+test("a reused result is not an upload, so it stays attached after a Higgsfield send", () => {
+  const items = [result("image", "https://blob.test/images/a.png"), result("video", "https://blob.test/videos/b.mp4")];
+  const sent = run(newComposer(SEEDANCE), { type: "add", items }, { type: "sent" });
+  assert.deepEqual([ids(sent), sent.note], [items.map((x) => x.id), null]);
+});
+
+test("the picker offers what the composer takes now: no videos in frames or on the image model", () => {
+  assert.deepEqual(takes(newComposer(SEEDANCE)), ["image", "video"]);
+  assert.deepEqual(takes(run(newComposer(SEEDANCE), { type: "mode", kind: "firstFrame" })), ["image"]);
+  assert.deepEqual(takes(newComposer(GPT)), ["image"]);
 });
