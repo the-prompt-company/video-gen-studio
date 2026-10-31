@@ -123,7 +123,7 @@ export type CostBasis = {
 
 type BodyInput = { mode: Mode; params: Params; prompt: string; images: readonly string[]; videos: readonly string[]; endImage: string | null };
 
-/** Its blurb and note are `families.<key>.blurb` and `.note`. */
+/** Its note is `families.<key>.note`. */
 export type Family = {
   id: FamilyId;
   key: FamilyKey;

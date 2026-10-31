@@ -417,10 +417,10 @@ test("quality, output format and background name every option a model offers, in
   }
 });
 
-test("every model has a blurb, a note, a price basis and an example, and every published price a label, in all three languages", () => {
+test("every model has a note, a price basis and an example, and every published price a label, in all three languages", () => {
   for (const { locale, tree } of MESSAGES) {
     for (const f of FAMILY_IDS.map((id) => FAMILIES[id])) {
-      for (const key of [`families.${f.key}.blurb`, `families.${f.key}.note`, `prices.basis.${f.key}`, `prices.example.${f.key}`]) assert.ok(message(tree, key), `${locale} ${key}`);
+      for (const key of [`families.${f.key}.note`, `prices.basis.${f.key}`, `prices.example.${f.key}`]) assert.ok(message(tree, key), `${locale} ${key}`);
       for (const p of f.rate.published) assert.ok(message(tree, `prices.preset.${p.preset}`), `${locale} prices.preset.${p.preset}`);
     }
   }

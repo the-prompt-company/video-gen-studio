@@ -284,7 +284,7 @@
       "duration": "{seconds}s",
       "audio": "Audio",
       "watermark": "Watermark",
-      "firstFrameRatio": "Start frame's ratio",
+      "firstFrameRatio": "Start frame ratio",
       "quality": "{value, select, low {Low} medium {Medium} other {High}}",
       "transparent": "Transparent"
     },
@@ -430,15 +430,12 @@
   },
   "families": {
     "seedance": {
-      "blurb": "From text alone, from one image as the first frame, or from up to 6 images and 3 videos as references. 480p to 4K, a choice of aspect ratios, and optional audio.",
       "note": "Cost scales with resolution and duration. Use 480p for drafts and 720p or higher for delivery."
     },
     "h3": {
-      "blurb": "From text alone, from one image as the first frame, or from up to 5 images and 3 videos as references. 2K, 5, 10 or 15 seconds.",
       "note": "Output is fixed at 2K. Every mode needs a prompt."
     },
     "gptImage2": {
-      "blurb": "Makes images from a prompt alone or with up to 16 reference images. 5 aspect ratios, 3 quality levels, and PNG, JPEG or WebP.",
       "note": "With references, the request goes to OpenAI editing. It usually takes about 30 seconds to 2 minutes, and the cost is set by the token usage OpenAI reports."
     }
   },

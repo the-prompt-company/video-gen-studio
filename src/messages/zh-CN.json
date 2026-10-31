@@ -344,7 +344,7 @@
     "fact": {
       "seconds": "{seconds} 秒",
       "inputVideo": "输入视频 {seconds} 秒",
-      "refImages": "参考图 {count, plural, other {# 张}}"
+      "refImages": "{count, plural, other {# 张参考图}}"
     },
     "generate": "生成",
     "submitting": "正在提交…",
@@ -430,15 +430,12 @@
   },
   "families": {
     "seedance": {
-      "blurb": "可仅用文本生成，也可将一张图片作为首帧，或以最多 6 张图片和 3 个视频作为参考素材。支持 480p~4K、可选画面比例、生成音频。",
       "note": "费用与分辨率和时长成正比。试做建议用 480p，正式交付建议用 720p 及以上。"
     },
     "h3": {
-      "blurb": "可仅用文本生成，也可将一张图片作为首帧，或以最多 5 张图片和 3 个视频作为参考素材。2K，5、10 或 15 秒。",
       "note": "输出固定为 2K。所有生成方式都需要提示词。"
     },
     "gptImage2": {
-      "blurb": "仅用提示词，或以最多 16 张图片作为参考素材生成图片。5 种画面比例、3 档质量，支持 PNG、JPEG、WebP。",
       "note": "有参考素材时会使用 OpenAI 编辑。通常需要几十秒到 2 分钟，费用按 OpenAI 报告的 token 用量确定。"
     }
   },
