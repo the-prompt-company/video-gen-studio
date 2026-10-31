@@ -254,60 +254,70 @@
     }
   },
   "playground": {
-    "drawer": "Generation settings",
-    "stage": "Result stage",
-    "section": {
-      "prompt": "1 · Prompt and references",
-      "model": "2 · Model and parameters"
-    },
+    "stream": "Generations",
+    "composer": "Generation input",
     "prompt": "Prompt",
-    "promptLength": "{count, plural, one {# character} other {# characters}}",
     "promptPlaceholder": "Describe the scene, the camera movement and the mood…",
-    "startFromImage": "Start from this image",
-    "startFromImageHint": "Image 1 becomes the first frame",
-    "modes": "Mode",
-    "modeSentence": {
-      "text": "Generates from the prompt alone, with no references.",
-      "firstFrame": "Uses image 1 as the first frame.",
-      "edit": "Sends {images, plural, one {# image to OpenAI editing as a reference} other {# images to OpenAI editing as references}}.",
-      "reference": "{refs, select, both {Uses {images, plural, one {# image} other {# images}} and {videos, plural, one {# video} other {# videos}} as references.} images {Uses {images, plural, one {# image as a reference} other {# images as references}}.} other {Uses {videos, plural, one {# video as a reference} other {# videos as references}}.}}"
-    },
-    "model": "Model",
+    "modelMenu": "Model and mode",
+    "outputs": "Output",
     "output": "{output, select, video {Video} other {Image}}",
+    "modes": "Mode",
+    "model": "Model",
+    "kind": {
+      "text": "Text",
+      "firstFrame": "Frames",
+      "reference": "References"
+    },
+    "kindHint": {
+      "text": "Generates from the prompt alone",
+      "firstFrame": "{end, select, yes {Start frame required · end frame optional} other {Start frame required}}",
+      "reference": "Up to {images, plural, one {# image} other {# images}}{videos, plural, =0 {} one { · # video} other { · # videos}}"
+    },
     "unavailable": "Unavailable",
-    "offline": "<model>{name}</model> is unavailable · {reason}",
     "rateHint": "{rate} ({basis})",
     "rateUnset": "No rate set",
+    "settings": {
+      "title": "Settings",
+      "open": "Change settings · {summary}"
+    },
+    "summary": {
+      "duration": "{seconds}s",
+      "audio": "Audio",
+      "watermark": "Watermark",
+      "firstFrameRatio": "Start frame's ratio",
+      "quality": "{value, select, low {Low} medium {Medium} other {High}}",
+      "transparent": "Transparent"
+    },
     "aspect": {
       "label": "Output aspect ratio",
       "pill": "{shape} {ratio}",
       "auto": "Auto",
-      "followsImage": "Follows the first frame's ratio",
-      "firstFrameNote": "Image 1 is <num>{size}</num>, a {shape, select, landscape {landscape} portrait {portrait} other {square}} image, so the video comes out <em>{shape, select, landscape {landscape} portrait {portrait} other {square}}</em> too.{shape, select, landscape {} other { For a landscape video, upload a landscape image.}}",
-      "firstFrameRule": "Image to video has no aspect ratio choice. It follows the first-frame image."
+      "firstFrameNote": "The start frame is <num>{size}</num>, a {shape, select, landscape {landscape} portrait {portrait} other {square}} image, so the video comes out <em>{shape, select, landscape {landscape} portrait {portrait} other {square}}</em> too.{shape, select, landscape {} other { For a landscape video, use a landscape image.}}",
+      "firstFrameRule": "Image to video has no aspect ratio choice. It follows the start frame."
     },
     "refs": {
       "add": "Add references",
+      "uploadImages": "Upload images",
+      "uploadVideos": "Upload videos",
+      "full": "{kind, select, image {All {max, plural, one {# image} other {# images}} added} other {All {max, plural, one {# video} other {# videos}} added}}",
+      "menuNote": "You can also drop files onto the input. They're numbered in the order you add them and sent to the model in that order.",
+      "dropHint": "{videos, select, yes {Drop images or videos here, or add them with the + button} other {Drop images here, or add them with the + button}}",
       "imageCount": "Images {count}/{max}",
       "videoCount": "Videos {count}/{max}",
-      "optional": "Optional",
       "attached": "Attached references",
-      "limits": "{model} · up to {images, plural, one {# image} other {# images}}{videos, plural, =0 {} one { · up to # video} other { · up to # videos}} · optional",
-      "note": "{provider, select, openai {References are optional. Without them, the image comes from the prompt alone. With images, OpenAI editing builds on them. Images are numbered in upload order and sent in that order, and each one adds input cost.} other {References are optional. Without them, the video comes from the prompt alone. With exactly one image, you choose in the settings whether to start from it. Images and videos are numbered in upload order and sent to the model in that order. A video reference can add its length to the cost.}}",
-      "attachedCount": "Attached · {images, plural, one {# image} other {# images}} · {videos, plural, one {# video} other {# videos}}",
-      "none": "No references attached yet.",
-      "done": "Done",
-      "remove": "Remove",
       "removeLabel": "Remove {kind, select, image {image} other {video}} reference {tag} {name}",
       "seconds": "{seconds}s",
       "fileHint": "{types} · up to {mb} MB"
     },
-    "drop": {
-      "off": "This model takes no {kind, select, image {image} other {video}} references",
-      "full": "{kind, select, image {All {max, plural, one {# image} other {# images}} added} other {All {max, plural, one {# video} other {# videos}} added}}",
-      "pick": "Drag {kind, select, image {image} other {video}} files here or click to choose",
-      "add": "Add {kind, select, image {image} other {video}} references"
+    "frames": {
+      "label": "Frames",
+      "slot": "{slot, select, start {Start frame} other {End frame}}",
+      "required": "Required",
+      "optional": "Optional",
+      "add": "{slot, select, start {Add a start frame} other {Add an end frame}}",
+      "remove": "Remove the {slot, select, start {start frame} other {end frame}} {name}"
     },
+    "dropHere": "{kind, select, firstFrame {Drop to use as frames} other {Drop to add as references}}",
     "uploading": "Uploading…",
     "upload": {
       "blobForImages": "Uploading image references needs a connected Blob store",
@@ -315,38 +325,18 @@
       "tooMany": "{kind, select, image {Up to {max, plural, one {# image} other {# images}}} other {Up to {max, plural, one {# video} other {# videos}}}}",
       "badType": "{file}: {model} doesn't take this format. Upload a {types} file",
       "tooBig": "{file} is over {mb} MB. Make it smaller and upload it again",
-      "noLength": "{file}: couldn't read the video's length. Upload a different MP4"
+      "noLength": "{file}: couldn't read the video's length. Upload a different MP4",
+      "framesTakeImages": "Frames take images only",
+      "framesFull": "Both frames are filled. Remove one to replace it"
     },
-    "feed": {
-      "item": "Result {n}: {status}",
-      "elapsed": "{status} · elapsed",
-      "pendingNote": "Starts on its own as soon as Higgsfield accepts the request",
-      "imageNote": "OpenAI is making the image. This usually takes about 30 seconds to 2 minutes",
-      "estimated": "Est.",
-      "took": "took {elapsed}",
-      "refsLabel": "References: {images, plural, one {# image} other {# images}}, {videos, plural, one {# video} other {# videos}}",
-      "refsCount": "{count, plural, one {# reference} other {# references}}",
-      "progress": "Generation in progress",
-      "progressUnknown": "Progress unknown"
+    "note": {
+      "switched": "Switched to {mode, select, r2v {Reference to video} other {Reference to image}} for the reference.",
+      "removed": "{to, select, text {Text mode sends the prompt only. } other {}}Removed {count, plural, one {# reference} other {# references}}.",
+      "undo": "Undo",
+      "reused": "Filled in this result's model, mode, prompt and settings.{refs, select, yes { Add the references again.} other {}}"
     },
-    "empty": {
-      "title": "Make your first video",
-      "lead": "Write a prompt <wide>in the panel on the left</wide><narrow>below</narrow>, choose a model and generate. The result appears on this stage.",
-      "toSettings": "Go to generation settings"
-    },
-    "loading": "Loading recent generations",
-    "rail": {
-      "label": "Result actions",
-      "position": "Result position",
-      "previous": "Previous result",
-      "next": "Next result",
-      "generate": "Generate",
-      "cancel": "Cancel",
-      "reuse": "Reuse"
-    },
-    "noModels": "No models are available. Contact an admin.",
     "cost": {
-      "label": "Estimated cost",
+      "label": "Est.",
       "unset": "Not set",
       "rate": "Rate {rate}",
       "unpriced": "Calculated from {facts} once an admin sets a rate"
@@ -357,7 +347,38 @@
       "refImages": "{count, plural, one {# image reference} other {# image references}}"
     },
     "generate": "Generate",
-    "submitting": "Submitting…"
+    "submitting": "Submitting…",
+    "shortcut": "Ctrl+Enter to generate",
+    "feed": {
+      "item": "Result {n}: {status}",
+      "elapsed": "{status} · elapsed",
+      "pendingNote": "Starts on its own as soon as Higgsfield accepts the request",
+      "imageNote": "OpenAI is making the image. This usually takes about 30 seconds to 2 minutes",
+      "estimated": "Est.",
+      "took": "took {elapsed}",
+      "refsLabel": "References: {images, plural, one {# image} other {# images}}, {videos, plural, one {# video} other {# videos}}",
+      "frame": "{slot, select, start {Start} other {End}}",
+      "progress": "Generation in progress",
+      "progressUnknown": "Progress unknown"
+    },
+    "actions": {
+      "cancel": "Cancel",
+      "reuse": "Reuse",
+      "reuseLabel": "Generate again with this result's settings"
+    },
+    "older": {
+      "load": "Show earlier results",
+      "loading": "Loading earlier results…",
+      "start": "This is the start of the thread"
+    },
+    "latest": "Jump to the latest",
+    "galleryCount": "Gallery · {count, plural, one {# finished result} other {# finished results}}",
+    "empty": {
+      "title": "Make your first video",
+      "lead": "Write a prompt in the box below, pick a model and a mode, and generate. Prompts and results stack up here like a chat."
+    },
+    "loading": "Loading recent generations",
+    "noModels": "No models are available. Contact an admin."
   },
   "threads": {
     "label": "Threads",
@@ -368,7 +389,7 @@
     "picker": "Thread list",
     "fresh": {
       "title": "New thread",
-      "lead": "Generate from the panel <wide>on the left</wide><narrow>below</narrow> and this thread joins the list, named after its first prompt."
+      "lead": "Generate from the box below and this thread joins the list, named after its first prompt."
     },
     "missing": {
       "title": "Can't find that thread",

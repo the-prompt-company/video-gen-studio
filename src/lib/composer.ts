@@ -41,6 +41,8 @@ export type Action =
   /** Its upload failed. */
   | { type: "failed"; id: string }
   | { type: "undo" }
+  /** The note has served its turn, as after a submit. */
+  | { type: "dismiss" }
   | { type: "reuse"; family: FamilyId; kind: ModeKind; params: Readonly<Record<string, unknown>> };
 
 const EMPTY: Record<ModeKind, Attachments> = {
@@ -184,6 +186,8 @@ export function composerReducer(c: Composer, action: Action): Composer {
       return { ...c, attach: mapAttachments(c.attach, (x) => (x.id === action.id ? null : x)), note: null };
     case "undo":
       return c.note?.kind === "removed" ? { ...c, attach: c.note.restore, note: null } : c;
+    case "dismiss":
+      return c.note ? { ...c, note: null } : c;
     case "reuse": {
       const kind = FAMILIES[action.family].modes[action.kind] ? action.kind : "reference";
       return {

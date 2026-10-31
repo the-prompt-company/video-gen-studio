@@ -254,60 +254,70 @@
     }
   },
   "playground": {
-    "drawer": "생성 설정",
-    "stage": "결과 무대",
-    "section": {
-      "prompt": "1 · 프롬프트와 레퍼런스",
-      "model": "2 · 모델과 하이퍼파라미터"
-    },
+    "stream": "생성 기록",
+    "composer": "생성 입력창",
     "prompt": "프롬프트",
-    "promptLength": "{count, plural, other {#자}}",
     "promptPlaceholder": "장면, 카메라 움직임, 분위기를 적어 주세요…",
-    "startFromImage": "이 이미지로 시작",
-    "startFromImageHint": "1번 이미지를 첫 프레임으로",
-    "modes": "생성 방식",
-    "modeSentence": {
-      "text": "레퍼런스 없이 프롬프트만으로 만듭니다.",
-      "firstFrame": "1번 이미지를 첫 프레임으로 씁니다.",
-      "edit": "이미지 {images, plural, other {#장}}을 레퍼런스로 OpenAI 편집에 보냅니다.",
-      "reference": "{refs, select, both {이미지 {images, plural, other {#장}}과 영상 {videos, plural, other {#개}}를} images {이미지 {images, plural, other {#장}}을} other {영상 {videos, plural, other {#개}}를}} 레퍼런스로 씁니다."
-    },
-    "model": "모델",
+    "modelMenu": "모델과 방식",
+    "outputs": "만들 것",
     "output": "{output, select, video {영상} other {이미지}}",
+    "modes": "생성 방식",
+    "model": "모델",
+    "kind": {
+      "text": "텍스트",
+      "firstFrame": "프레임",
+      "reference": "레퍼런스"
+    },
+    "kindHint": {
+      "text": "프롬프트만으로 만듭니다",
+      "firstFrame": "{end, select, yes {시작 프레임 필수 · 끝 프레임 선택} other {시작 프레임 필수}}",
+      "reference": "이미지 최대 {images, plural, other {#장}}{videos, plural, =0 {} other { · 영상 최대 #개}}"
+    },
     "unavailable": "사용 불가",
-    "offline": "<model>{name}</model> 사용 불가 · {reason}",
     "rateHint": "{basis} 기준 {rate}",
     "rateUnset": "단가 미설정",
+    "settings": {
+      "title": "설정",
+      "open": "설정 바꾸기 · {summary}"
+    },
+    "summary": {
+      "duration": "{seconds}초",
+      "audio": "오디오",
+      "watermark": "워터마크",
+      "firstFrameRatio": "시작 프레임 비율",
+      "quality": "{value, select, low {낮음} medium {중간} other {높음}}",
+      "transparent": "투명 배경"
+    },
     "aspect": {
       "label": "출력 화면비",
       "pill": "{shape} {ratio}",
       "auto": "자동",
-      "followsImage": "첫 프레임 이미지 비율을 따름",
-      "firstFrameNote": "1번 이미지가 <num>{size}</num> {shape, select, landscape {가로} portrait {세로} other {정사각}} 이미지라 영상도 <em>{shape, select, landscape {가로로} portrait {세로로} other {정사각으로}}</em> 나옵니다.{shape, select, landscape {} other { 가로 영상이 필요하면 가로 이미지를 올리세요.}}",
-      "firstFrameRule": "이미지→영상은 화면비를 따로 고르지 않고 첫 프레임 이미지의 비율을 따릅니다."
+      "firstFrameNote": "시작 프레임이 <num>{size}</num> {shape, select, landscape {가로} portrait {세로} other {정사각}} 이미지라 영상도 <em>{shape, select, landscape {가로로} portrait {세로로} other {정사각으로}}</em> 나옵니다.{shape, select, landscape {} other { 가로 영상이 필요하면 가로 이미지를 넣으세요.}}",
+      "firstFrameRule": "이미지→영상은 화면비를 따로 고르지 않고 시작 프레임 이미지의 비율을 따릅니다."
     },
     "refs": {
       "add": "레퍼런스 추가",
+      "uploadImages": "이미지 올리기",
+      "uploadVideos": "영상 올리기",
+      "full": "{kind, select, image {이미지 {max, plural, other {#장}}} other {영상 {max, plural, other {#개}}}} 모두 추가됨",
+      "menuNote": "파일을 입력창에 끌어다 놓아도 됩니다. 넣은 순서대로 번호가 붙고 그 순서로 모델에 전달됩니다.",
+      "dropHint": "{videos, select, yes {이미지나 영상을 끌어다 놓거나 + 버튼으로 넣으세요} other {이미지를 끌어다 놓거나 + 버튼으로 넣으세요}}",
       "imageCount": "이미지 {count}/{max}",
       "videoCount": "영상 {count}/{max}",
-      "optional": "선택",
       "attached": "첨부한 레퍼런스",
-      "limits": "{model} · 이미지 최대 {images, plural, other {#장}}{videos, plural, =0 {} other { · 영상 최대 #개}} · 선택",
-      "note": "{provider, select, openai {레퍼런스는 선택입니다. 없으면 프롬프트만으로 만들고, 이미지를 올리면 OpenAI 편집으로 그 이미지들을 바탕으로 만듭니다. 이미지는 올린 순서대로 번호가 붙고 그 순서로 전달되며, 장마다 입력 비용이 더해집니다.} other {레퍼런스는 선택입니다. 없으면 프롬프트만으로 만들고, 이미지 한 장만 올리면 그 이미지로 시작할지 서랍에서 고릅니다. 이미지와 영상은 올린 순서대로 번호가 붙고 그 순서로 모델에 전달됩니다. 영상 레퍼런스는 길이만큼 비용에 더해질 수 있습니다.}}",
-      "attachedCount": "첨부됨 · 이미지 {images, plural, other {#}} · 영상 {videos, plural, other {#}}",
-      "none": "아직 첨부한 레퍼런스가 없습니다.",
-      "done": "완료",
-      "remove": "제거",
       "removeLabel": "{kind, select, image {이미지} other {영상}} 레퍼런스 {tag} {name} 제거",
       "seconds": "{seconds}s",
       "fileHint": "{types} · {mb} MB 이하"
     },
-    "drop": {
-      "off": "{kind, select, image {이미지} other {영상}} 레퍼런스를 받지 않는 모델",
-      "full": "{kind, select, image {이미지 {max, plural, other {#장}}} other {영상 {max, plural, other {#개}}}} 모두 추가됨",
-      "pick": "{kind, select, image {이미지} other {영상}} 파일을 끌어다 놓거나 클릭해서 선택",
-      "add": "{kind, select, image {이미지} other {영상}} 레퍼런스 추가"
+    "frames": {
+      "label": "프레임",
+      "slot": "{slot, select, start {시작 프레임} other {끝 프레임}}",
+      "required": "필수",
+      "optional": "선택",
+      "add": "{slot, select, start {시작 프레임 넣기} other {끝 프레임 넣기}}",
+      "remove": "{slot, select, start {시작 프레임} other {끝 프레임}} {name} 빼기"
     },
+    "dropHere": "{kind, select, firstFrame {여기에 놓으면 프레임으로 들어갑니다} other {여기에 놓으면 레퍼런스로 들어갑니다}}",
     "uploading": "업로드 중…",
     "upload": {
       "blobForImages": "이미지 레퍼런스는 Blob 스토어가 연결돼야 올릴 수 있습니다",
@@ -315,38 +325,18 @@
       "tooMany": "{kind, select, image {이미지는 최대 {max, plural, other {#장}}} other {영상은 최대 {max, plural, other {#개}}}}",
       "badType": "{file}: {model} 모델은 이 형식을 받지 않습니다. {types} 파일로 올려 주세요",
       "tooBig": "{file}: {mb} MB를 넘습니다. 줄여서 다시 올려 주세요",
-      "noLength": "{file}: 영상 길이를 읽지 못했습니다. 다른 mp4로 올려 주세요"
+      "noLength": "{file}: 영상 길이를 읽지 못했습니다. 다른 mp4로 올려 주세요",
+      "framesTakeImages": "프레임에는 이미지만 넣을 수 있습니다",
+      "framesFull": "시작·끝 프레임이 모두 찼습니다. 바꾸려면 먼저 빼세요"
     },
-    "feed": {
-      "item": "{n}번째 결과: {status}",
-      "elapsed": "{status} · 경과 시간",
-      "pendingNote": "Higgsfield가 요청을 받는 대로 자동으로 시작합니다",
-      "imageNote": "OpenAI가 이미지를 만드는 중입니다. 보통 수십 초에서 2분 걸립니다",
-      "estimated": "예상",
-      "took": "{elapsed} 걸림",
-      "refsLabel": "레퍼런스 이미지 {images, plural, other {#장}}, 영상 {videos, plural, other {#개}}",
-      "refsCount": "레퍼런스 {count, plural, other {#}}",
-      "progress": "생성 진행 중",
-      "progressUnknown": "진행률을 알 수 없음"
+    "note": {
+      "switched": "레퍼런스를 넣어 {mode, select, r2v {레퍼런스→영상으로} other {레퍼런스→이미지로}} 바꿨습니다.",
+      "removed": "{to, select, text {텍스트 방식은 프롬프트만 보냅니다. } other {}}레퍼런스 {count, plural, other {#개}}를 뺐습니다.",
+      "undo": "되돌리기",
+      "reused": "이 결과의 모델·방식·프롬프트·설정을 다시 넣었습니다.{refs, select, yes { 레퍼런스는 다시 넣으세요.} other {}}"
     },
-    "empty": {
-      "title": "첫 영상을 만들어 보세요",
-      "lead": "<wide>왼쪽 서랍</wide><narrow>아래</narrow>에서 프롬프트를 적고 모델을 고른 뒤 생성하면 결과가 이 무대에 올라옵니다.",
-      "toSettings": "생성 설정으로 이동"
-    },
-    "loading": "최근 생성을 불러오는 중",
-    "rail": {
-      "label": "결과 동작",
-      "position": "결과 위치",
-      "previous": "이전 결과",
-      "next": "다음 결과",
-      "generate": "생성",
-      "cancel": "취소",
-      "reuse": "다시"
-    },
-    "noModels": "사용할 수 있는 모델이 없습니다. 관리자에게 문의하세요.",
     "cost": {
-      "label": "예상 비용",
+      "label": "예상",
       "unset": "미정",
       "rate": "단가 {rate}",
       "unpriced": "관리자가 단가를 넣으면 {facts} 기준으로 계산"
@@ -357,7 +347,38 @@
       "refImages": "레퍼런스 {count, plural, other {#장}}"
     },
     "generate": "생성하기",
-    "submitting": "제출 중…"
+    "submitting": "제출 중…",
+    "shortcut": "Ctrl+Enter로 생성",
+    "feed": {
+      "item": "{n}번째 결과: {status}",
+      "elapsed": "{status} · 경과 시간",
+      "pendingNote": "Higgsfield가 요청을 받는 대로 자동으로 시작합니다",
+      "imageNote": "OpenAI가 이미지를 만드는 중입니다. 보통 수십 초에서 2분 걸립니다",
+      "estimated": "예상",
+      "took": "{elapsed} 걸림",
+      "refsLabel": "레퍼런스 이미지 {images, plural, other {#장}}, 영상 {videos, plural, other {#개}}",
+      "frame": "{slot, select, start {시작} other {끝}}",
+      "progress": "생성 진행 중",
+      "progressUnknown": "진행률을 알 수 없음"
+    },
+    "actions": {
+      "cancel": "취소",
+      "reuse": "다시",
+      "reuseLabel": "이 결과의 설정으로 다시 만들기"
+    },
+    "older": {
+      "load": "이전 결과 더 보기",
+      "loading": "이전 결과를 불러오는 중…",
+      "start": "이 스레드의 처음입니다"
+    },
+    "latest": "최신 결과로",
+    "galleryCount": "갤러리 · 완료된 결과 {count, plural, other {#건}}",
+    "empty": {
+      "title": "첫 영상을 만들어 보세요",
+      "lead": "아래 입력창에 프롬프트를 적고 모델과 방식을 고른 뒤 생성하세요. 프롬프트와 결과가 대화처럼 여기에 쌓입니다."
+    },
+    "loading": "최근 생성을 불러오는 중",
+    "noModels": "사용할 수 있는 모델이 없습니다. 관리자에게 문의하세요."
   },
   "threads": {
     "label": "스레드",
@@ -368,7 +389,7 @@
     "picker": "스레드 목록",
     "fresh": {
       "title": "새 스레드",
-      "lead": "<wide>왼쪽 서랍</wide><narrow>아래</narrow>에서 생성하면 이 스레드가 목록에 생기고, 첫 프롬프트가 제목이 됩니다."
+      "lead": "아래 입력창에서 생성하면 이 스레드가 목록에 생기고, 첫 프롬프트가 제목이 됩니다."
     },
     "missing": {
       "title": "스레드를 찾을 수 없습니다",

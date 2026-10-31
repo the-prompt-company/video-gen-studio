@@ -101,7 +101,7 @@ export function ThreadColumn({ mode, onMode, ...list }: ListProps & { mode: List
   const t = useTranslations("threads");
   const look = COLUMN[mode];
   return (
-    <nav aria-label={t("label")} className={`hidden shrink-0 border-r border-border bg-background lg:order-1 lg:block lg:h-full ${look.width}`}>
+    <nav aria-label={t("label")} className={`hidden shrink-0 border-r border-border bg-background lg:block lg:h-full ${look.width}`}>
       <div className={`${look.open} h-full flex-col`}>
         <div className="flex items-center justify-between pb-2 pl-4 pr-2.5 pt-3.5">
           <h2 className="text-xs font-semibold tracking-wider text-muted">{t("label")}</h2>
@@ -125,7 +125,7 @@ export function ThreadColumn({ mode, onMode, ...list }: ListProps & { mode: List
   );
 }
 
-export function ThreadBar({ title, ...list }: ListProps & { title: string }) {
+export function ThreadBar({ title, trailing, ...list }: ListProps & { title: string; trailing?: ReactNode }) {
   const t = useTranslations("threads");
   const [open, setOpen] = useState(false);
   const closing =
@@ -135,7 +135,7 @@ export function ThreadBar({ title, ...list }: ListProps & { title: string }) {
       then(...args);
     };
   return (
-    <div className="order-0 flex items-center gap-2 border-b border-border px-3 py-1.5 lg:hidden">
+    <div className="flex shrink-0 items-center gap-1.5 border-b border-border px-2 py-1.5 lg:hidden">
       <button
         type="button"
         aria-haspopup="dialog"
@@ -146,7 +146,8 @@ export function ThreadBar({ title, ...list }: ListProps & { title: string }) {
         <span className="sr-only">{t("picker")} </span>
         <span id="thread-bar-title" className="truncate">{title}</span>
       </button>
-      <Button variant="outline" size="sm" className="h-11 shrink-0" onClick={list.onNew} data-new-thread>
+      {trailing}
+      <Button variant="outline" size="sm" className="h-11 shrink-0 px-3.5" onClick={list.onNew} data-new-thread>
         {ICON.plus}
         {t("new")}
       </Button>
