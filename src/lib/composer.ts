@@ -68,6 +68,10 @@ export function modeOfComposer(c: Composer): Mode {
   return modes[c.attach.kind] ?? modes.reference;
 }
 
+export function takes(c: Composer): ("image" | "video")[] {
+  return c.attach.kind === "firstFrame" || FAMILIES[c.family].maxVideos === 0 ? ["image"] : ["image", "video"];
+}
+
 export function uploading(c: Composer): boolean {
   return attachmentsOf(c.attach).some((a) => a.url === null);
 }

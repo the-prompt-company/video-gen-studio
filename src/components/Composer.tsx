@@ -10,6 +10,7 @@ import {
   fit,
   modeOfComposer,
   newComposer,
+  takes,
   uploading as isUploading,
   type Attachment,
   type Refusal,
@@ -22,6 +23,7 @@ import { threadTitle } from "@/lib/threads";
 import { Button, ErrorText } from "@/components/ui";
 import { Icon } from "@/components/icons";
 import { Popover } from "@/components/Popover";
+import { ResultList, useResultPicker } from "@/components/ResultPicker";
 import { shapeOf, useAspectText, useSettingsSummary } from "@/components/settings-summary";
 import { useErrorText, useParamLabel, type KeyTranslator } from "@/i18n/errors";
 import { usd } from "@/i18n/format";
@@ -205,6 +207,7 @@ export function Composer({
   offers,
   largeUploadPrefix,
   threadKey,
+  threadRows,
   onSubmit,
 }: {
   ref?: Ref<ComposerHandle>;
@@ -212,6 +215,8 @@ export function Composer({
   largeUploadPrefix: string | null;
   /** Another thread on the stream clears the last send's error. */
   threadKey: string;
+  /** The stream's rows, newest first. */
+  threadRows: readonly PublicGeneration[];
   onSubmit: (draft: Draft) => Promise<Reason | null>;
 }) {
   const t = useTranslations("playground");
@@ -338,6 +343,8 @@ export function Composer({
     }),
   );
 
+  const picker = useResultPicker({ prompt, setPrompt, input: promptRef, threadRows, takes: takes(state), onPick: (g) => void attachResult(g) });
+
   async function attach(files: File[], slot?: Slot) {
     const current = FAMILIES[latest.current.family];
     setError(null);
@@ -396,6 +403,7 @@ export function Composer({
 
   async function generate() {
     if (!canGenerate) return;
+    picker.close();
     setSubmitting(true);
     setError(null);
     const reason = await onSubmit(draft);
@@ -517,10 +525,17 @@ export function Composer({
           ref={promptRef}
           rows={2}
           aria-keyshortcuts="Control+Enter Meta+Enter"
+          {...picker.inputProps}
           value={prompt}
           placeholder={t("promptPlaceholder")}
-          onChange={(e) => setPrompt(e.target.value)}
+          onChange={(e) => {
+            picker.edited(e.target.value, e.target.selectionStart);
+            setPrompt(e.target.value);
+          }}
+          onSelect={(e) => picker.moved(e.currentTarget.value, e.currentTarget.selectionStart)}
+          onBlur={picker.close}
           onKeyDown={(e) => {
+            if (picker.key(e)) return;
             if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !e.nativeEvent.isComposing) {
               e.preventDefault();
               void generate();
@@ -594,6 +609,13 @@ export function Composer({
           </div>
         </div>
 
+        {picker.list && (
+          <ResultList
+            {...picker.list}
+            attached={new Set(all.flatMap((a) => (a.url ? [a.url] : [])))}
+            note={picker.videosHidden ? t("picker.hidden", { reason: kind === "firstFrame" ? "frames" : "model", model: family.name }) : null}
+          />
+        )}
         {dragging && (
           <div aria-hidden className="pointer-events-none absolute inset-0 grid place-items-center rounded-xl bg-background/85 text-sm text-foreground">
             {t("dropHere", { kind: kind === "firstFrame" ? "firstFrame" : "reference" })}

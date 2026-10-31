@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { defaultParams, planGeneration, type FamilyId } from "./catalog";
-import { attachmentsOf, composerReducer, draftOf, fit, modeOfComposer, newComposer, uploading, type Action, type Attachment, type Composer } from "./composer";
+import { attachmentsOf, composerReducer, draftOf, fit, modeOfComposer, newComposer, takes, uploading, type Action, type Attachment, type Composer } from "./composer";
 
 const SEEDANCE: FamilyId = "bytedance/seedance-2.0";
 const H3: FamilyId = "minimax/h3";
@@ -190,4 +190,10 @@ test("a reused result is not an upload, so it stays attached after a Higgsfield 
   const items = [result("image", "https://blob.test/images/a.png"), result("video", "https://blob.test/videos/b.mp4")];
   const sent = run(newComposer(SEEDANCE), { type: "add", items }, { type: "sent" });
   assert.deepEqual([ids(sent), sent.note], [items.map((x) => x.id), null]);
+});
+
+test("the picker offers what the composer takes now: no videos in frames or on the image model", () => {
+  assert.deepEqual(takes(newComposer(SEEDANCE)), ["image", "video"]);
+  assert.deepEqual(takes(run(newComposer(SEEDANCE), { type: "mode", kind: "firstFrame" })), ["image"]);
+  assert.deepEqual(takes(newComposer(GPT)), ["image"]);
 });

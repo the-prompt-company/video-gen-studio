@@ -322,7 +322,7 @@ export function Playground({
             <ErrorText>{errorText(cancelError)}</ErrorText>
           </div>
         )}
-        <Composer ref={composer} offers={offers} largeUploadPrefix={largeUploadPrefix} threadKey={stageThread} onSubmit={submit} />
+        <Composer ref={composer} offers={offers} largeUploadPrefix={largeUploadPrefix} threadKey={stageThread} threadRows={items} onSubmit={submit} />
       </div>
       {deleting && <DeleteThreadDialog thread={deleting} onClose={() => setDeleting(null)} onDeleted={threadDeleted} />}
     </div>

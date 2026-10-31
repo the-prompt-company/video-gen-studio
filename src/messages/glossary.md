@@ -41,6 +41,7 @@ Each language button in the picker shows its own name (`한국어`, `English`, `
 | 레퍼런스 | reference | 参考素材 | An attached image or video |
 | 이미지 레퍼런스, 영상 레퍼런스 | image reference, video reference | 参考图, 参考视频 | |
 | 결과 | result | 结果 | What a generation made: a video or an image |
+| 내 결과 | your results | 我的结果 | The member's own finished results, which "@" in the prompt lists. Chinese labels say 我的结果, running text says 您的结果 |
 | 레퍼런스로 | Use as reference | 用作参考素材 | The action on a finished turn that attaches its result to the composer: a reference, or a frame in Frames mode |
 | 텍스트→영상 | Text to video | 文生视频 | Mode |
 | 이미지→영상 | Image to video | 图生视频 | Mode |
@@ -77,7 +78,7 @@ Each language button in the picker shows its own name (`한국어`, `English`, `
 | 만들 것 | Output | 输出类型 | Label of the 영상 / 이미지 tabs |
 | 텍스트, 프레임, 레퍼런스 | Text, Frames, References | 文本, 首尾帧, 参考素材 | The three kinds of mode in the model menu |
 | 되돌리기 | Undo | 撤销 | Puts back references a mode switch took away |
-| 스레드 | thread | 会话 | A member's group of generations in the playground, like a chat; private to its owner. English writes `thread` in sentences and `Threads` only as the list heading. 会话 means a thread only, never a sign-in session |
+| 스레드 | thread | 会话 | A member's group of generations in the playground, like a chat; private to its owner. English writes `thread` in sentences and `Threads` only as the list heading. 会话 means a thread only, never a sign-in session. 이 스레드 is 当前会话 |
 | 새 스레드 | New thread | 新建会话 | The button. The stage's heading for a thread not created yet is 새 스레드 / New thread / 新会话 |
 | 이전 기록 | Earlier history | 以往记录 | The thread holding the generations made before threads existed |
 | 생성 방식 | Mode | 生成方式 | Label of the mode list |
