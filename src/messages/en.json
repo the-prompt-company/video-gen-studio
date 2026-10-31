@@ -11,7 +11,9 @@
     "settings": "Settings"
   },
   "common": {
-    "close": "Close"
+    "close": "Close",
+    "save": "Save",
+    "cancel": "Cancel"
   },
   "nav": {
     "label": "Main menu",
@@ -197,11 +199,20 @@
   "gallery": {
     "lead": "{count, plural, one {# finished result.} other {# finished results.}}{expiring, select, yes { Results that aren't kept permanently stay on Higgsfield for only 7 days, so download the ones you need.} other {}}",
     "scope": {
+      "label": "Whose results",
       "mine": "Mine",
-      "all": "All"
+      "team": "Team",
+      "all": "All",
+      "everyone": "All",
+      "noTeam": "Once you're on a team, your teammates' results show up here too. An admin assigns teams."
     },
     "empty": "No finished results yet. Make your first one in the <link>Playground</link>.",
+    "emptyTeam": "Your teammates have no finished results yet.",
     "openDetail": "View details: {prompt}",
+    "owner": {
+      "self": "You",
+      "teammate": "Teammate"
+    },
     "retention": {
       "line": "Kept: {value}",
       "label": "Kept",
@@ -456,7 +467,269 @@
     "example": {
       "seedance": "720p 16:9, 5s",
       "h3": "10s",
-      "gptImage2": "One 1024×1024 image at medium quality"
+      "gptImage2": "one 1024×1024 image at medium quality"
     }
+  },
+  "settings": {
+    "lead": "Change the photo and nickname shown in the top menu, the display language, and your sign-in password.",
+    "profile": {
+      "title": "Profile",
+      "lead": "Your photo and nickname show who you are in the top menu. Without a nickname, your ID shows instead."
+    },
+    "account": {
+      "title": "Account",
+      "lead": "You can't change your sign-in ID or team yourself. Ask an admin if either needs to change.",
+      "team": "Team"
+    },
+    "password": {
+      "title": "Password",
+      "lead": "Confirm your current password, then choose a new one. This browser stays signed in, and every other device and browser is signed out."
+    }
+  },
+  "profile": {
+    "avatar": {
+      "current": "Profile photo",
+      "preview": "Preview of the new profile photo"
+    },
+    "photo": {
+      "choose": "Choose photo",
+      "change": "Change photo",
+      "preparing": "Preparing photo…",
+      "save": "Save photo",
+      "remove": "Remove photo",
+      "removing": "Removing…",
+      "cropHint": "When you choose an image file, its center is cropped to a square and resized to {side}×{side} before it's uploaded.",
+      "previewHint": "This is a preview. Select Save photo to apply it.",
+      "storageOff": "Photo storage (Vercel Blob) isn't connected, so you can't change your photo right now. Ask an admin to connect it.",
+      "unreadable": "This file can't be opened as a photo. Choose an image file such as JPG, PNG, or WebP."
+    },
+    "saving": "Saving…",
+    "nickname": {
+      "label": "Nickname",
+      "counter": "{length}/{max}",
+      "save": "Save nickname",
+      "help": "Save with the field empty to remove your nickname and show your ID instead. Nicknames don't have to be unique."
+    },
+    "done": {
+      "photoSaved": "Photo saved.",
+      "photoRemoved": "Photo removed. The top menu shows the first letter of your name.",
+      "nicknameSaved": "Nickname saved.",
+      "nicknameCleared": "Nickname removed. The top menu shows your ID."
+    }
+  },
+  "admin": {
+    "lead": "Members and API key assignment, model rates, and all logs.",
+    "stats": {
+      "totalSpend": "Total spend",
+      "generations": "Total generations",
+      "models": "Model count",
+      "modelsSub": "Models used"
+    },
+    "tabs": {
+      "users": "Members · API keys",
+      "teams": "Teams",
+      "models": "Models · rates",
+      "logs": "Logs · history"
+    }
+  },
+  "members": {
+    "title": "{count, plural, one {# member} other {# members}}",
+    "notice": {
+      "added": "Account {id} added.",
+      "assigned": "{count, plural, one {Assigned # member} other {Assigned # members}} to {team}.",
+      "unassigned": "{count, plural, one {Moved # member} other {Moved # members}} to No team."
+    },
+    "filter": {
+      "label": "Filter by team",
+      "all": "All teams ({count, plural, one {# member} other {# members}})",
+      "team": "{team} ({count, plural, one {# member} other {# members}})"
+    },
+    "selected": "{count, plural, one {# selected} other {# selected}}",
+    "selectAll": "Select all visible members",
+    "select": "Select {username}",
+    "edit": "Edit {username}",
+    "empty": {
+      "none": "No members.",
+      "noTeam": "No members without a team.",
+      "team": "No members in this team. Switch to All teams, choose people, then select Assign team."
+    },
+    "field": {
+      "nickname": "Nickname",
+      "team": "Team",
+      "role": "Role",
+      "note": "Note"
+    },
+    "table": {
+      "key": "Key",
+      "generations": "Generations",
+      "cost": "Cost",
+      "lastUsed": "Last used",
+      "status": "Status"
+    },
+    "key": {
+      "assigned": "Assigned",
+      "none": "None"
+    },
+    "active": "Active",
+    "inactive": "Inactive",
+    "temporary": "Temporary password",
+    "add": {
+      "title": "Add member",
+      "submit": "Add",
+      "submitting": "Adding…",
+      "password": "Temporary password",
+      "passwordHint": "{min, plural, one {Min. #} other {Min. #}} · Changed at first sign-in",
+      "apiKey": "Higgsfield API key",
+      "apiKeyHint": "key-id:key-secret · Can be added later",
+      "optional": "Optional"
+    },
+    "assign": {
+      "title": "Assign team",
+      "submit": "{count, plural, one {Assign # member} other {Assign # members}}",
+      "submitting": "Assigning…",
+      "hint": "A member belongs to one team only",
+      "placeholder": "Choose a team",
+      "noTeams": "No teams yet. Create one on the Teams tab, then reopen this dialog.",
+      "chosenLabel": "Selected members",
+      "chosen": "{count, plural, one {# selected member} other {# selected members}}"
+    },
+    "editor": {
+      "apiKey": "API key",
+      "removeKey": "Remove",
+      "temporaryNote": "This member has a temporary password and must choose a new one at the next sign-in.",
+      "deactivate": "Deactivate",
+      "activate": "Activate",
+      "unlock": "Unlock ({failures, plural, one {# failed attempt} other {# failed attempts}})",
+      "unlockUntil": "Unlock ({failures, plural, one {# failed attempt} other {# failed attempts}}, locked until {until})"
+    },
+    "nickname": {
+      "hint": "{max, plural, one {Up to # character} other {Up to # characters}} · Clear to remove",
+      "placeholder": "No nickname"
+    },
+    "password": {
+      "temporary": "Temporary password ({min, plural, one {min. #} other {min. #}})",
+      "new": "New password ({min, plural, one {min. #} other {min. #}})",
+      "change": "Change"
+    },
+    "reset": {
+      "title": "Reset to initial password",
+      "body": "Resets the password to the initial password, <mono>{password}</mono>. This member is signed out on every device and must choose a new password at the next sign-in.",
+      "confirm": "Reset"
+    }
+  },
+  "teams": {
+    "none": "No team",
+    "title": "Teams",
+    "count": "{count, plural, one {# team} other {# teams}}",
+    "create": {
+      "title": "Create team",
+      "submit": "Create",
+      "submitting": "Creating…",
+      "hint": "{max, plural, one {Up to # character} other {Up to # characters}} · Names that differ only in case count as the same"
+    },
+    "name": {
+      "label": "Team name",
+      "hint": "{max, plural, one {Up to # character} other {Up to # characters}}"
+    },
+    "notice": {
+      "created": "Team created: {name}. Choose its members on the Members tab, then select Assign team.",
+      "deleted": "Team deleted: {name}.{released, plural, =0 {} one { # member now has no team.} other { # members now have no team.}}"
+    },
+    "empty": "No teams yet. Create one, then choose its members on the Members tab and select Assign team.",
+    "table": {
+      "team": "Team",
+      "size": "Size",
+      "members": "Members"
+    },
+    "edit": "Edit {name}",
+    "size": "{count, plural, one {# member} other {# members}}",
+    "noMembers": "None",
+    "members": {
+      "label": "Members",
+      "count": "{count, plural, one {# member} other {# members}}",
+      "empty": "No members yet. Choose people on the Members tab, then select Assign team."
+    },
+    "delete": {
+      "title": "Delete team",
+      "confirm": "This deletes the team. {count, plural, =0 {} one {# member will have no team. } other {# members will have no team. }}Videos and usage history stay as they are.",
+      "submit": "Delete",
+      "submitting": "Deleting…"
+    }
+  },
+  "import": {
+    "title": "Create members from Excel",
+    "intro": "The first filled row of the first sheet is read as the header row. Each email becomes the member's sign-in ID. Members sign in the first time with the initial password <pw>{password}</pw>, then choose a new one.",
+    "pick": {
+      "first": "Choose an Excel file",
+      "another": "Choose another file"
+    },
+    "working": "{doing, select, reading {Reading <name>{file}</name>…} checking {Checking <name>{file}</name>…} creating {Creating members from <name>{file}</name>…} other {}}",
+    "failure": {
+      "notXlsx": "Only Excel workbooks (.xlsx) can be read. In Excel, use Save As → Excel Workbook (.xlsx), then choose the file again.",
+      "unreadable": "Couldn't read the file. Check that it opens in Excel. If it's password-protected, remove the password and save it again as .xlsx, then choose it again.",
+      "empty": "The sheet is empty. In the first row, write the headers {nickname} and {email} (or {nicknameAlias} and {emailAlias}), then list one member per row below them.",
+      "missingColumns": "Row {row} was read as the header row, but it has no {missing, select, nickname {{nickname} (or {nicknameAlias})} email {{email} (or {emailAlias})} both {{nickname} (or {nicknameAlias}) or {email} (or {emailAlias})} other {}} column (headers found: {found}). Fix the headers, then choose the file again."
+    },
+    "example": {
+      "label": "Example of the Excel format",
+      "nickname": "Minji Kim",
+      "caption": "The Korean headers {nicknameAlias} and {emailAlias} work too. Other columns are ignored, and up to {max, plural, one {# member} other {# members}} can be created at a time."
+    },
+    "rowCount": "{count, plural, one {# row} other {# rows}}",
+    "done": "{count, plural, =0 {No new members were created.} one {Created # member. The members table shows them with a temporary password.} other {Created # members. The members table shows them with a temporary password.}}",
+    "summary": "Result summary",
+    "rows": "Results by row",
+    "outcome": {
+      "invalid": "Needs a fix",
+      "duplicate": "Duplicate in file",
+      "exists": "Already exists",
+      "create": "Ready to create",
+      "created": "Created"
+    },
+    "row": "Row {row}",
+    "noEmail": "No email",
+    "detail": {
+      "nickname": "Nickname: {nickname}",
+      "exists": "An ID with this email already exists.",
+      "duplicate": "Same email as row {row}. Only the first row is created."
+    },
+    "nothingToCreate": "No rows can be created. Fix the file, then choose it again.",
+    "submit": "{count, plural, one {Create # member} other {Create # members}}"
+  },
+  "models": {
+    "title": "Model rates",
+    "lead": "Higgsfield's responses carry no cost, so for a video the app works out the cost when it sends the request, from this rate and Higgsfield's pricing rules (resolution, aspect ratio, duration, video reference length), and records it. For GPT Image 2 it multiplies the token counts OpenAI reports in its response by this rate (per 1M image output tokens) and OpenAI's input price ratios (text 5/30, image 8/30), and records the estimated cost when no token counts come back. A new rate applies from the next request. Actual charges follow each provider's invoice.",
+    "list": "Models",
+    "unit": "USD {per} ({basis})",
+    "rateLabel": "{model} rate",
+    "fill": "Use {label} {rate} as the rate",
+    "example": "Example: {example} costs {cost}",
+    "exampleEmpty": "Enter a rate to see an example cost",
+    "toggle": "{enabled, select, yes {On · Turn off} other {Off · Turn on}}"
+  },
+  "logs": {
+    "title": "History ({count, plural, one {# generation} other {# generations}})",
+    "csv": "Export CSV (latest {count, plural, one {# row} other {# rows}})",
+    "filter": {
+      "allMembers": "All members",
+      "allModels": "All models",
+      "allStatuses": "All statuses"
+    },
+    "field": {
+      "time": "Time",
+      "member": "Member",
+      "status": "Status",
+      "model": "Model",
+      "prompt": "Prompt",
+      "duration": "Duration",
+      "cost": "Cost",
+      "params": "Parameters",
+      "images": "Image references",
+      "videos": "Video references",
+      "error": "Error"
+    },
+    "empty": "No generations match these filters.",
+    "more": "Show more",
+    "seconds": "{seconds}s"
   }
 }

@@ -66,6 +66,7 @@ Each language button in the picker shows its own name (`한국어`, `English`, `
 | 회원, 사용자 | member | 成员 | One word per language for a person with an account |
 | 관리자 | admin | 管理员 | The person; the page is 어드민 |
 | 팀 | team | 团队 | |
+| 팀원 | teammate | 团队成员 | A member of the viewer's own team. Also stands in for a teammate's name in the gallery when they have no nickname |
 | 미소속 | No team | 未分配团队 | |
 | API 키 | API key | API 密钥 | |
 | 생성 입력창 | Generation input | 生成输入框 | The composer docked under the stream. Running text says 입력창 / the box below / 输入框 |
@@ -86,3 +87,14 @@ Each language button in the picker shows its own name (`한국어`, `English`, `
 | OpenAI 편집 | OpenAI editing | OpenAI 编辑 | The edits endpoint, used when references are attached |
 | 정가 | List price | 原价 | A provider's published price before a discount |
 | 사용 불가 | Unavailable | 不可用 | A model the server cannot run |
+| 상단 메뉴 | top menu | 顶部菜单 | Where the photo and nickname show; the header nav is 주 메뉴 |
+| 사진, 프로필 사진 | photo, profile photo | 照片, 头像 | |
+| 팀 지정 | Assign team | 分配团队 | Button and dialog in the members tab |
+| 역할 | Role | 角色 | `user` and `admin` stay as written |
+| 메모 | Note | 备注 | |
+| 활성, 비활성 | Active, Inactive | 已启用, 已停用 | A member's status |
+| 활성화, 비활성화 | Activate, Deactivate | 启用, 停用 | Buttons |
+| 잠금 해제 | Unlock | 解除锁定 | |
+| 엑셀 통합 문서 | Excel workbook | Excel 工作簿 | The .xlsx format |
+| 제목 줄 | header row | 标题行 | The sheet row that names the columns |
+| 히스토리 | History | 历史记录 | The logs tab's list |

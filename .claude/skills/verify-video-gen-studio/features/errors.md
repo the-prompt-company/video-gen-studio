@@ -10,9 +10,9 @@ Every refusal the server sends and every failure reason a generation stores reac
 - `err-temporary` on the forced change, the initial password as the new one reads `errors.passwordIsInitial`, and a short one `errors.passwordTooShort` with the minimum.
 - `err-composer` a member without a Higgsfield key sees `errors.noKey` in the composer `playground.composer` once Seedance is picked, and with an empty `playground.prompt` a second status line reads `errors.promptRequired` with the model and mode.
 - `err-stream` a failed row stored with an error code reads in the page language in the stream `playground.stream`.
-- `err-nickname` a 31-character nickname reads `errors.nameTooLong` in 설정, from the browser's own check and from `PATCH /api/me`.
-- `err-duplicate` adding a member with an existing ID reads `errors.duplicateUsername` in the 사용자 추가 dialog.
-- `err-logs` 어드민 로그 shows an old Korean reason and provider text as written, and a coded reason in the page language.
+- `err-nickname` a 31-character nickname in the field labelled `profile.nickname.label` reads `errors.nameTooLong` on `pages.settings` after `profile.nickname.save`, from the browser's own check and from `PATCH /api/me`.
+- `err-duplicate` adding a member with an existing ID reads `errors.duplicateUsername` in the `members.add.title` dialog.
+- `err-logs` tab `admin.tabs.logs` shows an old Korean reason and provider text as written, and a coded reason in the page language.
 - `err-image` a real GPT Image 2 submit that the fake answers with a 500 fails as `imageUnanswered` (maybe billed) and the stream reads it in the page language.
 - `err-key` a submit the fake refuses with a 401 fails as `openaiKeyRejected`, and the sentence carries OpenAI's own words with the key fragment redacted (`Incorrect API key provided: sk-… … [code: invalid_api_key, type: invalid_request_error]`).
 
@@ -20,7 +20,7 @@ Every refusal the server sends and every failure reason a generation stores reac
 
 - `/login` with a wrong password, ten times, or with a temporary password.
 - `/playground` as a member without a Higgsfield key; `/playground?thread=earlier` shows that member's failed generations, which have no thread.
-- `/settings` → 닉네임; `/admin` → 사용자 추가 and 로그 · 히스토리.
+- `/settings` → `profile.nickname.label`; `/admin` → `members.add.title` and `admin.tabs.logs`.
 
 ## Driving it with vgs
 
@@ -39,4 +39,5 @@ Preconditions:
 - The wrong-password step uses an ID that does not exist, so the admin's lockout counter never moves.
 - The fake's OpenAI is set to fail with a 500, then a 401, for the image steps and reset in `finally`. Do not run this journey beside `lifecycle-check` or [Images](./images.md), which set the same fake.
 - The stream shows the newest row at the bottom; the coded failure is inserted last.
-- The playground is found by key (`playground.composer`, `playground.modelMenu`, `playground.prompt`, the composer's `playground.generate`, `playground.stream`). 어드민's own labels stay Korean until its i18n PR; only its error sentences change language here.
+- Every surface is found by key: the playground (`playground.composer`, `playground.modelMenu`, `playground.prompt`, the composer's `playground.generate`, `playground.stream`), settings (`profile.nickname.label`, `profile.nickname.save`) and the admin (`members.add.title`, `members.add.password`, `members.add.submit`, `admin.tabs.logs`). The old Korean reason and the `[목업]` prompts are stored data and stay as written in every language.
+- Every run rewrites its review images under `.impeccable/review/i18n-2/`. When a run is not meant to refresh them, restore them with `git checkout -- .impeccable/review/i18n-2`.

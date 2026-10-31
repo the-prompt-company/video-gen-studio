@@ -13,6 +13,7 @@ const INITIAL = "oooooooo";
 const LANG = { "ko-KR": "ko", "en-US": "en", "zh-CN": "zh-CN" };
 const GPT = "openai/gpt-image-2";
 const OPENAI_DEFAULTS = { delayMs: 0, refuseFirstN: 0, overloadedFirstN: 0, retryAfterS: 1, fail: null, usage: true };
+const literal = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 export default async function errors({ page, ev, base, env, webDir, local }) {
   if (!/localhost|127\.0\.0\.1/.test(local.DATABASE_URL ?? "")) ev.fail("precondition: this journey writes generation rows, so .env.local must point at a local database");
@@ -150,8 +151,8 @@ export default async function errors({ page, ev, base, env, webDir, local }) {
 
     // err-nickname: the nickname rule, checked in the browser before the server, reads the same code.
     await member.goto(`${base}/settings`, { waitUntil: "networkidle" });
-    await member.getByLabel(/^닉네임/).fill("가".repeat(31));
-    await member.getByRole("button", { name: "닉네임 저장" }).click();
+    await member.getByLabel(new RegExp(`^${literal(await ev.t("profile.nickname.label", undefined, member))}`)).fill("가".repeat(31));
+    await member.getByRole("button", { name: await ev.t("profile.nickname.save", undefined, member) }).click();
     const tooLong = await ev.t("errors.nameTooLong", { kind: "nickname", max: 30, length: 31 }, member);
     await expectText(member.locator("main").getByRole("alert"), tooLong, "a 31-character nickname");
     const wire = await ev.api("/api/me", { method: "PATCH", body: JSON.stringify({ nickname: "a".repeat(31) }) }, member);
@@ -160,17 +161,18 @@ export default async function errors({ page, ev, base, env, webDir, local }) {
 
     // err-duplicate: the admin modal shows the server's code in the page language.
     await admin.goto(`${base}/admin`, { waitUntil: "networkidle" });
-    await admin.getByRole("button", { name: "사용자 추가", exact: true }).click();
-    const add = admin.getByRole("dialog", { name: "사용자 추가" });
+    const addTitle = await ev.t("members.add.title", undefined, admin);
+    await admin.getByRole("button", { name: addTitle, exact: true }).click();
+    const add = admin.getByRole("dialog", { name: addTitle });
     await add.getByLabel("ID", { exact: true }).fill(memberA);
-    await add.getByLabel("임시 비밀번호").fill("abcdefgh1");
-    await add.getByRole("button", { name: "추가", exact: true }).click();
+    await add.getByLabel(await ev.t("members.add.password", undefined, admin)).fill("abcdefgh1");
+    await add.getByRole("button", { name: await ev.t("members.add.submit", undefined, admin), exact: true }).click();
     await expectText(add.getByRole("alert"), await ev.t("errors.duplicateUsername", undefined, admin), "a duplicate ID");
     await review("admin-duplicate", admin);
     await admin.keyboard.press("Escape");
 
-    // err-logs: 어드민 로그 shows each stored form, old Korean text as it was written.
-    await admin.getByRole("button", { name: "로그 · 히스토리" }).click();
+    // err-logs: the admin logs tab shows each stored form, old Korean text as it was written.
+    await admin.getByRole("button", { name: await ev.t("admin.tabs.logs", undefined, admin), exact: true }).click();
     for (const [label, surface, want] of [
       ["old row", "logs-old-row", "API 키가 아직 할당되지 않았습니다. 관리자에게 문의하세요"],
       ["provider text", "logs-provider-text", "content moderation"],

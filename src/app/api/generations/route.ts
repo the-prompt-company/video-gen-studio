@@ -8,6 +8,7 @@ import { isGenerationId, publicGeneration, settle, submitGeneration, unavailable
 import { loadModelSetting } from "@/lib/model-settings";
 import { claimThread, threadFeed } from "@/lib/thread-store";
 import { EARLIER, parseThreadRef, type ThreadRef } from "@/lib/threads";
+import { scopeCondition, settleScope } from "@/lib/scope";
 
 /** The copy a settle schedules with `after` runs inside this budget. MIRROR_LEASE_S in generations.ts outlasts it. */
 export const maxDuration = 300;
@@ -21,7 +22,7 @@ function threadRefOf(raw: unknown): ThreadRef {
   return ref;
 }
 
-/** Settle the listed rows the caller may see. The client poll sends every live id in one request per tick. */
+/** Settle the listed rows the caller may settle. The client poll sends every live id in one request per tick. */
 async function pollRows(user: User, raw: string) {
   const ids = raw.split(",").filter((s) => s !== "");
   if (ids.length > MAX_IDS) throw new HttpError(400, "tooManyIds", { max: MAX_IDS });
@@ -31,12 +32,12 @@ async function pollRows(user: User, raw: string) {
   const found = await getDb()
     .select({ row: g, now: dbNowMs })
     .from(g)
-    .where(user.role === "admin" ? inArray(g.id, valid) : and(inArray(g.id, valid), eq(g.userId, user.id)));
+    .where(and(inArray(g.id, valid), scopeCondition(settleScope(user))));
   return { rows: await Promise.all(found.map(({ row }) => settle(row, after))), now: found[0]?.now };
 }
 
 /**
- * GET /api/generations?ids=<id>,<id> — settle and return those rows (max 24).
+ * GET /api/generations?ids=<id>,<id> — settle and return those rows (max 24): own, or any for an admin.
  * GET /api/generations?thread=<id|earlier>&limit=12[&before=<generation id>] — the newest rows of one of the caller's
  * threads, or the rows just older than `before`, the oldest row the page holds; `more` says whether older rows remain.
  * 404 for a thread the caller cannot see.

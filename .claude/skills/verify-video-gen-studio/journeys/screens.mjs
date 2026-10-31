@@ -163,15 +163,15 @@ export default async function screens({ page, ev, base, env, webDir, local, cred
     // The member's newest row is minutes old, so it is among the first tiles of 전체 however many rows the admin has.
     const memberTile = page.getByRole("button", { name: await ev.t("gallery.openDetail", { prompt: `[목업] i18n3 ${stamp} reuse me` }), exact: true });
     if (await memberTile.count()) ev.fail(`${await ev.t("gallery.scope.mine")} shows the member's row`);
-    await page.getByRole("link", { name: await ev.t("gallery.scope.all"), exact: true }).click();
-    await page.waitForURL("**/gallery?all=1");
+    await page.getByRole("link", { name: await ev.t("gallery.scope.everyone"), exact: true }).click();
+    await page.waitForURL("**/gallery?scope=everyone");
     await page.waitForLoadState("networkidle");
-    if (!(await memberTile.count())) ev.fail(`${await ev.t("gallery.scope.all")} does not show the member's row`);
+    if (!(await memberTile.count())) ev.fail(`${await ev.t("gallery.scope.everyone")} does not show the member's row`);
     await review("admin-scope", page);
     await page.getByRole("link", { name: await ev.t("gallery.scope.mine"), exact: true }).click();
     await page.waitForURL(/\/gallery$/);
     if (await memberTile.count()) ev.fail(`back on ${await ev.t("gallery.scope.mine")}, the member's row still shows`);
-    ev.note(`admin-scope: the member's row shows under ${await ev.t("gallery.scope.all")} only`);
+    ev.note(`admin-scope: the member's row shows under ${await ev.t("gallery.scope.everyone")} only`);
 
     await page.goto(`${base}/dashboard`, { waitUntil: "networkidle" });
     for (const key of ["totalSpend", "generations", "videoLength", "apiKey"]) {

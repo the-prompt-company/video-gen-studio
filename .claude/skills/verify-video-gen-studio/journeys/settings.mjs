@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { writeFileSync } from "node:fs";
 
 const INITIAL = "oooooooo";
+const literal = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /** A browser-made image as bytes: a noisy photo-like JPEG, or a PNG of three vertical bands (red, green, blue). */
 async function makeImage(p, kind) {
@@ -116,20 +117,21 @@ export default async function settings({ page, ev, base, webDir, local }) {
   const served = async (url) => (await fetch(url, { cache: "no-store" })).status;
   const storeStats = async () => (fakeStore ? (await (await fetch(`${fakeStore}/_stats`)).json()).storage : null);
   const pickPhoto = async (file) => {
-    const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.getByRole("button", { name: /^사진 (고르기|바꾸기)$/ }).click()]);
+    const picker = new RegExp(`^(${literal(await ev.t("profile.photo.choose"))}|${literal(await ev.t("profile.photo.change"))})$`);
+    const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.getByRole("button", { name: picker }).click()]);
     await chooser.setFiles(file);
-    await page.getByRole("img", { name: "새 프로필 사진 미리보기" }).waitFor({ timeout: 30_000 });
-    await page.getByRole("button", { name: "사진 저장" }).waitFor({ timeout: 10_000 });
+    await page.getByRole("img", { name: await ev.t("profile.avatar.preview") }).waitFor({ timeout: 30_000 });
+    await page.getByRole("button", { name: await ev.t("profile.photo.save") }).waitFor({ timeout: 10_000 });
     await page.waitForTimeout(300);
   };
   const savePhoto = async () => {
     const [req, res] = await Promise.all([
       page.waitForRequest((r) => r.url().endsWith("/api/me/avatar") && r.method() === "PUT", { timeout: 30_000 }),
       page.waitForResponse((r) => r.url().endsWith("/api/me/avatar") && r.request().method() === "PUT", { timeout: 60_000 }),
-      page.getByRole("button", { name: "사진 저장" }).click(),
+      page.getByRole("button", { name: await ev.t("profile.photo.save") }).click(),
     ]);
     if (res.status() !== 200) ev.fail(`PUT /api/me/avatar answered ${res.status()}: ${await res.text()}`);
-    await statusSays(page, /사진을 저장했습니다/, "photo save");
+    await statusSays(page, await ev.t("profile.done.photoSaved"), "photo save");
     return { sentBytes: Number((await req.allHeaders())["content-length"] ?? 0), contentType: req.headers()["content-type"] };
   };
   const storedPhoto = async (what) => {
@@ -171,21 +173,23 @@ export default async function settings({ page, ev, base, webDir, local }) {
     await ev.shot("nav-id-and-letter");
     await (await identity(page)).click();
     await page.waitForURL("**/settings", { timeout: 30_000 });
-    await page.getByRole("heading", { level: 1, name: "설정" }).waitFor({ timeout: 30_000 });
+    await page.getByRole("heading", { level: 1, name: await ev.t("pages.settings") }).waitFor({ timeout: 30_000 });
     if ((await (await identity(page)).getAttribute("aria-current")) !== "page") ev.fail("the identity link should be the current page on /settings");
-    const account = page.getByRole("region", { name: "계정" });
+    const account = page.getByRole("region", { name: await ev.t("settings.account.title") });
+    const noTeam = await ev.t("teams.none");
     const shownId = (await account.locator("dl > div").filter({ has: page.locator("dt", { hasText: /^ID$/ }) }).locator("dd").innerText()).trim();
-    if (shownId !== memberA) ev.fail(`계정 should show the ID, got "${shownId}"`);
-    const shownTeam = (await account.locator("dl > div").filter({ has: page.locator("dt", { hasText: /^팀$/ }) }).locator("dd").innerText()).trim();
-    if (shownTeam !== "미소속") ev.fail(`계정 should show 미소속 for a member without a team, got "${shownTeam}"`);
-    if (await account.getByRole("textbox").count()) ev.fail("계정 should show the ID as text, not as a field");
-    if (await page.getByRole("region", { name: "비밀번호" }).getByRole("textbox", { name: "ID" }).count()) ev.fail("the password form should not repeat the ID visibly");
-    ev.note("the nav links the member's ID to /settings, which shows the ID once, as text, and 미소속 as the team");
+    if (shownId !== memberA) ev.fail(`settings.account should show the ID, got "${shownId}"`);
+    const teamTerm = new RegExp(`^${literal(await ev.t("settings.account.team"))}$`);
+    const shownTeam = (await account.locator("dl > div").filter({ has: page.locator("dt", { hasText: teamTerm }) }).locator("dd").innerText()).trim();
+    if (shownTeam !== noTeam) ev.fail(`settings.account should show teams.none ("${noTeam}") for a member without a team, got "${shownTeam}"`);
+    if (await account.getByRole("textbox").count()) ev.fail("settings.account should show the ID as text, not as a field");
+    if (await page.getByRole("region", { name: await ev.t("settings.password.title") }).getByRole("textbox", { name: "ID" }).count()) ev.fail("the password form should not repeat the ID visibly");
+    ev.note(`the nav links the member's ID to /settings, which shows the ID once, as text, and "${noTeam}" as the team`);
     await ev.shot("settings");
 
-    const storageOff = await page.getByRole("status").filter({ hasText: "사진 저장소" }).isVisible();
+    const storageOff = await page.getByRole("status").filter({ hasText: await ev.t("profile.photo.storageOff") }).isVisible();
     if (storageOff) {
-      if (await page.getByRole("button", { name: "사진 고르기" }).isEnabled()) ev.fail("without a Blob store 사진 고르기 should be disabled");
+      if (await page.getByRole("button", { name: await ev.t("profile.photo.choose") }).isEnabled()) ev.fail("without a Blob store profile.photo.choose should be disabled");
       const put = await page.evaluate(async () => (await fetch("/api/me/avatar", { method: "PUT", headers: { "Content-Type": "image/png" }, body: new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]) })).status);
       const del = (await ev.api("/api/me/avatar", { method: "DELETE" })).status;
       if (put !== 503 || del !== 503) ev.fail(`without a Blob store PUT and DELETE should answer 503, got ${put} and ${del}`);
@@ -225,8 +229,8 @@ export default async function settings({ page, ev, base, webDir, local }) {
       ev.note(`PNG ${png.length} bytes (1200×400 red|green|blue) stored as ${replaced.key} ${replaced.width}×${replaced.height} ${replaced.bytes} bytes, all green (center crop); the old object answers ${oldStatus}${afterReplace ? " and del() got its canonical URL" : ""}`);
       await ev.shot("photo-replaced-png");
 
-      await page.getByRole("button", { name: "사진 삭제" }).click();
-      await statusSays(page, /사진을 지웠습니다/, "photo removal");
+      await page.getByRole("button", { name: await ev.t("profile.photo.remove") }).click();
+      await statusSays(page, await ev.t("profile.done.photoRemoved"), "photo removal");
       if ((await row(memberA)).avatar_key !== null) ev.fail("removing the photo should clear users.avatar_key");
       try {
         await (await identity(page)).locator("img").waitFor({ state: "detached", timeout: 20_000 });
@@ -239,8 +243,8 @@ export default async function settings({ page, ev, base, webDir, local }) {
       await ev.shot("photo-removed");
     }
 
-    const nickname = page.getByLabel(/^닉네임/);
-    const saveNickname = page.getByRole("button", { name: "닉네임 저장" });
+    const nickname = page.getByLabel(new RegExp(`^${literal(await ev.t("profile.nickname.label"))}`));
+    const saveNickname = page.getByRole("button", { name: await ev.t("profile.nickname.save") });
     await nickname.fill("가".repeat(31));
     await saveNickname.click();
     await page.locator("main").getByRole("alert").filter({ hasText: await ev.t("errors.nameTooLong", { kind: "nickname", max: 30, length: 31 }) }).waitFor({ timeout: 10_000 });
@@ -252,7 +256,7 @@ export default async function settings({ page, ev, base, webDir, local }) {
 
     await nickname.fill("  설정 테스터 ");
     await saveNickname.click();
-    await statusSays(page, /닉네임을 저장했습니다/, "nickname save");
+    await statusSays(page, await ev.t("profile.done.nicknameSaved"), "nickname save");
     await headerShows(page, "설정 테스터", "after the nickname save, without a reload");
     if ((await row(memberA)).nickname !== "설정 테스터") ev.fail("users.nickname should be the trimmed nickname");
     await ev.shot("nickname-saved", { fullPage: true });
@@ -265,7 +269,7 @@ export default async function settings({ page, ev, base, webDir, local }) {
     await page.waitForURL("**/settings", { timeout: 30_000 });
     await nickname.fill("");
     await saveNickname.click();
-    await statusSays(page, /닉네임을 지웠습니다/, "nickname clear");
+    await statusSays(page, await ev.t("profile.done.nicknameCleared"), "nickname clear");
     await headerShows(page, memberA, "after clearing the nickname");
     if ((await row(memberA)).nickname !== null) ev.fail("clearing should store null");
     ev.note("an empty nickname clears it and the header falls back to the ID");
@@ -333,8 +337,8 @@ export default async function settings({ page, ev, base, webDir, local }) {
       await bPage.goto(`${base}/settings`, { waitUntil: "networkidle" });
       await ev.shot("member-b-photo-kept", { page: bPage });
       await page.goto(`${base}/settings`, { waitUntil: "networkidle" });
-      await page.getByRole("button", { name: "사진 삭제" }).click();
-      await statusSays(page, /사진을 지웠습니다/, "removing A's own photo after the crafted requests");
+      await page.getByRole("button", { name: await ev.t("profile.photo.remove") }).click();
+      await statusSays(page, await ev.t("profile.done.photoRemoved"), "removing A's own photo after the crafted requests");
     }
 
     await signIn(second, memberA);
@@ -342,7 +346,7 @@ export default async function settings({ page, ev, base, webDir, local }) {
     await second.waitForLoadState("networkidle");
     await headerShows(second, memberA, "the second browser");
     await new Promise((r) => setTimeout(r, 1_100));
-    const password = page.getByRole("region", { name: "비밀번호" });
+    const password = page.getByRole("region", { name: await ev.t("settings.password.title") });
     const next = `set-${stamp}-a-2`;
     await password.getByLabel(await ev.t("auth.currentPassword")).fill(passwords[memberA]);
     await password.getByLabel(await ev.t("auth.newPassword")).first().fill(next);

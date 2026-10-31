@@ -79,7 +79,7 @@ export default async function formats({ page, ev, base, env, webDir, local, cred
     const adminCells = (await adminRow.locator("td").allTextContents()).map((t) => t.trim());
     if (!adminCells.some((t) => USD.test(t)) || !adminCells.some((t) => DATE[lang].test(t))) ev.fail(`the users row reads ${JSON.stringify(adminCells)}`);
     await review("admin-users", { focus: adminRow });
-    await page.getByRole("button", { name: "로그 · 히스토리" }).click();
+    await page.getByRole("button", { name: await ev.t("admin.tabs.logs"), exact: true }).click();
     const logRow = page.getByRole("row").filter({ hasText: prompt });
     await logRow.waitFor({ timeout: 15_000 });
     const logCells = (await logRow.locator("td").allTextContents()).map((t) => t.trim());
