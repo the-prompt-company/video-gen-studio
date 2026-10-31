@@ -194,11 +194,20 @@
   "gallery": {
     "lead": "已完成的结果共 {count, plural, other {# 个}}。{expiring, select, yes {未永久保存的结果在 Higgsfield 上只保留 7 天，请下载需要的结果。} other {}}",
     "scope": {
+      "label": "查看谁的结果",
       "mine": "我的",
-      "all": "全部"
+      "team": "团队",
+      "all": "全部",
+      "everyone": "全部",
+      "noTeam": "加入团队后，您也可以在这里查看团队成员的结果。团队由管理员分配。"
     },
     "empty": "还没有已完成的结果。请在<link>创作台</link>生成第一个结果。",
+    "emptyTeam": "团队成员还没有已完成的结果。",
     "openDetail": "查看详情：{prompt}",
+    "owner": {
+      "self": "我",
+      "teammate": "团队成员"
+    },
     "retention": {
       "line": "保存：{value}",
       "label": "保存",

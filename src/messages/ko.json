@@ -194,11 +194,20 @@
   "gallery": {
     "lead": "완료된 결과 {count, plural, other {#건}}.{expiring, select, yes { 영구 보관이 아닌 결과는 Higgsfield에 7일간만 남으니 필요한 건 다운로드하세요.} other {}}",
     "scope": {
+      "label": "누구의 결과",
       "mine": "내 것",
-      "all": "전체"
+      "team": "팀",
+      "all": "전체",
+      "everyone": "전체",
+      "noTeam": "팀에 속하면 팀원의 결과도 여기서 볼 수 있습니다. 팀은 관리자가 정합니다."
     },
     "empty": "완료된 결과가 없습니다. <link>플레이그라운드</link>에서 첫 결과를 만들어 보세요.",
+    "emptyTeam": "팀원이 완료한 결과가 아직 없습니다.",
     "openDetail": "{prompt} 자세히 보기",
+    "owner": {
+      "self": "나",
+      "teammate": "팀원"
+    },
     "retention": {
       "line": "보관 {value}",
       "label": "보관",

@@ -9,7 +9,7 @@ The gallery, the dashboard and the playground read fully in the browser's langua
 - `scr-plurals` the dashboard's by-model rows read `dashboard.modelUsage` for 2 and 1 generations and the outcomes line reads 0 failed.
 - `scr-empty` a member with no results sees `gallery.empty` with a link to `/playground`.
 - `scr-no-key` a member without an API key sees `errors.noKey` in the drawer and Generate stays off.
-- `scr-scope` the admin's `gallery.scope.all` and `gallery.scope.mine` links switch scope, and the admin's `users.locale` does not move.
+- `scr-scope` the admin's `gallery.scope.everyone` and `gallery.scope.mine` links switch scope, and the admin's `users.locale` does not move.
 - `scr-blocker` reusing a row that asks for 20 s puts `errors.paramRange` with the `params.duration` label in the cost bar.
 - `scr-drawers` each model's option starts with its untranslated name, its `families.*.note` shows, and GPT Image 2's options read `paramValues.*`.
 - `scr-refs` the reference dialog shows `playground.refs.limits`, `playground.refs.attachedCount` and remove buttons named by `playground.refs.removeLabel`.
