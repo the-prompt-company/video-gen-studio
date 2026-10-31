@@ -25,7 +25,7 @@ export default async function images({ page, ev, env }) {
   ev.note(`img-model-groups: image tab lists "${gptText}"`);
 
   if (await gpt.isDisabled()) {
-    // img-no-key: the server has no OPENAI_API_KEY. The model is listed but cannot be picked, its row says why, and the server refuses.
+    // img-no-key: a disabled row means the server has no OPENAI_API_KEY.
     if (!gptText.includes(await t("playground.unavailable")) || !gptText.includes(await t("errors.noOpenAiKey"))) ev.fail(`the disabled row should say ${await t("playground.unavailable")} and name OPENAI_API_KEY: ${gptText}`);
     await ev.shot("image-no-key");
     const refused = await ev.api("/api/generations", { method: "POST", body: JSON.stringify({ family: GPT, mode: "t2i", prompt: "vgs-img 키 없음", params: {}, images: [], videos: [], endImage: null }) });
@@ -39,7 +39,7 @@ export default async function images({ page, ev, env }) {
   await menu.waitFor({ state: "detached" });
   await h.pickMode("text", "t2i");
 
-  // img-composer: two modes, the aspect pills, and the three option groups in the settings.
+  // img-composer
   const modesMenu = await h.openMenu();
   const [t2iName, r2iName] = await Promise.all(["t2i", "r2i"].map((m) => t(`mode.${m}`)));
   const modeRows = (await modesMenu.getByRole("button", { name: new RegExp(`· (${t2iName}|${r2iName})`) }).allInnerTexts()).length;
@@ -114,7 +114,7 @@ export default async function images({ page, ev, env }) {
   const onUpload = (r) => r.request().method() === "POST" && new URL(r.url()).pathname === "/api/uploads" && serverUploads.push(r.status());
   page.on("response", onUpload);
   await h.imageInput.setInputFiles(IMAGES);
-  await h.uploaded("the two references");
+  await h.waitForUploads("the two references");
   page.off("response", onUpload);
   if ((await h.refs.count()) !== 2) ev.fail(`two references should be attached, found ${await h.refs.count()}`);
   const added = (await refKeys()).filter((k) => !before.has(k));

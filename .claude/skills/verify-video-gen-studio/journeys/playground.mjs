@@ -24,7 +24,6 @@ function ticks(polls) {
 }
 
 export default async function playground({ page, ev, env }) {
-  // Every poll the page makes, with its response, so pg-poll can judge them.
   const polls = [];
   const lists = [];
   const uploads = [];
@@ -46,8 +45,7 @@ export default async function playground({ page, ev, env }) {
   });
 
   await ev.login("/playground");
-  // An id counts as live when it was live at the start or at the end of the run. The stream holds one thread, the
-  // URL's, and a new thread (no `thread`) holds nothing yet.
+  // A row can finish, or mock rows can be replaced, mid-run: an id counts as live if it was live at the start or at the end.
   const liveIds = new Set();
   const readLive = async () => {
     const thread = new URL(page.url()).searchParams.get("thread");
@@ -63,7 +61,7 @@ export default async function playground({ page, ev, env }) {
   if (!(await h.box.isVisible())) ev.fail("the composer (playground.composer) is not visible");
   await ev.shot("composer");
 
-  // pg-model-menu: the video tab lists the enabled video models with their rates; Hailuo is never offered.
+  // pg-model-menu
   let menu = await h.openMenu();
   const outputs = menu.getByRole("group", { name: await t("playground.outputs") });
   const videoTab = outputs.getByRole("button", { name: await t("playground.output", { output: "video" }) });
@@ -84,7 +82,7 @@ export default async function playground({ page, ev, env }) {
     if (got !== want) ev.fail(`${why}: the model chip should read ${want}, got ${got}`);
   };
 
-  // pg-mode: the member picks the mode; text needs nothing, frames a start frame, references at least one.
+  // pg-mode
   if (seedance) {
     await h.pickModel(SEEDANCE, "video");
     await h.pickMode("text", "t2v");
@@ -96,7 +94,7 @@ export default async function playground({ page, ev, env }) {
     await menu.waitFor({ state: "detached" });
   }
 
-  // pg-aspect-pills: Seedance's aspect ratio is a pill group in the settings; the 9:16 pill reads portrait in the summary.
+  // pg-aspect-pills
   if (seedance) {
     const settings = await h.openSettings();
     const aspect = settings.getByRole("group", { name: await t("playground.aspect.label") });
@@ -115,7 +113,7 @@ export default async function playground({ page, ev, env }) {
     if (!summary.includes(want)) ev.fail(`the settings chip should read ${want}, reads ${summary}`);
   } else ev.note("Seedance not offered; aspect-pills skipped (unmet precondition)");
 
-  // pg-model-switch: H3 starts on auto, takes 5, 10 or 15 s, has no resolution, and says its output is fixed at 2K.
+  // pg-model-switch
   if (h3) {
     await h.pickModel(H3, "video");
     const settings = await h.openSettings();
@@ -132,7 +130,7 @@ export default async function playground({ page, ev, env }) {
     if (seedance) await h.pickModel(SEEDANCE, "video");
   } else ev.note("MiniMax H3 not offered; model-switch skipped (unmet precondition)");
 
-  // pg-refs-add: + opens the add menu, its image row opens the file picker, Esc closes it and focus returns to +.
+  // pg-refs-add
   const add = h.box.getByRole("button", { name: await t("playground.refs.add"), exact: true });
   await add.click();
   const addMenu = page.getByRole("dialog", { name: await t("playground.refs.add") });
@@ -143,7 +141,7 @@ export default async function playground({ page, ev, env }) {
   await chooser.setFiles(IMAGES[0]);
   const alert = h.box.getByRole("alert");
   await Promise.race([h.refs.first().waitFor({ timeout: 30_000 }), alert.waitFor({ timeout: 30_000 })]).catch(() => ev.fail("neither a thumbnail nor an error appeared within 30s of picking a file"));
-  await h.uploaded("the first reference");
+  await h.waitForUploads("the first reference");
   const attached = (await h.refs.count()) > 0 && !(await alert.isVisible());
   if (attached) ev.note(`reference uploaded: ${await h.refs.count()} thumbnail(s)`);
   else ev.note(`upload refused (expected without an API key): ${await alert.textContent()}`);
@@ -164,7 +162,7 @@ export default async function playground({ page, ev, env }) {
     await h.box.getByRole("button", { name: await t("playground.note.undo"), exact: true }).waitFor();
   }
 
-  // generate-gate: without an API key the status line says so and 생성하기 stays off.
+  // pg-generate-gate
   const banner = h.status.filter({ hasText: await t("errors.noKey") });
   if (await banner.isVisible()) {
     if (await h.generate.isEnabled()) ev.fail("생성하기 (playground.generate) must be disabled while the no-API-key line shows");
@@ -180,7 +178,7 @@ export default async function playground({ page, ev, env }) {
   } else ev.note("API key present; paid submit skipped (set VGS_ALLOW_SPEND=1, or VGS_FAKE_HF against the fake, to exercise it)");
   await ev.shot("generate-gate");
 
-  // pg-poll: every live turn's id is polled in one batch per tick, every poll is a 200, and the answer holds that row.
+  // pg-poll
   // VGS_POLL_WAIT_MS keeps the page open longer so the backoff schedule can be read; VGS_POLL_NAV=1 leaves for the gallery and comes back.
   const liveAtEnd = await readLive();
   const waitMs = Number(env.VGS_POLL_WAIT_MS ?? 0);
@@ -290,7 +288,7 @@ async function everyMode({ page, ev, h, seedance, h3, uploads, fake }) {
 
     await h.imageInput.setInputFiles(IMAGES);
     await h.videoInput.setInputFiles(WEBM_AS_MP4);
-    await h.uploaded(`${short} references`);
+    await h.waitForUploads(`${short} references`);
     if ((await h.refs.count()) !== 3) ev.fail(`${short}: three references should be attached, found ${await h.refs.count()}`);
     if (!uploads.every((u) => typeof u === "string" && u.startsWith(fake))) ev.fail(`uploads did not go to the fake ${fake}: ${uploads.join(", ")}; refusing to click 생성하기`);
     if (family === SEEDANCE && !(await h.box.getByText(await t("playground.fact.inputVideo", { seconds: "3.0" })).isVisible())) ev.fail("the estimate line does not count the 3 s reference video (playground.fact.inputVideo)");

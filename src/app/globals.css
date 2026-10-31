@@ -84,7 +84,7 @@ body [lang="zh-CN"] {
   outline-offset: 2px;
 }
 
-/* The playground is a chat: the page holds still under the header and the stream scrolls inside it. */
+/* A data-fill-viewport page scrolls inside its panes, so the body stops at the viewport. */
 body:has([data-fill-viewport]) {
   height: 100dvh;
 }

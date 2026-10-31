@@ -1,12 +1,10 @@
 import type { PublicGeneration } from "@/lib/generations";
 
-/** A thread's first page and each older page hold up to this many results. */
 export const FEED_LIMIT = 12;
 
-/** The results this tab has shown of one thread, newest first, and whether the server holds older ones. */
+/** `rows` newest first; `more` when the server holds older rows. */
 export type ThreadFeed = { rows: readonly PublicGeneration[]; more: boolean };
 
-/** Each thread's results this tab has shown, and the member's count of finished results. */
 export type Feeds = { byThread: Readonly<Record<string, ThreadFeed>>; galleryTotal: number };
 
 const NONE: ThreadFeed = { rows: [], more: false };
@@ -34,7 +32,6 @@ export function withAnswer(feeds: Feeds, thread: string, answered: readonly Publ
   return { byThread: { ...feeds.byThread, [thread]: { rows: [...sentSince, ...answered], more } }, galleryTotal: feeds.galleryTotal + done };
 }
 
-/** An older page below the rows the thread already shows. */
 export function withOlder(feeds: Feeds, thread: string, older: readonly PublicGeneration[], more: boolean): Feeds {
   const feed = feeds.byThread[thread] ?? NONE;
   const rows = [...feed.rows, ...older.filter((o) => !feed.rows.some((x) => x.id === o.id))];

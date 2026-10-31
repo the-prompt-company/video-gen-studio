@@ -94,7 +94,7 @@ export default async function threads({ page, ev, base, env, webDir, local }) {
     const earlierName = await ta("threads.earlier");
     const threadOf = () => new URL(a.url()).searchParams.get("thread");
     const stageIds = () => h.turns.evaluateAll((els) => els.map((e) => e.getAttribute("data-id")).reverse());
-    // `ids` newest first; the stream shows them oldest first, the newest at the bottom.
+    // `ids` newest first; the stream renders oldest first.
     const expectStage = async (ids, why) => {
       try {
         await a.waitForFunction((want) => JSON.stringify([...document.querySelectorAll('[role="region"] article[data-id]')].map((e) => e.dataset.id).reverse()) === JSON.stringify(want), ids, { timeout: 20_000 });
@@ -136,7 +136,7 @@ export default async function threads({ page, ev, base, env, webDir, local }) {
       if (!body?.item || !body?.thread) ev.fail(`POST /api/generations answered ${status}: ${JSON.stringify(body)}`);
       return body;
     };
-    // The gallery link names the member's finished results; it sits in the stream's header, or the thread bar under 1024px.
+    // The count is in the link's name; the link moves to the thread bar under 1024px.
     const galleryCount = async () => {
       const link = a.getByRole("link", { name: new RegExp(`^${(await ta("playground.galleryCount", { count: 7 })).replace("7", "\\d+")}$`) });
       return Number(/\d+/.exec((await link.getAttribute("aria-label")) ?? "")?.[0]);
@@ -169,7 +169,6 @@ export default async function threads({ page, ev, base, env, webDir, local }) {
     const made = [one.item.id, oneAgain.item.id, two.item.id];
     await waitDone(made);
     ev.note("the three generations completed against the fake");
-    // Thread one finished while thread two or the new thread held the stream; the gallery link still counts it.
     const wantFinished = ((await ev.api("/api/generations?limit=50", undefined, a)).body?.items ?? []).filter((x) => x.status === "completed").length;
     for (let i = 0; (await galleryCount()) !== wantFinished; i++) {
       if (i === 60) ev.fail(`without a reload the gallery link counts ${await galleryCount()}, the member has ${wantFinished} finished results`);
@@ -232,7 +231,7 @@ export default async function threads({ page, ev, base, env, webDir, local }) {
     await expectStage(earlierIds, "the earlier history");
     await review("earlier-history", a);
 
-    // The header's link to the playground, from inside a thread, opens a new thread: URL and stage agree.
+    // The header's link to the playground, from inside a thread, opens a new thread: URL and stream agree.
     await a.getByRole("navigation", { name: await ta("nav.label") }).getByRole("link", { name: await ta("pages.playground"), exact: true }).click();
     await a.waitForURL((u) => !new URL(u).searchParams.has("thread"));
     await stage.getByText(await ta("threads.fresh.title"), { exact: true }).waitFor({ timeout: 15_000 });

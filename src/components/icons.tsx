@@ -15,7 +15,7 @@ const PATHS = {
 
 export type IconName = keyof typeof PATHS;
 
-/** A 20-unit line icon in the current text color. Decorative: the control around it carries the name. */
+/** Decorative (aria-hidden): the control around it must carry the name. */
 export function Icon({ name, className = "h-4 w-4" }: { name: IconName; className?: string }) {
   return (
     <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden className={`shrink-0 ${className}`}>

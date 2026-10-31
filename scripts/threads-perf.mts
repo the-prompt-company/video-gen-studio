@@ -2,8 +2,7 @@
  * Measures 0011 and the two thread queries on about 20k generation rows. In a fresh database next to the local one
  * DATABASE_URL names, it applies migrations up to 0010, inserts 20 members × 1000 rows with no thread (the shape 0011
  * meets in production), times applying 0011, then moves 800 of each member's rows into 80 threads and runs ANALYZE.
- * It times listThreads and threadFeed (a chat thread and the earlier history, their newest page and an older page from
- * a cursor) through thread-store itself, with and
+ * It times listThreads and threadFeed (a chat thread and the earlier history) through thread-store itself, with and
  * without 0011's two generations indexes, alternating the two sides, and has auto_explain log every statement of
  * one more call per query so the plans and the statement count come from the real calls. The database is dropped at
  * the end. Local Postgres only: the verify skill's Docker container is `vgs-threads-pg`.

@@ -10,11 +10,7 @@ const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select
 
 type Place = { left: number; bottom: number; maxHeight: number } | "sheet";
 
-/**
- * A panel the composer's chips open. From 640px it floats above its trigger; below, it is a bottom sheet over a scrim.
- * Esc, a click outside and 닫기 close it; Tab stays inside; focus starts on the first control (or `data-autofocus`)
- * and goes back to the trigger when the panel closes with focus inside it. Mount it to open it.
- */
+/** Mount it to open it. Focus starts on the child marked `data-autofocus`, else the first control. */
 export function Popover({ anchor, title, width, onClose, children }: { anchor: RefObject<HTMLElement | null>; title: string; width: number; onClose: () => void; children: ReactNode }) {
   const t = useTranslations("common");
   const panel = useRef<HTMLDivElement>(null);

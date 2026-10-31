@@ -121,7 +121,6 @@ export function Playground({
   }
 
   // The answer's `now` is taken as the request's midpoint, so the offset is off by at most half the round trip.
-  // `answeredAt` is when the last answer came, the clock the poll set reads.
   const [answeredAt, setAnsweredAt] = useState(() => Date.now());
   function syncClock(sentAt: number, serverNow: number | undefined) {
     setAnsweredAt(Date.now());

@@ -149,7 +149,6 @@ export default async function screens({ page, ev, base, env, webDir, local, cred
     if ((await link.getAttribute("href")) !== "/playground") ev.fail(`the empty gallery links to ${await link.getAttribute("href")}`);
     await review("gallery-empty", b, empty);
 
-    // No-key line: the composer says why and 생성하기 stays off.
     await b.goto(`${base}/playground`, { waitUntil: "networkidle" });
     const hb = await composerHandles(ev, b);
     // The composer opens on a model the member can use, GPT Image 2 here, so pick the Higgsfield model that needs the key.
@@ -180,12 +179,11 @@ export default async function screens({ page, ev, base, env, webDir, local, cred
     }
     await review("dashboard", page, undefined, { fullPage: true });
 
-    // Playground as member A, on the earlier history that holds the three rows.
+    // The seeded rows have no thread, so they are in the earlier history.
     await a.goto(`${base}/playground?thread=earlier`, { waitUntil: "networkidle" });
     const h = await composerHandles(ev, a);
     await h.turns.first().waitFor({ timeout: 15_000 });
 
-    // Blocker: reusing the 20 s row puts an out-of-range duration in the composer, and its reason names the parameter.
     await h.turns.filter({ hasText: `[목업] i18n3 ${stamp} reuse me` }).getByRole("button", { name: await ta("playground.actions.reuse"), exact: true }).click();
     const blockerText = await ta("errors.paramRange", { label: await ta("params.duration"), min: 4, max: 15 });
     const blocker = h.status.filter({ hasText: blockerText });
@@ -193,7 +191,6 @@ export default async function screens({ page, ev, base, env, webDir, local, cred
     ev.note(`blocker: "${blockerText}"`);
     await review("blocker", a, blocker);
 
-    // Each model's row in the model menu starts with its untranslated name, and its note reads in the page language.
     for (const [family, output, surface] of [[H3, "video", "model-menu-h3"], [GPT, "image", "model-menu-gpt-image-2"], [SEEDANCE, "video", "model-menu-seedance"]]) {
       await h.pickModel(family, output);
       const menu = await h.openMenu();
@@ -217,13 +214,12 @@ export default async function screens({ page, ev, base, env, webDir, local, cred
       }
     }
 
-    // Two images and a video: the counter, the remove buttons and the cost line.
     await h.prompt.fill(promptKo);
     await h.pickMode("reference", "r2v");
     await h.imageInput.setInputFiles(["ref-landscape-1.jpg", "ref-landscape-2.jpg"].map((f) => join(webDir, "public", "mock", f)));
     const clip = { name: "clip-3s.mp4", mimeType: "video/mp4", buffer: readFileSync(join(webDir, ".claude", "skills", "verify-video-gen-studio", "fixtures", "clip-3s.webm")) };
     await h.videoInput.setInputFiles(clip);
-    await h.uploaded("two images and a video");
+    await h.waitForUploads("two images and a video");
     const count = [await ta("playground.refs.imageCount", { count: "2", max: "6" }), await ta("playground.refs.videoCount", { count: "1", max: "3" })];
     for (const part of count) await expectText(h.box.locator("p"), part, "reference counter");
     const removeName = await ta("playground.refs.removeLabel", { kind: "image", tag: "1", name: "ref-landscape-1.jpg" });
@@ -238,7 +234,6 @@ export default async function screens({ page, ev, base, env, webDir, local, cred
     ev.note(`cost line: ${factLine}`);
     await review("cost-bar", a, facts);
 
-    // Text takes the three references away: the note counts them with the right Korean particle.
     await h.pickMode("text", "t2v");
     const removed = await ta("playground.note.removed", { to: "text", count: 3 });
     if (lang === "ko" && !removed.includes("레퍼런스 3개를")) ev.fail(`the Korean note reads "${removed}"`);
@@ -247,10 +242,9 @@ export default async function screens({ page, ev, base, env, webDir, local, cred
     if (/장를|개을/.test(await h.box.innerText())) ev.fail("a Korean particle disagrees with its noun in the composer");
     await review("particles", a, removedEl);
 
-    // A square start frame: the settings note names the shape with the right particle.
     await h.pickMode("firstFrame", "i2v");
     await h.imageInput.setInputFiles(join(webDir, "public", "mock", "ref-square.jpg"));
-    await h.uploaded("the square start frame");
+    await h.waitForUploads("the square start frame");
     const settings = await h.openSettings();
     const shape = await ta("generation.shape", { shape: "square" });
     const noteWords = { ko: "정사각으로", en: "square", "zh-CN": "方形" }[lang];

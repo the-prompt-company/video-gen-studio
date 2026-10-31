@@ -25,11 +25,10 @@ import { shapeOf, useAspectText, useSettingsSummary } from "@/components/setting
 import { useErrorText, useParamLabel, type KeyTranslator } from "@/i18n/errors";
 import { usd } from "@/i18n/format";
 
-/**
- * `unavailable` 503: the server cannot run the model at all, so it is listed but cannot be picked. 403: this member
- * has no key for it, and the composer says so while 생성하기 stays off.
- */
 export type Offer = { family: FamilyId; rateUsd: number; unavailable: Unavailable | null };
+
+/** A 503 means the server cannot run the model at all; a 403 (no key for this member) can still be picked and says why. */
+const pickable = (o: Offer) => o.unavailable?.status !== 503;
 export type ComposerHandle = { reuse: (g: PublicGeneration) => void };
 
 const SMALL = 4 * 1024 * 1024;
@@ -72,11 +71,7 @@ function readVideoSeconds(file: File): Promise<number | null> {
   });
 }
 
-/**
- * With no `blobPrefix`, the file goes through the server to Higgsfield's storage with the member's key. With one, it
- * goes straight to Blob: an OpenAI model's references always do, so no Higgsfield key is involved, and so does any
- * file over 4 MB.
- */
+/** A null `blobPrefix` uploads through /api/uploads to Higgsfield storage with the member's key; otherwise straight to Blob. */
 async function uploadFile(file: File, blobPrefix: string | null): Promise<string> {
   if (blobPrefix === null) {
     const fd = new FormData();
@@ -93,7 +88,6 @@ async function uploadFile(file: File, blobPrefix: string | null): Promise<string
   return blob.url;
 }
 
-/** "jpeg · png · webp", the way the file pickers list what they take. */
 function typeList(types: readonly string[]) {
   return types.map((t) => t.replace(/^image\//, "")).join(" · ");
 }
@@ -204,7 +198,7 @@ export function Composer({ ref, offers, largeUploadPrefix, onSubmit }: { ref?: R
   const summary = useSettingsSummary();
   const aspectText = useAspectText();
 
-  const [state, dispatch] = useReducer(composerReducer, offers, (list) => newComposer((list.find((o) => !o.unavailable) ?? list.find((o) => o.unavailable?.status !== 503) ?? list[0]).family));
+  const [state, dispatch] = useReducer(composerReducer, offers, (list) => newComposer((list.find((o) => !o.unavailable) ?? list.find(pickable) ?? list[0]).family));
   const latest = useRef(state);
   useEffect(() => {
     latest.current = state;
@@ -286,7 +280,6 @@ export function Composer({ ref, offers, largeUploadPrefix, onSubmit }: { ref?: R
     }
   }
 
-  /** Checks each file, places what the mode takes, and uploads those. The composer shows them at once, uploading. */
   async function attach(files: File[], slot?: Slot) {
     const current = FAMILIES[latest.current.family];
     setError(null);
@@ -509,7 +502,7 @@ export function Composer({ ref, offers, largeUploadPrefix, onSubmit }: { ref?: R
               <span className="truncate">{modeLabel}</span>
               <Icon name="chevron" />
             </button>
-            <button ref={settingsChip} type="button" aria-label={t("settings.open", { summary: settingsLine })} aria-haspopup="dialog" aria-expanded={open === "settings"} onClick={() => setOpen(open === "settings" ? null : "settings")} className={`${CHIP} sm:shrink`}>
+            <button ref={settingsChip} type="button" aria-label={t("settings.open", { summary: settingsLine })} aria-haspopup="dialog" aria-expanded={open === "settings"} onClick={() => setOpen(open === "settings" ? null : "settings")} className={`${CHIP} sm:min-w-32 sm:shrink`}>
               <Icon name="sliders" />
               <span className="truncate">{settingsLine}</span>
             </button>
@@ -524,7 +517,7 @@ export function Composer({ ref, offers, largeUploadPrefix, onSubmit }: { ref?: R
                   <span className="text-sm font-semibold text-foreground">{priced ? "—" : t("cost.unset")}</span>
                 )}
               </div>
-              <div className="max-w-[16rem] truncate text-[11px] tabular-nums text-subtle sm:max-w-[15rem]">
+              <div className="max-w-[16rem] truncate text-[11px] tabular-nums text-subtle sm:max-w-[13rem]">
                 {priced ? [...facts, t("cost.rate", { rate: rate(offer) })].join(" · ") : t("cost.unpriced", { facts: facts.join(" · ") })}
               </div>
             </div>
@@ -571,7 +564,7 @@ export function Composer({ ref, offers, largeUploadPrefix, onSubmit }: { ref?: R
             <div role="group" aria-label={t("outputs")} className="inline-flex justify-self-start rounded-full border border-border p-[3px]">
               {outputs.map((o) => {
                 const on = family.modes.output === o;
-                const first = offers.find((x) => FAMILIES[x.family].modes.output === o && x.unavailable?.status !== 503);
+                const first = offers.find((x) => FAMILIES[x.family].modes.output === o && pickable(x));
                 return (
                   <button key={o} type="button" aria-pressed={on} disabled={!on && !first} onClick={() => !on && first && pickFamily(first.family)} className="inline-flex h-10 items-center gap-1.5 rounded-full px-4 text-[13px] text-muted transition focus:outline-none focus-visible:ring-2 focus-visible:ring-accent aria-pressed:bg-foreground aria-pressed:font-medium aria-pressed:text-background disabled:opacity-45 sm:h-8">
                     <Icon name={o === "video" ? "film" : "image"} />
@@ -608,7 +601,7 @@ export function Composer({ ref, offers, largeUploadPrefix, onSubmit }: { ref?: R
                   <Option
                     key={o.family}
                     pressed={o.family === family.id}
-                    disabled={o.unavailable?.status === 503}
+                    disabled={!pickable(o)}
                     title={`${FAMILIES[o.family].name} · ${FAMILIES[o.family].vendor}`}
                     hint={offerHint(o)}
                     onClick={() => {

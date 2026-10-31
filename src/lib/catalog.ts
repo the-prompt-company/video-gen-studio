@@ -68,16 +68,11 @@ export type Provider = "higgsfield" | "openai";
 /** What the request makes: the element the browser shows and the key storage writes. */
 export type Output = "video" | "image";
 
-/**
- * A model's modes by what the member attaches: nothing (`text`), a start frame and an optional end frame
- * (`firstFrame`), or references (`reference`). The member picks the mode; the attachments must fit it. `endFrame` says
- * whether the model's image-to-video endpoint takes `end_image_url`.
- */
+/** `endFrame`: the model's image-to-video endpoint takes `end_image_url`. */
 export type ModeSet =
   | { output: "video"; text: "t2v"; firstFrame: "i2v"; reference: "r2v"; endFrame: boolean }
   | { output: "image"; text: "t2i"; firstFrame: null; reference: "r2i"; endFrame: false };
 
-/** How a mode takes attachments, the key of its ModeSet entry. */
 export type ModeKind = "text" | "firstFrame" | "reference";
 export const KIND_OF: Record<Mode, ModeKind> = { t2v: "text", t2i: "text", i2v: "firstFrame", r2v: "reference", r2i: "reference" };
 
@@ -123,7 +118,6 @@ export type CostBasis = {
 
 type BodyInput = { mode: Mode; params: Params; prompt: string; images: readonly string[]; videos: readonly string[]; endImage: string | null };
 
-/** Its note is `families.<key>.note`. */
 export type Family = {
   id: FamilyId;
   key: FamilyKey;
@@ -363,15 +357,9 @@ const RETIRED: Record<string, { name: string; mode: Mode }> = {
   "minimax/hailuo-2.3/standard/image-to-video": { name: "Hailuo 2.3 Standard", mode: "i2v" },
 };
 
-/** The model's modes in the order the model menu lists them. */
 export function modesOf(family: FamilyId): Mode[] {
   const m = FAMILIES[family].modes;
   return m.firstFrame ? [m.text, m.firstFrame, m.reference] : [m.text, m.reference];
-}
-
-/** The model's mode of that kind, or null when it has none (an image model has no first frame). */
-export function modeOf(family: FamilyId, kind: ModeKind): Mode | null {
-  return FAMILIES[family].modes[kind];
 }
 
 export function endpointOf(family: FamilyId, mode: Mode): string {
@@ -418,8 +406,8 @@ export function costUsd(b: CostBasis, rateUsd: number): number {
 }
 
 /**
- * What the member composed. `mode` is the mode the member picked. Images and videos are uploaded URLs: the start frame
- * alone in a first-frame mode, the references in their order in a reference mode, none in a text mode.
+ * `images`: the start frame alone in a first-frame mode (the end frame is `endImage`), the references in order in a
+ * reference mode, none in a text mode.
  */
 export type Draft = {
   family: FamilyId;
@@ -429,7 +417,6 @@ export type Draft = {
   images: readonly string[];
   /** `seconds` is read from the file's metadata in the browser when it was attached. */
   videos: readonly { url: string; seconds: number }[];
-  /** The optional last frame of a first-frame mode. */
   endImage: string | null;
 };
 
@@ -439,7 +426,7 @@ type PlanBase = {
   endpoint: string;
   prompt: string;
   params: Params;
-  /** Every image the request sends, in body order: the references, or the start frame then the end frame. */
+  /** The references in order, or the start frame then the end frame: the row's image_refs, which the stream labels by position. */
   imageUrls: readonly string[];
   videoUrls: readonly string[];
   durationS: number;
@@ -455,7 +442,6 @@ type PlanBase = {
 export type Plan = PlanBase & ({ ready: true; body: WireBody } | { ready: false; blocker: AppError });
 export type ReadyPlan = Extract<Plan, { ready: true }>;
 
-/** Why the attachments do not fit the member's mode, or null. The composer only ever makes the two it names. */
 function attachmentBlocker(family: Family, draft: Draft): AppError | null {
   const images = draft.images.length;
   const videos = draft.videos.length;
@@ -478,9 +464,8 @@ function attachmentBlocker(family: Family, draft: Draft): AppError | null {
 }
 
 /**
- * The member's mode checked against the attachments, param checks, the prompt rule, the request body and the cost, in
- * one pure call: the composer runs it on every change, the route runs it on the POST, and only a ready plan is
- * inserted. The body is the model's own (body()).
+ * Pure, so the composer runs it on every change and the route on the POST; only a ready plan is inserted. The body is
+ * the model's own (body()).
  */
 export function planGeneration(draft: Draft, baseRateUsd: number): Plan {
   const family = FAMILIES[draft.family];

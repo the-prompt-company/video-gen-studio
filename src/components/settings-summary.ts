@@ -12,13 +12,11 @@ export function shapeOf(w?: number | null, h?: number | null): Shape | null {
   return r > 1.05 ? "landscape" : r < 0.95 ? "portrait" : "square";
 }
 
-/** "16:9" as [16, 9]. "auto" and anything else that is not a ratio has none. */
 export function ratioOf(ratio: unknown): [number, number] | null {
   const m = /^(\d+):(\d+)$/.exec(String(ratio));
   return m ? [Number(m[1]), Number(m[2])] : null;
 }
 
-/** "가로 16:9", or "자동" for auto. */
 export function useAspectText(): (ratio: string) => string {
   const t = useTranslations("playground");
   const tGeneration = useTranslations("generation");
@@ -30,7 +28,6 @@ export function useAspectText(): (ratio: string) => string {
   };
 }
 
-/** A request's settings in one line, the aspect first: "가로 16:9 · 5초 · 480p". A switch shows only when on. */
 export function useSettingsSummary(): (family: FamilyId, mode: Mode, params: Readonly<Record<string, unknown>>) => string {
   const t = useTranslations("playground");
   const tValues = useTranslations("paramValues") as unknown as KeyTranslator;

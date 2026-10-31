@@ -1,7 +1,3 @@
-/**
- * The playground's composer and stream as a journey drives them, by message key in the page's language, so every
- * journey that generates or reads results finds them the same way. `p` is the page; `ev` the journey's harness.
- */
 const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 export const FAMILY_NAME = {
@@ -42,10 +38,8 @@ export async function composerHandles(ev, p) {
     turns: stream.locator("article[data-id]"),
     turn: (id) => stream.locator(`article[data-id="${id}"]`),
     openMenu,
-    /** "Seedance 2.0 · 텍스트→영상", as the model chip reads it. */
     chipText: async () => (await chip.innerText()).trim(),
     modeLabel: async (family, mode) => `${FAMILY_NAME[family]} · ${await t(`mode.${mode}`)}`,
-    /** Picks a model in the model menu, switching its output tab first when it is on the other one. */
     async pickModel(family, output) {
       const menu = await openMenu();
       if (output) {
@@ -57,30 +51,26 @@ export async function composerHandles(ev, p) {
       else await option.click();
       await menu.waitFor({ state: "detached" });
     },
-    /** Picks 텍스트, 프레임 or 레퍼런스 (`text`, `firstFrame`, `reference`) in the model menu. */
     async pickMode(kind, mode) {
       const menu = await openMenu();
       await menu.getByRole("button", { name: new RegExp(`^${escape(await t(`playground.kind.${kind}`))} · ${escape(await t(`mode.${mode}`))}`) }).click();
       await menu.waitFor({ state: "detached" });
     },
-    /** Opens the settings popover (a sheet under 640 px). */
     async openSettings() {
       await box.getByRole("button", { name: new RegExp(`^${escape(await t("playground.settings.open", { summary: "" }))}`) }).click();
       const dialog = p.getByRole("dialog", { name: await t("playground.settings.title") });
       await dialog.waitFor();
       return dialog;
     },
-    /** The estimate as the composer shows it: "$0.4925", "—" or the unpriced word. */
     cost: async () => (await box.getByText(costLabel, { exact: true }).locator("xpath=following-sibling::*[1]").innerText()).trim(),
-    /** Waits until no attachment is still uploading. */
-    async uploaded(why = "an attachment") {
+    async waitForUploads(why = "an attachment") {
+      // setInputFiles returns before React renders the new attachments as uploading.
       await p.waitForTimeout(300);
       for (let i = 0; (await box.getByText(uploadingText).count()) > 0; i++) {
         if (i === 150) ev.fail(`${why}: an upload never finished`);
         await p.waitForTimeout(200);
       }
     },
-    /** Clicks 생성하기 (or presses Ctrl+Enter in the prompt) and returns the POST's answer. */
     async submit(how = "click") {
       const answer = p.waitForResponse((r) => r.request().method() === "POST" && new URL(r.url()).pathname === "/api/generations", { timeout: 30_000 });
       if (how === "keyboard") {
@@ -93,7 +83,6 @@ export async function composerHandles(ev, p) {
   };
 }
 
-/** "$0.4925", "$1.71", "$120": how the page prints a dollar amount. */
 export function usd(n) {
   const v = Number(n ?? 0);
   return `$${v.toFixed(v >= 100 ? 0 : v >= 1 ? 2 : 4)}`;

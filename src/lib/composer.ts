@@ -2,13 +2,9 @@ import { defaultParams, FAMILIES, type Draft, type FamilyId, type Mode, type Mod
 
 type AttachmentBase = { id: string; name: string; preview: string; url: string | null };
 
-/**
- * One file the member attached. `preview` is the browser's own copy, shown at once; `url` is null until the upload
- * answers. A video's length is read in the browser before it is attached.
- */
+/** `url` is null until the upload answers. */
 export type Attachment = AttachmentBase & ({ kind: "image"; w: number | null; h: number | null } | { kind: "video"; seconds: number });
 
-/** The attachments a mode takes, so what the composer holds always fits the mode the member picked. */
 export type Attachments =
   | { kind: "text" }
   | { kind: "firstFrame"; start: Attachment | null; end: Attachment | null }
@@ -16,10 +12,7 @@ export type Attachments =
 
 export type Slot = "start" | "end";
 
-/**
- * A line under the prompt after the composer changed what the member had. `removed` holds what 되돌리기 puts back,
- * and lasts until the attachments change again.
- */
+/** `removed` holds what 되돌리기 puts back, until the member next adds or removes an attachment or changes the model. */
 export type Note =
   | { kind: "switched"; mode: Mode }
   | { kind: "removed"; count: number; restore: Attachments }
@@ -27,7 +20,6 @@ export type Note =
 
 export type Composer = { family: FamilyId; params: Readonly<Record<string, unknown>>; attach: Attachments; note: Note | null };
 
-/** Why an attached file was not taken. */
 export type Refusal = { reason: "full"; kind: "image" | "video"; max: number } | { reason: "noVideos" } | { reason: "framesTakeImages" } | { reason: "framesFull" };
 
 export type Action =
@@ -36,12 +28,11 @@ export type Action =
   | { type: "param"; key: string; value: unknown }
   | { type: "add"; items: readonly Attachment[]; slot?: Slot }
   | { type: "uploaded"; id: string; url: string }
-  /** The member took it off. */
+  /** The member took it off, which also ends the chance to undo. */
   | { type: "remove"; id: string }
-  /** Its upload failed. */
+  /** Its upload failed: gone from the attachments and from what 되돌리기 restores. */
   | { type: "failed"; id: string }
   | { type: "undo" }
-  /** The note has served its turn, as after a submit. */
   | { type: "dismiss" }
   | { type: "reuse"; family: FamilyId; kind: ModeKind; params: Readonly<Record<string, unknown>> };
 
@@ -55,14 +46,12 @@ export function newComposer(family: FamilyId): Composer {
   return { family, params: defaultParams(family), attach: EMPTY.text, note: null };
 }
 
-/** The attachments in the order the request sends them. */
 export function attachmentsOf(a: Attachments): Attachment[] {
   if (a.kind === "text") return [];
   if (a.kind === "reference") return [...a.items];
   return [a.start, a.end].filter((x): x is Attachment => x !== null);
 }
 
-/** The model's mode for what the composer holds. A kind the model lacks never stays: a model change turns it into references. */
 export function modeOfComposer(c: Composer): Mode {
   const modes = FAMILIES[c.family].modes;
   return modes[c.attach.kind] ?? modes.reference;
@@ -72,7 +61,7 @@ export function uploading(c: Composer): boolean {
   return attachmentsOf(c.attach).some((a) => a.url === null);
 }
 
-/** What the composer would send. An attachment still uploading stands in with its preview, so counts and costs are right. */
+/** An attachment still uploading stands in with its preview URL, so counts and costs are right before it lands. */
 export function draftOf(c: Composer, prompt: string): Draft {
   const url = (a: Attachment) => a.url ?? a.preview;
   const base = { family: c.family, mode: modeOfComposer(c), prompt, params: c.params };
@@ -87,10 +76,6 @@ export function draftOf(c: Composer, prompt: string): Draft {
   };
 }
 
-/**
- * Moves the attachments into another kind of mode. Text takes none; frames take the first two images as start and
- * end; references take everything. What does not fit is dropped, and the note can put it back.
- */
 function toKind(c: Composer, kind: ModeKind): Composer {
   if (c.attach.kind === kind) return c;
   const all = attachmentsOf(c.attach);
@@ -105,11 +90,7 @@ function toKind(c: Composer, kind: ModeKind): Composer {
   return { ...c, attach, note: dropped > 0 ? { kind: "removed", count: dropped, restore: c.attach } : null };
 }
 
-/**
- * Places files the member attached, in order, where the mode takes them: references up to the model's limits, or the
- * empty frame slots (the named slot first). Attaching in text mode switches to references. `placed` are the ones to
- * upload.
- */
+/** Attaching in text mode switches to references. `placed` are the items to upload. */
 export function fit(c: Composer, items: readonly Attachment[], slot?: Slot): { composer: Composer; placed: Attachment[]; refused: Refusal[] } {
   const family = FAMILIES[c.family];
   const placed: Attachment[] = [];
@@ -158,7 +139,7 @@ function mapAttachments(a: Attachments, f: (x: Attachment) => Attachment | null)
   return { kind: "firstFrame", start: a.start && f(a.start), end: a.end && f(a.end) };
 }
 
-/** Applies `f` to the attachments and to what the note would put back, so an upload that lands after a switch still counts. */
+/** The note's restore too: an upload can land after a switch moved its attachment there. */
 function everywhere(c: Composer, f: (x: Attachment) => Attachment | null): Composer {
   const note = c.note?.kind === "removed" ? { ...c.note, restore: mapAttachments(c.note.restore, f) } : c.note;
   return { ...c, attach: mapAttachments(c.attach, f), note };
@@ -173,7 +154,7 @@ export function composerReducer(c: Composer, action: Action): Composer {
       return { family: action.family, params: defaultParams(action.family), attach, note: null };
     }
     case "mode":
-      return toKind(c, action.kind);
+      return FAMILIES[c.family].modes[action.kind] ? toKind(c, action.kind) : c;
     case "param":
       return { ...c, params: { ...c.params, [action.key]: action.value } };
     case "add":

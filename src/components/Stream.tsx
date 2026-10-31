@@ -15,9 +15,7 @@ import { usd } from "@/i18n/format";
 
 export type StreamHandle = { toEnd: () => void };
 
-/** Within this many pixels of the bottom, the stream follows new results down. */
 const PINNED_PX = 80;
-/** The tallest a result may stand, so a portrait clip never fills the screen. */
 const MEDIA_MAX_H = "min(60dvh, 560px)";
 const ACTION =
   "inline-flex h-11 items-center gap-1.5 rounded-full px-3 text-xs text-foreground-2 transition hover:bg-white/10 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:h-8";
@@ -31,7 +29,6 @@ function prefersReducedMotion() {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
-/** The time since `since` on the server's clock, ticking by itself so only this text renders every second. */
 function Elapsed({ since, offset }: { since: number; offset: RefObject<number> }) {
   const [now, setNow] = useState(() => Date.now() + offset.current);
   useEffect(() => {
@@ -41,7 +38,7 @@ function Elapsed({ since, offset }: { since: number; offset: RefObject<number> }
   return <>{fmtElapsed(now - since)}</>;
 }
 
-/** A reference of a stored row. Its upload may be gone after the row finished, so a broken one keeps only its label. */
+/** cleanupRefs deletes a row's uploads once it finishes, so a broken one keeps only its label. */
 function RefThumb({ url, video, label }: { url: string; video: boolean; label: string }) {
   const [broken, setBroken] = useState(false);
   return (
@@ -60,7 +57,6 @@ function RefThumb({ url, video, label }: { url: string; video: boolean; label: s
 
 type TurnProps = { g: PublicGeneration; n: number; offset: RefObject<number>; onCancel: (g: PublicGeneration) => void; onReuse: (g: PublicGeneration) => void };
 
-/** One generation as a chat turn: the prompt card the member sent, and the result under it. */
 const Turn = memo(function Turn({ g, n, offset, onCancel, onReuse }: TurnProps) {
   const t = useTranslations("playground");
   const tGeneration = useTranslations("generation");
@@ -80,7 +76,7 @@ const Turn = memo(function Turn({ g, n, offset, onCancel, onReuse }: TurnProps) 
   const media = g.video ?? g.image;
   const frames = m.mode === "i2v";
   const refs = [...g.imageRefs.map((url, i) => ({ url, video: false, label: frames ? t("feed.frame", { slot: i === 0 ? "start" : "end" }) : String(i + 1) })), ...g.videoRefs.map((url, i) => ({ url, video: true, label: `V${i + 1}` }))];
-  const cost = live || g.status === "completed" ? `${live ? `${t("feed.estimated")} ` : ""}${usd(format, g.costUsd)}` : null;
+  const cost = live || g.status === "completed" ? usd(format, g.costUsd) : null;
 
   return (
     <article data-id={g.id} aria-label={t("feed.item", { n: String(n), status: label })} className="grid gap-2.5">
@@ -96,7 +92,12 @@ const Turn = memo(function Turn({ g, n, offset, onCancel, onReuse }: TurnProps) 
           )}
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs text-muted">
             <span className="min-w-0">{[modelLine(g.modelId, (mode: Mode) => tMode(mode)), settings].filter(Boolean).join(" · ")}</span>
-            {cost && <span className="font-display text-sm leading-none text-sand">{cost}</span>}
+            {cost && (
+              <span>
+                {live && <span className="mr-1">{t("feed.estimated")}</span>}
+                <span className="font-display text-sm leading-none text-sand">{cost}</span>
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -155,11 +156,7 @@ const Turn = memo(function Turn({ g, n, offset, onCancel, onReuse }: TurnProps) 
   );
 });
 
-/**
- * The thread as a chat, oldest at the top. It follows new results down while the member is at the bottom and stays
- * put while they read older turns; an older page loads when its marker scrolls into view and keeps the view where it
- * was.
- */
+/** `rows` newest first, as the feeds hold them; shown oldest at the top. */
 export function Stream({
   ref,
   threadKey,
@@ -221,7 +218,7 @@ export function Stream({
     const el = scroller.current;
     const body = content.current;
     if (!el || !body) return;
-    // The turns grow as results land, and the stream shrinks as the composer grows; either way a pinned stream stays at the end.
+    // Observe the scroller too: it shrinks when the composer grows.
     const observer = new ResizeObserver(() => {
       if (pinned.current) el.scrollTop = el.scrollHeight;
     });

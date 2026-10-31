@@ -1,13 +1,4 @@
-/**
- * Feature: composer — the playground's chat stream and its docked composer. A member picks the mode in the model menu
- * per model, fills a start and an end frame and generates into a new thread (the fake receives end_image_url), changes
- * settings and sees the summary and the cost follow, switches frames to references and to text and back with 되돌리기,
- * hits the real reference limits and blockers, generates into the same thread with Ctrl+Enter, attaches by drag and
- * drop, loads older turns without losing their place, and reloads onto the same thread. Saves the review images to
- * .impeccable/review/composer/<surface>-<lang>-<viewport>.png. Creates and deletes one vgs-cmp-* member with its rows
- * and threads, and sets the two video rates for the run, so it runs on a local database only, with VGS_FAKE_HF
- * naming the fake the app talks to. See features/composer.md.
- */
+/** Feature: composer — the chat stream and its docked composer. See features/composer.md. */
 import { createRequire } from "node:module";
 import { mkdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -96,7 +87,7 @@ export default async function composer({ page, ev, base, env, webDir, local }) {
     const expectBlocked = async (key, values, why) => {
       if (!(await status.filter({ hasText: await ta(key, values) }).isVisible()) || (await generate.isEnabled())) ev.fail(`${why}: expected the blocker ${key} with 생성하기 off, got status "${(await status.allInnerTexts()).join(" | ")}"`);
     };
-    const settled = (why) => h.uploaded(why);
+    const settled = (why) => h.waitForUploads(why);
     const pickFile = async (button, files) => {
       const [chooser] = await Promise.all([a.waitForEvent("filechooser"), button.click()]);
       await chooser.setFiles(files);
@@ -121,7 +112,6 @@ export default async function composer({ page, ev, base, env, webDir, local }) {
     };
     const threadOf = () => new URL(a.url()).searchParams.get("thread");
 
-    // New thread, text mode, the first model the member can use.
     await stream.getByText(await ta("playground.empty.title"), { exact: true }).waitFor({ timeout: 15_000 });
     await expectChip(SEEDANCE, "t2v", "a member with a key starts on Seedance text");
     await review("new-thread", a);
@@ -129,7 +119,6 @@ export default async function composer({ page, ev, base, env, webDir, local }) {
     if (!(await generate.isEnabled())) ev.fail("text mode with a prompt should be ready");
     await review("composer-text", a);
 
-    // Model menu: tabs, the three modes of a video model, both video models with their rates.
     const menu = await openMenu();
     const modeOptions = (await menu.getByRole("button", { name: new RegExp(`· (${[await ta("mode.t2v"), await ta("mode.i2v"), await ta("mode.r2v")].join("|")})`) }).allInnerTexts()).length;
     if (modeOptions !== 3) ev.fail(`Seedance should list 3 modes, found ${modeOptions}`);
@@ -140,7 +129,6 @@ export default async function composer({ page, ev, base, env, webDir, local }) {
     await menu.waitFor({ state: "detached" });
     if (!(await h.chip.evaluate((el) => el === document.activeElement))) ev.fail("Esc should return focus to the model chip");
 
-    // Frames: the start frame is required, the end frame optional; both come from their own slot's picker.
     await pickMode("firstFrame", "i2v", { keyboard: true });
     await expectChip(SEEDANCE, "i2v", "picking 프레임 with Enter");
     await expectBlocked("errors.startFrameRequired", undefined, "frames with no start frame");
@@ -154,7 +142,6 @@ export default async function composer({ page, ev, base, env, webDir, local }) {
     if (!(await generate.isEnabled())) ev.fail(`start and end frames should be ready, status: ${(await status.allInnerTexts()).join(" | ")}`);
     await review("composer-frames", a);
 
-    // Settings: the summary and the cost follow each change.
     const settingsChip = box.getByRole("button", { name: new RegExp(`^${await ta("playground.settings.open", { summary: "" })}`) });
     const costBefore = await costText();
     await settingsChip.click();
@@ -174,7 +161,6 @@ export default async function composer({ page, ev, base, env, webDir, local }) {
     await a.keyboard.press("Escape");
     await settings.waitFor({ state: "detached" });
 
-    // Generate into a new thread: the fake receives image_url then end_image_url, the very files the slots uploaded.
     const one = await submit("frames");
     await a.waitForURL((u) => new URL(u).searchParams.get("thread") === one.thread.id, { timeout: 15_000 });
     const sentOne = await sentFor(one.item.id);
@@ -191,7 +177,6 @@ export default async function composer({ page, ev, base, env, webDir, local }) {
     if (JSON.stringify(frameLabels) !== JSON.stringify(wantLabels)) ev.fail(`the turn labels its frames ${JSON.stringify(frameLabels)}`);
     ev.note(`end frame: ${sentOne.endpoint} ← image_url ${startUrl}, end_image_url ${endUrl}; row ${one.item.id} in new thread ${one.thread.id}`);
 
-    // Frames to references keeps both; text takes them away and 되돌리기 brings them back.
     await pickMode("reference", "r2v");
     if ((await (await refList()).count()) !== 2) ev.fail("frames should become two references");
     await pickMode("text", "t2v");
@@ -201,7 +186,6 @@ export default async function composer({ page, ev, base, env, webDir, local }) {
     await expectChip(SEEDANCE, "r2v", "되돌리기");
     if ((await (await refList()).count()) !== 2) ev.fail("되돌리기 should restore both references");
 
-    // Reference limits: seven images give six, the video counts apart, and H3's five is a blocker.
     await attachRefs([0, 1, 2, 3, 4].map(jpeg));
     const tooMany = await ta("playground.upload.tooMany", { kind: "image", max: 6 });
     await box.getByRole("alert").filter({ hasText: tooMany }).waitFor({ timeout: 10_000 }).catch(() => ev.fail(`a seventh image should be refused with "${tooMany}"`));
@@ -218,7 +202,6 @@ export default async function composer({ page, ev, base, env, webDir, local }) {
     await box.getByRole("button", { name: await ta("playground.refs.removeLabel", { kind: "image", tag: "6", name: "ref-3.jpg" }), exact: true }).click();
     if (!(await generate.isEnabled())) ev.fail(`five images on H3 should be ready, status: ${(await status.allInnerTexts()).join(" | ")}`);
 
-    // Generate into the same thread with Ctrl+Enter.
     await prompt.fill(`[composer] ${stamp} 같은 다리, 카메라를 더 낮게`);
     const two = await submit("references", "keyboard");
     if (two.thread.id !== one.thread.id || threadOf() !== one.thread.id) ev.fail(`the second generation went to thread ${two.thread.id}`);
@@ -226,7 +209,6 @@ export default async function composer({ page, ev, base, env, webDir, local }) {
     if (sentTwo.endpoint !== `${H3}/reference-to-video` || sentTwo.body.image_urls?.length !== 5 || sentTwo.body.video_urls?.length !== 1) ev.fail(`references sent ${sentTwo.endpoint} ${JSON.stringify(sentTwo.body)}`);
     ev.note(`references: ${sentTwo.endpoint} with 5 images and 1 video into the same thread by Ctrl+Enter`);
 
-    // GPT Image 2: the image tab keeps the attachments, and a video is a real blocker there.
     await pickModel(GPT, "image");
     await expectChip(GPT, "r2i", "the image tab");
     await expectBlocked("errors.noVideoRefs", { model: "GPT Image 2" }, "a video on the image model");
@@ -241,7 +223,6 @@ export default async function composer({ page, ev, base, env, webDir, local }) {
     await a.keyboard.press("Escape");
     await expectChip(GPT, "r2i", "adding a reference in text mode");
 
-    // Drag and drop onto the composer adds a reference.
     const dropped = await a.evaluateHandle(async (b64) => {
       const dt = new DataTransfer();
       dt.items.add(new File([Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))], "dropped.jpg", { type: "image/jpeg" }));
@@ -253,7 +234,6 @@ export default async function composer({ page, ev, base, env, webDir, local }) {
     if ((await (await refList()).count()) !== before + 1) ev.fail("a dropped image should be added");
     ev.note("drag and drop added a reference");
 
-    // Both generations finish; the stream reads like a chat.
     for (let i = 0; ; i++) {
       const read = await ev.api(`/api/generations?ids=${one.item.id},${two.item.id}`, undefined, a);
       if ((read.body?.items ?? []).every((x) => x.status === "completed")) break;
@@ -265,8 +245,6 @@ export default async function composer({ page, ev, base, env, webDir, local }) {
     await stream.locator(`article[data-id="${two.item.id}"]`).getByLabel(result, { exact: true }).waitFor({ timeout: 20_000 });
     await review("stream", a);
 
-    // Older turns: 14 more rows behind the two, a reload shows the newest 12 on the same thread, and scrolling up loads
-    // the rest while the turn at the top stays where it was.
     await sql`
       insert into generations (user_id, thread_id, model_id, prompt, params, status, result_url, duration_s, cost_usd, created_at, completed_at, expires_at)
       select ${memberId}, ${one.thread.id}, ${`${SEEDANCE}/text-to-video`}, ${`[composer] ${stamp} older `} || n, ${sql.json({ duration: 5, resolution: "480p", aspect_ratio: "16:9" })},

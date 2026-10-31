@@ -35,7 +35,7 @@ export async function threadFeed(userId: number, ref: ThreadRef, limit: number, 
     ref.kind === "earlier"
       ? and(isNull(g.threadId), notExists(db.select({ one: sql`1` }).from(t).where(earlierDeleted(userId))))
       : and(eq(g.threadId, ref.id), exists(db.select({ one: sql`1` }).from(t).where(openChat(userId, ref.id))));
-  // The cursor's exact created_at, read here: the browser's copy has lost its microseconds. The id breaks a tie.
+  // Read the cursor's created_at in SQL: the browser's copy has lost its microseconds.
   const at = sql`(select c.created_at from generations c where c.id = ${before} and c.user_id = ${userId})`;
   const older = before === null ? undefined : and(lte(g.createdAt, at), sql`(${g.createdAt}, ${g.id}) < (${at}, ${before}::uuid)`);
   const found = await db
