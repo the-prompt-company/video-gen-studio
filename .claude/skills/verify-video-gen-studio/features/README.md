@@ -16,7 +16,7 @@ This directory is the maintained source for verifying the user-facing behavior o
 - Start every recipe from a fresh browser context; `ev.login(path)` signs in through the real form.
 - Prefer ARIA roles, accessible names, and labels over CSS selectors or DOM position. The handle table in `SKILL.md` lists the stable ones.
 - Treat every command as literal. Keep quoted Korean names unchanged.
-- Pick the browser language with `VGS_LOCALE` (`ko-KR` by default, `en-US`, `zh-CN`). Translated surfaces (sign-in, password forms, header, modal close, status badges, error messages, the playground, the gallery and the dashboard) are found by message key with `await ev.t("<key>", values, page)`, which reads the page's `<html lang>`; surfaces not yet translated keep their Korean names in every language.
+- Pick the browser language with `VGS_LOCALE` (`ko-KR` by default, `en-US`, `zh-CN`). Every surface is translated, so find each element by message key with `await ev.t("<key>", values, page)`, which reads the page's `<html lang>`. Korean stays in a journey only as data: prompts, nicknames, team names, sheet headers and old stored reasons.
 - Run journeys through `vgs run <journey>`; add `VGS_MOBILE=1` for the 390px layout.
 - A paid generation only happens with `VGS_ALLOW_SPEND=1`. Default runs prove the gate and stop.
 - Restore mutated data inside the journey (`finally`). Do not remove proof artifacts during cleanup.
@@ -56,4 +56,5 @@ Keep implementation details out of the map. Name only user paths, stable handles
 - [Errors](./errors.md) covers server refusals and stored failure reasons in the page language, provider text and old Korean reasons as written, and the error wire format. Creates and deletes three disposable members; local database only.
 - [Formats](./formats.md) covers dates in Seoul time per language, relative times, and dollars on the dashboard, gallery, playground and admin, with no hydration warning. Local database only.
 - [Screens](./screens.md) covers the gallery, the dashboard and the playground in each language: plurals, the Korean particles, the first-frame note, untranslated prompts and nicknames, the no-key banner, the admin scope links, GPT Image 2 against the fake, and no sideways scroll at 390 px. Saves the PR 3 review images. Creates and deletes two disposable members; local database only.
+- [Screens, admin](./screens-admin.md) covers 설정, the members, teams, import, model-rate and logs tabs in each language: plurals, `teams.none`, untranslated names, the import error column, the rate round-trip, and no sideways scroll at 390 px. Saves the PR 4 review images. Creates and deletes two disposable members, two teams and their rows; local database only.
 - [Admin](./admin.md) covers the users table and its edit, add and import modals (name, focus, Esc, scroll lock), the three model rates with their units and published-rate fill, and the logs tab.

@@ -11,7 +11,9 @@
     "settings": "설정"
   },
   "common": {
-    "close": "닫기"
+    "close": "닫기",
+    "save": "저장",
+    "cancel": "취소"
   },
   "nav": {
     "label": "주 메뉴",
@@ -420,5 +422,267 @@
       "h3": "10초",
       "gptImage2": "1024×1024 중간 품질 1장"
     }
+  },
+  "settings": {
+    "lead": "상단 메뉴에 보이는 사진과 닉네임, 화면 언어, 로그인 비밀번호를 바꿉니다.",
+    "profile": {
+      "title": "프로필",
+      "lead": "사진과 닉네임으로 상단 메뉴에 내가 표시됩니다. 닉네임이 없으면 ID가 보입니다."
+    },
+    "account": {
+      "title": "계정",
+      "lead": "로그인에 쓰는 ID와 팀은 직접 바꿀 수 없습니다. 바꿔야 하면 관리자에게 요청하세요.",
+      "team": "팀"
+    },
+    "password": {
+      "title": "비밀번호",
+      "lead": "현재 비밀번호를 확인한 뒤 바꿉니다. 이 브라우저는 로그인 상태로 남고, 다른 기기와 브라우저의 로그인은 모두 끝납니다."
+    }
+  },
+  "profile": {
+    "avatar": {
+      "current": "프로필 사진",
+      "preview": "새 프로필 사진 미리보기"
+    },
+    "photo": {
+      "choose": "사진 고르기",
+      "change": "사진 바꾸기",
+      "preparing": "사진 준비 중…",
+      "save": "사진 저장",
+      "remove": "사진 삭제",
+      "removing": "지우는 중…",
+      "cropHint": "이미지 파일을 고르면 가운데를 정사각형으로 잘라 {side}×{side} 크기로 줄인 뒤 올립니다.",
+      "previewHint": "미리보기입니다. 사진 저장을 눌러야 바뀝니다.",
+      "storageOff": "사진 저장소(Vercel Blob)가 연결되지 않아 지금은 사진을 바꿀 수 없습니다. 관리자에게 연결을 요청하세요.",
+      "unreadable": "이 파일은 사진으로 열 수 없습니다. JPG, PNG, WebP 같은 이미지 파일을 고르세요"
+    },
+    "saving": "저장 중…",
+    "nickname": {
+      "label": "닉네임",
+      "counter": "{length}/{max}",
+      "save": "닉네임 저장",
+      "help": "비워 두고 저장하면 닉네임이 지워지고 ID가 보입니다. 다른 사람과 같아도 됩니다."
+    },
+    "done": {
+      "photoSaved": "사진을 저장했습니다.",
+      "photoRemoved": "사진을 지웠습니다. 상단 메뉴에는 이름의 첫 글자가 보입니다.",
+      "nicknameSaved": "닉네임을 저장했습니다.",
+      "nicknameCleared": "닉네임을 지웠습니다. 상단 메뉴에 ID가 보입니다."
+    }
+  },
+  "admin": {
+    "lead": "사용자와 API 키 할당, 모델 단가, 전체 로그.",
+    "stats": {
+      "totalSpend": "전체 비용",
+      "generations": "전체 생성",
+      "models": "모델 수",
+      "modelsSub": "사용된 모델"
+    },
+    "tabs": {
+      "users": "사용자 · API 키",
+      "teams": "팀",
+      "models": "모델 · 단가",
+      "logs": "로그 · 히스토리"
+    }
+  },
+  "members": {
+    "title": "사용자 {count, plural, other {#명}}",
+    "notice": {
+      "added": "{id} 계정을 추가했습니다.",
+      "assigned": "{count, plural, other {#명을}} {team}에 지정했습니다.",
+      "unassigned": "{count, plural, other {#명을}} 미소속으로 바꿨습니다."
+    },
+    "filter": {
+      "label": "팀으로 거르기",
+      "all": "모든 팀 ({count, plural, other {#명}})",
+      "team": "{team} ({count, plural, other {#명}})"
+    },
+    "selected": "{count, plural, other {#명}} 선택",
+    "selectAll": "보이는 사용자 모두 선택",
+    "select": "{username} 선택",
+    "edit": "{username} 편집",
+    "empty": {
+      "none": "사용자가 없습니다.",
+      "noTeam": "미소속인 사용자가 없습니다.",
+      "team": "이 팀에 속한 사용자가 없습니다. 모든 팀으로 바꾼 뒤 사람을 골라 팀 지정을 누르세요."
+    },
+    "field": {
+      "nickname": "닉네임",
+      "team": "팀",
+      "role": "역할",
+      "note": "메모"
+    },
+    "table": {
+      "key": "키",
+      "generations": "생성",
+      "cost": "비용",
+      "lastUsed": "마지막 사용",
+      "status": "상태"
+    },
+    "key": {
+      "assigned": "할당",
+      "none": "없음"
+    },
+    "active": "활성",
+    "inactive": "비활성",
+    "temporary": "임시 비밀번호",
+    "add": {
+      "title": "사용자 추가",
+      "submit": "추가",
+      "submitting": "추가 중…",
+      "password": "임시 비밀번호",
+      "passwordHint": "{min, plural, other {#자 이상}} · 첫 로그인 때 바꾸게 함",
+      "apiKey": "Higgsfield API 키",
+      "apiKeyHint": "key-id:key-secret · 나중에 넣어도 됨",
+      "optional": "선택"
+    },
+    "assign": {
+      "title": "팀 지정",
+      "submit": "{count, plural, other {#명}} 지정",
+      "submitting": "지정하는 중…",
+      "hint": "한 사람은 한 팀에만 속합니다",
+      "placeholder": "팀을 고르세요",
+      "noTeams": "아직 팀이 없습니다. 팀 탭에서 팀을 만든 뒤 다시 여세요.",
+      "chosenLabel": "고른 사용자",
+      "chosen": "고른 사용자 {count, plural, other {#명}}"
+    },
+    "editor": {
+      "apiKey": "API 키",
+      "removeKey": "제거",
+      "temporaryNote": "임시 비밀번호 상태입니다. 다음 로그인 때 새 비밀번호를 정해야 들어올 수 있습니다.",
+      "deactivate": "비활성화",
+      "activate": "활성화",
+      "unlock": "잠금 해제 (실패 {failures, plural, other {#회}})",
+      "unlockUntil": "잠금 해제 (실패 {failures, plural, other {#회}}, {until}까지 잠김)"
+    },
+    "nickname": {
+      "hint": "{max, plural, other {#자까지}} · 비우면 없앰",
+      "placeholder": "닉네임 없음"
+    },
+    "password": {
+      "temporary": "임시 비밀번호 ({min, plural, other {#자 이상}})",
+      "new": "새 비밀번호 ({min, plural, other {#자 이상}})",
+      "change": "변경"
+    },
+    "reset": {
+      "title": "초기 비밀번호로 되돌리기",
+      "body": "비밀번호를 초기 비밀번호(<mono>{password}</mono>)로 되돌립니다. 이 회원은 모든 기기에서 로그아웃되고, 다음 로그인 때 새 비밀번호를 정해야 합니다.",
+      "confirm": "되돌리기"
+    }
+  },
+  "teams": {
+    "none": "미소속",
+    "title": "팀",
+    "count": "팀 {count, plural, other {#개}}",
+    "create": {
+      "title": "팀 만들기",
+      "submit": "만들기",
+      "submitting": "만드는 중…",
+      "hint": "{max, plural, other {#자까지}} · 대소문자만 다른 이름은 같은 이름"
+    },
+    "name": {
+      "label": "팀 이름",
+      "hint": "{max, plural, other {#자까지}}"
+    },
+    "notice": {
+      "created": "팀을 만들었습니다: {name}. 사용자 탭에서 팀원을 고른 뒤 팀 지정을 누르세요.",
+      "deleted": "팀을 삭제했습니다: {name}.{released, plural, =0 {} other { 팀원 #명이 미소속이 됐습니다.}}"
+    },
+    "empty": "아직 팀이 없습니다. 팀을 만든 뒤 사용자 탭에서 팀원을 고르고 팀 지정을 누르세요.",
+    "table": {
+      "team": "팀",
+      "size": "인원",
+      "members": "팀원"
+    },
+    "edit": "{name} 편집",
+    "size": "{count, plural, other {#명}}",
+    "noMembers": "없음",
+    "members": {
+      "label": "팀원",
+      "count": "팀원 {count, plural, other {#명}}",
+      "empty": "아직 팀원이 없습니다. 사용자 탭에서 사람을 고른 뒤 팀 지정을 누르세요."
+    },
+    "delete": {
+      "title": "팀 삭제",
+      "confirm": "이 팀을 삭제합니다. {count, plural, =0 {} other {팀원 #명은 미소속이 되고, }}영상과 사용 기록은 그대로 남습니다.",
+      "submit": "삭제",
+      "submitting": "삭제하는 중…"
+    }
+  },
+  "import": {
+    "title": "엑셀로 회원 만들기",
+    "intro": "첫 시트에서 처음 채워진 줄을 제목으로 읽습니다. 이메일이 로그인 ID가 되고, 초기 비밀번호(<pw>{password}</pw>)로 첫 로그인 때 새 비밀번호를 정합니다.",
+    "pick": {
+      "first": "엑셀 파일 고르기",
+      "another": "다른 파일 고르기"
+    },
+    "working": "<name>{file}</name> {doing, select, reading {읽는 중…} checking {확인하는 중…} creating {만드는 중…} other {}}",
+    "failure": {
+      "notXlsx": "엑셀 통합 문서(.xlsx)만 읽을 수 있습니다. 엑셀에서 다른 이름으로 저장 → Excel 통합 문서(.xlsx)로 저장한 뒤 다시 고르세요",
+      "unreadable": "파일을 읽지 못했습니다. 엑셀에서 열리는지 확인하고, 암호가 걸려 있으면 풀어서 .xlsx로 다시 저장한 뒤 고르세요",
+      "empty": "시트가 비어 있습니다. 첫 줄에 {nickname}, {email}(또는 {nicknameAlias}, {emailAlias}) 제목을 쓰고, 그 아래에 회원을 한 줄에 한 명씩 적으세요",
+      "missingColumns": "{row}행을 제목 줄로 읽었는데 {missing, select, nickname {{nickname}(또는 {nicknameAlias})} email {{email}(또는 {emailAlias})} both {{nickname}(또는 {nicknameAlias})과 {email}(또는 {emailAlias})} other {}} 열이 없습니다 (찾은 제목: {found}). 제목 칸을 고친 뒤 파일을 다시 고르세요"
+    },
+    "example": {
+      "label": "엑셀 형식 예시",
+      "nickname": "김민지",
+      "caption": "{nicknameAlias} · {emailAlias} 제목도 읽습니다. 다른 열은 읽지 않고, 한 번에 {max, plural, other {#명}}까지 만듭니다."
+    },
+    "rowCount": "{count, plural, other {#행}}",
+    "done": "{count, plural, =0 {새로 만든 회원이 없습니다.} other {#명을 만들었습니다. 사용자 표에 임시 비밀번호로 표시됩니다.}}",
+    "summary": "결과 요약",
+    "rows": "행별 결과",
+    "outcome": {
+      "invalid": "확인 필요",
+      "duplicate": "파일 안 중복",
+      "exists": "이미 있음",
+      "create": "만들 예정",
+      "created": "만듦"
+    },
+    "row": "{row}행",
+    "noEmail": "이메일 없음",
+    "detail": {
+      "nickname": "닉네임 {nickname}",
+      "exists": "이 이메일의 ID가 이미 있습니다",
+      "duplicate": "{row}행과 이메일이 같습니다. 첫 행만 만듭니다"
+    },
+    "nothingToCreate": "만들 수 있는 행이 없습니다. 파일을 고친 뒤 다시 고르세요.",
+    "submit": "{count, plural, other {#명 만들기}}"
+  },
+  "models": {
+    "title": "모델 단가",
+    "lead": "Higgsfield 응답에는 비용이 없어서, 영상은 생성을 요청할 때 이 단가와 Higgsfield의 요금 규칙(해상도, 화면비, 길이, 영상 레퍼런스 길이)으로 비용을 정해 기록합니다. GPT Image 2는 OpenAI가 응답에 알려 준 토큰 수에 이 단가(이미지 출력 100만 토큰당)와 OpenAI의 입력 단가 비율(텍스트 5/30, 이미지 8/30)을 곱해 기록하고, 토큰 수가 없으면 예상 비용을 씁니다. 단가를 바꾸면 그다음 요청부터 적용되고, 실제 청구 금액은 각 회사의 인보이스가 기준입니다.",
+    "list": "모델",
+    "unit": "{basis} 기준 {per} USD",
+    "rateLabel": "{model} 단가",
+    "fill": "단가 칸에 {label} {rate} 넣기",
+    "example": "예: {example} {cost}",
+    "exampleEmpty": "단가를 넣으면 예시 비용이 보입니다",
+    "toggle": "{enabled, select, yes {사용 중 · 끄기} other {꺼짐 · 켜기}}"
+  },
+  "logs": {
+    "title": "히스토리 {count, plural, other {#건}}",
+    "csv": "CSV 내보내기 (최근 {count, plural, other {#}})",
+    "filter": {
+      "allMembers": "모든 사용자",
+      "allModels": "모든 모델",
+      "allStatuses": "모든 상태"
+    },
+    "field": {
+      "time": "시각",
+      "member": "사용자",
+      "status": "상태",
+      "model": "모델",
+      "prompt": "프롬프트",
+      "duration": "길이",
+      "cost": "비용",
+      "params": "파라미터",
+      "images": "이미지",
+      "videos": "영상",
+      "error": "오류"
+    },
+    "empty": "조건에 맞는 기록이 없습니다.",
+    "more": "더 보기",
+    "seconds": "{seconds}s"
   }
 }

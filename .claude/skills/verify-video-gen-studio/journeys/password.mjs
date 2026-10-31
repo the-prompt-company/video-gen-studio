@@ -61,17 +61,18 @@ export default async function password({ page, ev, base, creds, webDir, local })
   try {
     await ev.login("/admin", admin);
     if (!(await admin.locator("header").getByText("ADMIN", { exact: true }).isVisible())) ev.fail(`${creds.username} is not an admin: run with an admin's VGS_USER/VGS_PASS`);
-    await admin.getByRole("button", { name: "사용자 추가", exact: true }).click();
-    const addForm = admin.getByRole("dialog", { name: "사용자 추가" });
+    const addTitle = await ev.t("members.add.title", undefined, admin);
+    await admin.getByRole("button", { name: addTitle, exact: true }).click();
+    const addForm = admin.getByRole("dialog", { name: addTitle });
     await addForm.getByLabel("ID", { exact: true }).fill(typedId);
-    await addForm.getByLabel("임시 비밀번호").fill(INITIAL);
-    await addForm.getByRole("button", { name: "추가", exact: true }).click();
+    await addForm.getByLabel(await ev.t("members.add.password", undefined, admin)).fill(INITIAL);
+    await addForm.getByRole("button", { name: await ev.t("members.add.submit", undefined, admin), exact: true }).click();
     await addForm.waitFor({ state: "hidden", timeout: 15_000 });
-    await admin.getByRole("status").filter({ hasText: `${storedId} 계정을 추가했습니다` }).waitFor({ timeout: 10_000 });
+    await admin.getByRole("status").filter({ hasText: await ev.t("members.notice.added", { id: storedId }, admin) }).waitFor({ timeout: 10_000 });
     await admin.getByRole("row").filter({ hasText: storedId }).waitFor({ timeout: 15_000 });
     const fresh = await member();
     if (fresh.mustChangePassword !== true) ev.fail("a member the admin creates must have mustChangePassword");
-    ev.note(`admin created ${typedId} in the 사용자 추가 modal, which closed and said so; stored as ${storedId} with mustChangePassword=true`);
+    ev.note(`admin created ${typedId} in the "${addTitle}" modal, which closed and said so; stored as ${storedId} with mustChangePassword=true`);
 
     await page.goto(`${base}/login`, { waitUntil: "networkidle" });
     await ev.shot("login-form");
@@ -124,11 +125,11 @@ export default async function password({ page, ev, base, creds, webDir, local })
 
     const row = admin.getByRole("row").filter({ hasText: storedId });
     await row.click();
-    const edit = admin.getByRole("dialog", { name: `${storedId} 편집` });
+    const edit = admin.getByRole("dialog", { name: await ev.t("members.edit", { username: storedId }, admin) });
     await edit.waitFor({ timeout: 10_000 });
-    await edit.getByPlaceholder("임시 비밀번호 (8자 이상)").fill(INITIAL);
-    await edit.getByRole("button", { name: "변경", exact: true }).click();
-    await edit.getByText("임시 비밀번호 상태입니다").waitFor({ timeout: 15_000 });
+    await edit.getByPlaceholder(await ev.t("members.password.temporary", { min: 8 }, admin)).fill(INITIAL);
+    await edit.getByRole("button", { name: await ev.t("members.password.change", undefined, admin), exact: true }).click();
+    await edit.getByText(await ev.t("members.editor.temporaryNote", undefined, admin)).waitFor({ timeout: 15_000 });
     const reset = await member();
     if (reset.mustChangePassword !== true) ev.fail("an admin reset must set mustChangePassword");
     await ev.shot("admin-reset", { page: admin });
