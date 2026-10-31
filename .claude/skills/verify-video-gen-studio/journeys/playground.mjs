@@ -1,4 +1,4 @@
-/** Feature: playground — the composer's model menu, modes, settings, references, the generate gate, every mode against the fake, live polling. See features/playground.md. */
+/** Feature: playground — the composer's model menu, settings, attachments and frames, the generate gate, every endpoint against the fake, live polling. See features/playground.md. */
 import { readFileSync, writeFileSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -71,25 +71,26 @@ export default async function playground({ page, ev, env }) {
   if (options.some((o) => /Hailuo/.test(o))) ev.fail("Hailuo is still offered");
   const seedance = options.some((o) => o.startsWith(FAMILY_NAME[SEEDANCE]));
   const h3 = options.some((o) => o.startsWith(FAMILY_NAME[H3]));
+  const imageTab = outputs.getByRole("button", { name: await t("playground.output", { output: "image" }) });
+  const gpt = (await imageTab.count()) > 0 && (await imageTab.isEnabled());
   if (!seedance && !h3) ev.fail("the model menu lists no video model (all disabled in admin?)");
   await ev.shot("model-menu");
   await page.keyboard.press("Escape");
   await menu.waitFor({ state: "detached" });
 
-  const expectMode = async (family, mode, why) => {
-    const want = await h.modeLabel(family, mode);
-    const got = await h.chipText();
-    if (got !== want) ev.fail(`${why}: the model chip should read ${want}, got ${got}`);
+  const expectMode = async (mode, why) => {
+    const got = await h.mode();
+    if (got !== mode) ev.fail(`${why}: the composer says it sends ${got ?? "the prompt alone"}, expected ${mode ?? "the prompt alone"}`);
   };
 
-  // pg-mode
+  // pg-mode: the attachments decide it, so the menu offers models only.
   if (seedance) {
     await h.pickModel(SEEDANCE, "video");
-    await h.pickMode("text", "t2v");
-    await expectMode(SEEDANCE, "t2v", "text");
+    if ((await h.chipText()) !== FAMILY_NAME[SEEDANCE]) ev.fail(`the model chip should read ${FAMILY_NAME[SEEDANCE]}, got ${await h.chipText()}`);
+    await expectMode(null, "nothing attached");
     menu = await h.openMenu();
-    const modeRows = await menu.getByRole("button", { name: new RegExp(`· (${[await t("mode.t2v"), await t("mode.i2v"), await t("mode.r2v")].join("|")})`) }).count();
-    if (modeRows !== 3) ev.fail(`Seedance should offer 3 modes, found ${modeRows}`);
+    const modeRows = await menu.getByRole("button", { name: new RegExp(`(${[await t("mode.t2v"), await t("mode.i2v"), await t("mode.r2v")].join("|")})`) }).count();
+    if (modeRows !== 0) ev.fail(`the model menu should offer no mode, found ${modeRows} rows naming one`);
     await page.keyboard.press("Escape");
     await menu.waitFor({ state: "detached" });
   }
@@ -135,7 +136,7 @@ export default async function playground({ page, ev, env }) {
   await add.click();
   const addMenu = page.getByRole("dialog", { name: await t("playground.refs.add") });
   await addMenu.waitFor({ timeout: 5_000 });
-  if (!(await addMenu.getByText(await t("playground.refs.menuNote")).isVisible())) ev.fail("the add menu does not explain the order and the drop (playground.refs.menuNote)");
+  if (!(await addMenu.getByText(await t("playground.refs.menuNote", { frames: "yes" })).isVisible())) ev.fail("the add menu does not explain the order, the drop and the frames (playground.refs.menuNote)");
   await ev.shot("add-menu");
   const [chooser] = await Promise.all([page.waitForEvent("filechooser"), addMenu.getByRole("button", { name: new RegExp(await t("playground.refs.uploadImages")) }).click()]);
   await chooser.setFiles(IMAGES[0]);
@@ -150,16 +151,15 @@ export default async function playground({ page, ev, env }) {
   if (!(await add.evaluate((el) => el === document.activeElement))) ev.fail("focus did not return to + (playground.refs.add) after closing");
   await ev.shot("after-pick");
   if (attached && seedance) {
-    await expectMode(SEEDANCE, "r2v", "a reference added in text mode");
-    if (!(await h.box.getByText(await t("playground.note.switched", { mode: "r2v" })).isVisible())) ev.fail("the switch to references should be said (playground.note.switched)");
-    await h.pickMode("firstFrame", "i2v");
-    await expectMode(SEEDANCE, "i2v", "frames");
+    await expectMode("r2v", "an image added with nothing marked");
+    await h.markFrame("1", "ref-landscape-1.jpg", "start");
+    await expectMode("i2v", "the image marked as the start frame");
     const settings = await h.openSettings();
     if (await settings.getByRole("group", { name: await t("playground.aspect.label") }).count()) ev.fail("Seedance image-to-video takes no aspect ratio, but the pills show");
     await ev.shot("start-frame");
     await page.keyboard.press("Escape");
-    await h.pickMode("text", "t2v");
-    await h.box.getByRole("button", { name: await t("playground.note.undo"), exact: true }).waitFor();
+    await h.refs.first().getByRole("button").last().click();
+    await expectMode(null, "the start frame taken off");
   }
 
   // pg-generate-gate
@@ -168,7 +168,7 @@ export default async function playground({ page, ev, env }) {
     if (await h.generate.isEnabled()) ev.fail("생성하기 (playground.generate) must be disabled while the no-API-key line shows");
     ev.note("no API key on this account: generate correctly disabled; paid submit not exercised");
   } else if (env.VGS_FAKE_HF) {
-    for (const id of await everyMode({ page, ev, h, seedance, h3, uploads, fake: env.VGS_FAKE_HF })) liveIds.add(id);
+    for (const id of await everyMode({ page, ev, h, seedance, h3, gpt, uploads, fake: env.VGS_FAKE_HF })) liveIds.add(id);
   } else if (env.VGS_ALLOW_SPEND === "1") {
     await h.prompt.fill("검증용 프롬프트: 비 오는 밤거리, 느린 돌리 인");
     if (!(await h.generate.isEnabled())) ev.fail("API key present but 생성하기 (playground.generate) disabled");
@@ -238,13 +238,13 @@ export default async function playground({ page, ev, env }) {
   }
 }
 
-async function everyMode({ page, ev, h, seedance, h3, uploads, fake }) {
+async function everyMode({ page, ev, h, seedance, h3, gpt, uploads, fake }) {
   const stats = async () => (await fetch(`${fake}/_stats`)).json();
   const t = h.t;
   const submitted = [];
+  // Each thumbnail's last button is its remove button; an image's first one opens its frame menu.
   const clearRefs = async () => {
-    const remove = h.refs.getByRole("button");
-    while ((await remove.count()) > 0) await remove.first().click();
+    while ((await h.refs.count()) > 0) await h.refs.first().getByRole("button").last().click();
   };
   const submitAndRead = async (label, want, checkBody) => {
     const before = (await stats()).submits.length;
@@ -268,52 +268,87 @@ async function everyMode({ page, ev, h, seedance, h3, uploads, fake }) {
     await ev.shot(`generated-${label.replace(/[^\w-]+/g, "-")}`);
   };
   const urls = (b, key) => (Array.isArray(b[key]) ? b[key] : []);
+  const noMedia = (b) => (["image_url", "end_image_url", "image_urls", "video_urls"].some((k) => k in b) ? "text-to-video must carry no media" : null);
+  const [L1, L2] = IMAGES.map((f) => f.split(/[\\/]/).pop());
 
   for (const family of [seedance && SEEDANCE, h3 && H3].filter(Boolean)) {
     const short = family === H3 ? "h3" : "seedance";
     await h.pickModel(family, "video");
-    await h.pickMode("reference", "r2v");
     await clearRefs();
     if (family === H3) {
-      const reference = h.status.filter({ hasText: await t("errors.referenceRequired", { mode: "r2v" }) });
-      if (!(await reference.isVisible()) || (await h.generate.isEnabled())) ev.fail("H3 references with nothing attached should say why (errors.referenceRequired) and keep 생성하기 off");
-      await h.pickMode("text", "t2v");
       await h.prompt.fill("");
       const prompt = h.status.filter({ hasText: await t("errors.promptRequired", { model: "MiniMax H3", mode: "t2v" }) });
       if (!(await prompt.isVisible()) || (await h.generate.isEnabled())) ev.fail("H3 text without a prompt should say why (errors.promptRequired) and keep 생성하기 off");
       ev.note(`pg-blocker: ${(await h.status.allInnerTexts()).join(" | ")}`);
       await ev.shot("h3-blocked");
-      await h.pickMode("reference", "r2v");
     }
     await h.prompt.fill(`검증 ${short}: 등대 위로 천천히 상승하는 카메라`);
+    if ((await h.mode()) !== null) ev.fail(`${short}: with nothing attached the composer should send the prompt alone`);
+    await submitAndRead(`${short} text`, `${family}/text-to-video`, (b) => (!b.prompt ? "prompt missing" : noMedia(b)));
 
     await h.imageInput.setInputFiles(IMAGES);
     await h.videoInput.setInputFiles(WEBM_AS_MP4);
     await h.waitForUploads(`${short} references`);
     if ((await h.refs.count()) !== 3) ev.fail(`${short}: three references should be attached, found ${await h.refs.count()}`);
     if (!uploads.every((u) => typeof u === "string" && u.startsWith(fake))) ev.fail(`uploads did not go to the fake ${fake}: ${uploads.join(", ")}; refusing to click 생성하기`);
+    if ((await h.mode()) !== "r2v") ev.fail(`${short}: two images and a video should go as reference to video, the composer says ${await h.mode()}`);
     if (family === SEEDANCE && !(await h.box.getByText(await t("playground.fact.inputVideo", { seconds: "3.0" })).isVisible())) ev.fail("the estimate line does not count the 3 s reference video (playground.fact.inputVideo)");
     await ev.shot(`${short}-references`);
     await submitAndRead(`${short} reference`, `${family}/reference-to-video`, (b) =>
       urls(b, "image_urls").length !== 2 ? "image_urls should hold 2 urls" : urls(b, "video_urls").length !== 1 ? "video_urls should hold 1 url" : "image_url" in b ? "image_url must not be sent" : null,
     );
 
-    await h.pickMode("firstFrame", "i2v");
-    await submitAndRead(`${short} first and end frame`, `${family}/image-to-video`, (b, item) =>
+    await h.markFrame("1", L1, "start");
+    await h.markFrame("2", L2, "end");
+    const others = h.status.filter({ hasText: await t("errors.framesWithOthers", { count: 1 }) });
+    if (!(await others.isVisible()) || (await h.generate.isEnabled())) ev.fail(`${short}: frames beside the video should say so (errors.framesWithOthers) and keep 생성하기 off`);
+    await h.refs.last().getByRole("button").last().click();
+    if ((await h.mode()) !== "i2v") ev.fail(`${short}: 시작 and 끝 alone should go as image to video, the composer says ${await h.mode()}`);
+    await submitAndRead(`${short} start and end frame`, `${family}/image-to-video`, (b, item) =>
       typeof b.image_url !== "string" || b.image_url !== item.imageRefs[0]
-        ? "image_url should be the start frame"
+        ? "image_url should be the image marked 시작"
         : item.imageRefs.length !== 2 || b.end_image_url !== item.imageRefs[1]
-          ? "end_image_url should be the end frame"
-          : "image_urls" in b
-            ? "image_urls must not be sent"
+          ? "end_image_url should be the image marked 끝"
+          : "image_urls" in b || "video_urls" in b
+            ? "image to video must send the frames only"
             : family === SEEDANCE && "aspect_ratio" in b
               ? "Seedance image-to-video takes no aspect_ratio"
               : null,
     );
-
-    await h.pickMode("text", "t2v");
-    await submitAndRead(`${short} text`, `${family}/text-to-video`, (b) => (!b.prompt ? "prompt missing" : ["image_url", "end_image_url", "image_urls", "video_urls"].some((k) => k in b) ? "text-to-video must carry no media" : null));
+    await clearRefs();
   }
+
+  // GPT Image 2: the prompt alone is a generation, attached images make it an edit.
+  if (gpt) {
+    const openai = async () => (await stats()).openai.requests;
+    const imageCall = async (label, prompt, op, check) => {
+      await h.prompt.fill(prompt);
+      const { status, body } = await h.submit();
+      if (status !== 201 || body?.item?.modelId !== `openai/gpt-image-2/${op}`) ev.fail(`${label}: POST answered ${status} with ${body?.item?.modelId ?? JSON.stringify(body?.error)}`);
+      submitted.push(body.item.id);
+      // The image call runs in after(), so it can reach the fake after the POST has answered.
+      let sent = [];
+      for (let i = 0; i < 50 && sent.length === 0; i++) {
+        if (i > 0) await page.waitForTimeout(200);
+        sent = (await openai()).filter((r) => r.body.prompt === prompt);
+      }
+      const problem = sent.length !== 1 || sent[0].op !== op ? `OpenAI got ${JSON.stringify(sent.map((r) => r.op))}` : check(sent[0].body, body.item);
+      if (problem) ev.fail(`${label}: ${problem}`);
+      ev.note(`pg-generate-modes ${label}: OpenAI ${op} ← ${JSON.stringify(sent[0].body.images ?? "no images")}`);
+      await ev.shot(`generated-${label.replace(/[^\w-]+/g, "-")}`);
+    };
+    await h.pickModel("openai/gpt-image-2", "image");
+    await clearRefs();
+    await imageCall("gpt text", `검증 gpt ${Date.now().toString(36)}: 안개 낀 등대`, "generations", (b) => ("images" in b ? "a generation must carry no images" : null));
+    await h.imageInput.setInputFiles(IMAGES);
+    await h.waitForUploads("the GPT Image 2 references");
+    if ((await h.mode()) !== "r2i") ev.fail(`two images on GPT Image 2 should go as reference to image, the composer says ${await h.mode()}`);
+    if ((await (await h.frameButton("1", L1)).count()) !== 0) ev.fail("GPT Image 2 should offer no frame to mark");
+    await imageCall("gpt reference", `검증 gpt ${Date.now().toString(36)}: 두 사진의 빛으로`, "edits", (b, item) =>
+      JSON.stringify((b.images ?? []).map((i) => i.image_url)) !== JSON.stringify(item.imageRefs) || item.imageRefs.length !== 2 ? `images ${JSON.stringify(b.images)} should be the two references ${JSON.stringify(item.imageRefs)}` : null,
+    );
+    await clearRefs();
+  } else ev.note("GPT Image 2 not offered; its endpoints skipped (unmet precondition)");
 
   const until = Date.now() + 60_000;
   let live = submitted;

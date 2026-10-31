@@ -13,9 +13,9 @@ The gallery, the dashboard and the playground read fully in the browser's langua
 - `scr-blocker` reusing a row that asks for 20 s (its turn's `playground.actions.reuse`, in the earlier history) falls back to `playground.summary.duration` 5 s, and an empty prompt then reads `errors.promptRequired` with the model and mode in the composer's status line.
 - `scr-menus` each model's row in the model menu starts with its untranslated name, its `families.*.note` shows, and GPT Image 2's settings pills read `paramValues.*`.
 - `scr-refs` two images and a video read `playground.refs.imageCount` and `playground.refs.videoCount` in the composer, with remove buttons named by `playground.refs.removeLabel`.
-- `scr-particles` choosing text takes the three references away and reads `playground.note.removed` (`레퍼런스 3개를 뺐습니다` in Korean), with no particle that disagrees with its noun.
+- `scr-particles` image 1 marked 시작 beside the second image and the video reads `errors.framesWithOthers` with a count of 2 (`첨부 2개를` in Korean), with no particle that disagrees with its noun.
 - `scr-cost` the estimate line names the 3.0 s input video and the rate.
-- `scr-orientation` a square start frame reads `정사각으로` in Korean in the settings, and the shape's branch in the other languages.
+- `scr-orientation` a square image marked 시작 reads `정사각으로` in Korean in the settings, and the shape's branch in the other languages.
 - `scr-image` GPT Image 2 generates against the fake, and its turn reads `GPT Image 2 · ` and `mode.t2i`.
 - `scr-sideways` at 390 px no surface scrolls sideways (`scrollWidth` equals `innerWidth`).
 

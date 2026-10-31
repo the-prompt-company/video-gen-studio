@@ -220,7 +220,6 @@ export default async function screens({ page, ev, base, env, webDir, local, cred
     }
 
     await h.prompt.fill(promptKo);
-    await h.pickMode("reference", "r2v");
     await h.imageInput.setInputFiles(["ref-landscape-1.jpg", "ref-landscape-2.jpg"].map((f) => join(webDir, "public", "mock", f)));
     const clip = { name: "clip-3s.mp4", mimeType: "video/mp4", buffer: readFileSync(join(webDir, ".claude", "skills", "verify-video-gen-studio", "fixtures", "clip-3s.webm")) };
     await h.videoInput.setInputFiles(clip);
@@ -239,17 +238,19 @@ export default async function screens({ page, ev, base, env, webDir, local, cred
     ev.note(`cost line: ${factLine}`);
     await review("cost-bar", a, facts);
 
-    await h.pickMode("text", "t2v");
-    const removed = await ta("playground.note.removed", { to: "text", count: 3 });
-    if (lang === "ko" && !removed.includes("레퍼런스 3개를")) ev.fail(`the Korean note reads "${removed}"`);
-    const removedEl = h.box.getByText(removed, { exact: true });
-    await removedEl.waitFor({ timeout: 5_000 });
+    // A start frame beside the second image and the video: the blocker counts what it leaves out.
+    await h.markFrame("1", "ref-landscape-1.jpg", "start");
+    const others = await ta("errors.framesWithOthers", { count: 2 });
+    if (lang === "ko" && !others.includes("첨부 2개를")) ev.fail(`the Korean blocker reads "${others}"`);
+    const othersEl = h.status.getByText(others, { exact: true });
+    await othersEl.waitFor({ timeout: 5_000 });
     if (/장를|개을/.test(await h.box.innerText())) ev.fail("a Korean particle disagrees with its noun in the composer");
-    await review("particles", a, removedEl);
+    await review("particles", a, othersEl);
 
-    await h.pickMode("firstFrame", "i2v");
+    while ((await h.refs.count()) > 0) await h.refs.first().getByRole("button").last().click();
     await h.imageInput.setInputFiles(join(webDir, "public", "mock", "ref-square.jpg"));
     await h.waitForUploads("the square start frame");
+    await h.markFrame("1", "ref-square.jpg", "start");
     const settings = await h.openSettings();
     const shape = await ta("generation.shape", { shape: "square" });
     const noteWords = { ko: "정사각으로", en: "square", "zh-CN": "方形" }[lang];
@@ -262,8 +263,8 @@ export default async function screens({ page, ev, base, env, webDir, local, cred
     await a.keyboard.press("Escape");
 
     // GPT Image 2 against the fake: translated labels around an untranslated model name.
+    await h.refs.first().getByRole("button").last().click();
     await h.pickModel(GPT, "image");
-    await h.pickMode("text", "t2i");
     await h.prompt.fill(imagePrompt);
     const { status, body: made } = await h.submit();
     if (status !== 201) ev.fail(`GPT Image 2 POST answered ${status} ${JSON.stringify(made?.error ?? "")}`);

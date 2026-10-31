@@ -192,7 +192,6 @@ export default async function errors({ page, ev, base, env, webDir, local }) {
       await admin.goto(`${base}/playground`, { waitUntil: "networkidle" });
       const ha = await composerHandles(ev, admin);
       await ha.pickModel(GPT, "image");
-      await ha.pickMode("text", "t2i");
       await ha.prompt.fill(`${imagePrompt} ${fail}`);
       const { status, body } = await ha.submit();
       const id = body?.item?.id;

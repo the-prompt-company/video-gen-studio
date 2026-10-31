@@ -6,12 +6,12 @@ The journey finds every element by message key with `ev.t`, as in [Playground](.
 
 ## Sub-features
 
-- `img-model-groups` dialog `playground.modelMenu` (모델과 방식) has the output tabs `playground.output` for video and image (영상, 이미지); GPT Image 2 · OpenAI sits under the image tab.
+- `img-model-groups` dialog `playground.modelMenu` (모델) has the output tabs `playground.output` for video and image (영상, 이미지); GPT Image 2 · OpenAI sits under the image tab.
 - `img-no-key` without `OPENAI_API_KEY` on the server, the row reads `playground.unavailable` with `errors.noOpenAiKey` (it names `OPENAI_API_KEY`) and is disabled, and `POST /api/generations` for it answers 503.
-- `img-composer` GPT Image 2 offers the modes `mode.t2i` and `mode.r2i` (텍스트→이미지, 레퍼런스→이미지) and no frames; its settings hold the aspect pills `playground.aspect.pill` for 1:1 square, 3:2 landscape, 2:3 portrait, 16:9 landscape and 9:16 portrait (정사각 1:1, 가로 3:2, 세로 2:3, 가로 16:9, 세로 9:16) and pill groups `params.quality`, `params.output_format`, `params.background` (품질, 파일 형식, 배경) whose pills read `paramValues.<key>`; the add menu has no video row.
+- `img-composer` GPT Image 2's row says it takes up to 16 images and no frames (`playground.takes`), no row names a mode, and with nothing attached the chip reads GPT Image 2 alone; its settings hold the aspect pills `playground.aspect.pill` for 1:1 square, 3:2 landscape, 2:3 portrait, 16:9 landscape and 9:16 portrait (정사각 1:1, 가로 3:2, 세로 2:3, 가로 16:9, 세로 9:16) and pill groups `params.quality`, `params.output_format`, `params.background` (품질, 파일 형식, 배경) whose pills read `paramValues.<key>`; the add menu has no video row.
 - `img-estimate` the composer shows a `$0.xxxx` estimate before submit, and it equals the row's `estimatedCostUsd`.
 - `img-t2i` in text mode, `playground.generate` (생성하기) answers 201 with an in-progress row; its turn shows `playground.feed.imageNote` (OpenAI is making it), then the image `generation.image`; the fake got exactly one `images/generations` request; the turn's `generation.download` link (다운로드) reads PNG and serves an attachment.
-- `img-r2i` two references upload browser → Blob, the chip reads `mode.r2i` with `playground.note.switched`, and generating sends one `images/edits` request whose `images` are the two Blob URLs, at 1536x864 for 16:9; a JPEG pick yields a JPEG download.
+- `img-r2i` two references upload browser → Blob, the line under them reads `mode.r2i` and neither image offers a frame menu, and generating sends one `images/edits` request whose `images` are the two Blob URLs, at 1536x864 for 16:9; a JPEG pick yields a JPEG download.
 - `img-gallery` the gallery tile `gallery.openDetail` holds an `<img>`, the detail dialog `gallery.detail.title` (생성 상세) shows the stored image, `gallery.retention.permanent` (영구), and the same download link.
 - `img-dashboard` the per-model card (모델별) lists GPT Image 2 and the recent table reads `GPT Image 2 · ` + `mode.t2i` with length `—`.
 
