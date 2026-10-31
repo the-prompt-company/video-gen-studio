@@ -188,7 +188,7 @@ export default async function screens({ page, ev, base, env, webDir, local, cred
     // The row asks for 20 s, which Seedance refuses, so 다시 falls back to the default length.
     const summary = await ta("playground.settings.open", { summary: "" });
     const chip = h.box.getByRole("button", { name: new RegExp(`^${summary}`) });
-    if (!(await chip.innerText()).includes(await ta("playground.summary.duration", { seconds: "5" }))) ev.fail(`다시 should fall back to 5 s, the chip reads "${await chip.innerText()}"`);
+    if (!(await chip.getAttribute("aria-label")).includes(await ta("playground.summary.duration", { seconds: "5" }))) ev.fail(`다시 should fall back to 5 s, the chip reads "${await chip.getAttribute("aria-label")}"`);
     await h.prompt.fill("");
     const blockerText = await ta("errors.promptRequired", { model: "Seedance 2.0", mode: "t2v" });
     const blocker = h.status.filter({ hasText: blockerText });

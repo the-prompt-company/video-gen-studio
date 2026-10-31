@@ -108,7 +108,7 @@ export default async function playground({ page, ev, env }) {
     await ev.shot("seedance-portrait");
     await page.keyboard.press("Escape");
     await settings.waitFor({ state: "detached" });
-    const summary = await h.box.getByRole("button", { name: new RegExp(`^${await t("playground.settings.open", { summary: "" })}`) }).innerText();
+    const summary = await h.box.getByRole("button", { name: new RegExp(`^${await t("playground.settings.open", { summary: "" })}`) }).getAttribute("aria-label");
     const want = await t("playground.aspect.pill", { shape: await t("generation.shape", { shape: "portrait" }), ratio: "9:16" });
     if (!summary.includes(want)) ev.fail(`the settings chip should read ${want}, reads ${summary}`);
   } else ev.note("Seedance not offered; aspect-pills skipped (unmet precondition)");

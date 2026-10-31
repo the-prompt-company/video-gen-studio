@@ -533,20 +533,20 @@ export function Composer({
         </div>
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <div className="-mx-1 flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto px-1 py-0.5 [scrollbar-width:none] sm:overflow-visible">
+          <div className="flex min-w-0 flex-1 items-center gap-1.5">
             {kind !== "firstFrame" && (
               <button ref={addChip} type="button" aria-label={t("refs.add")} aria-haspopup="dialog" aria-expanded={open === "add"} onClick={() => setOpen(open === "add" ? null : "add")} className={`${CHIP} w-11 justify-center px-0 sm:w-9 sm:px-0`}>
                 <Icon name="plus" className="h-5 w-5" />
               </button>
             )}
-            <button ref={modelChip} type="button" aria-label={`${t("modelMenu")} · ${modeLabel}`} aria-haspopup="dialog" aria-expanded={open === "model"} onClick={() => setOpen(open === "model" ? null : "model")} className={`${CHIP} text-foreground`}>
+            <button ref={modelChip} type="button" aria-label={`${t("modelMenu")} · ${modeLabel}`} aria-haspopup="dialog" aria-expanded={open === "model"} onClick={() => setOpen(open === "model" ? null : "model")} className={`${CHIP} text-foreground max-sm:shrink`}>
               <Icon name={family.modes.output === "video" ? "film" : "image"} />
               <span className="truncate">{modeLabel}</span>
               <Icon name="chevron" />
             </button>
-            <button ref={settingsChip} type="button" aria-label={t("settings.open", { summary: settingsLine })} aria-haspopup="dialog" aria-expanded={open === "settings"} onClick={() => setOpen(open === "settings" ? null : "settings")} className={`${CHIP} sm:min-w-32 sm:shrink`}>
+            <button ref={settingsChip} type="button" aria-label={t("settings.open", { summary: settingsLine })} aria-haspopup="dialog" aria-expanded={open === "settings"} onClick={() => setOpen(open === "settings" ? null : "settings")} className={`${CHIP} max-sm:w-11 max-sm:justify-center max-sm:px-0 sm:min-w-32 sm:shrink`}>
               <Icon name="sliders" />
-              <span className="truncate">{settingsLine}</span>
+              <span className="truncate max-sm:hidden">{settingsLine}</span>
             </button>
           </div>
           <div className="flex items-center justify-between gap-3.5 sm:justify-end">

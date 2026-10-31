@@ -155,7 +155,7 @@ export default async function composer({ page, ev, base, env, webDir, local }) {
     }
     await settings.getByRole("group", { name: await ta("params.resolution") }).getByRole("button", { name: "720p", exact: true }).click();
     await settings.getByRole("slider").fill("8");
-    const summaryNow = (await settingsChip.innerText()).trim();
+    const summaryNow = (await settingsChip.getAttribute("aria-label")) ?? "";
     for (const part of [await ta("playground.summary.duration", { seconds: 8 }), "720p"]) if (!summaryNow.includes(part)) ev.fail(`the settings chip should read ${part}, reads "${summaryNow}"`);
     const costAfter = await costText();
     if (costAfter === costBefore) ev.fail(`the cost stayed ${costBefore} after 720p and 8 s`);
