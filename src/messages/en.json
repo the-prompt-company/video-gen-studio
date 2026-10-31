@@ -127,6 +127,7 @@
     "modelDisabled": "An admin turned off {model}.",
     "noSuchGeneration": "That generation doesn't exist.",
     "notYourGeneration": "You can only cancel your own generations.",
+    "noSuchThread": "That thread doesn't exist or was deleted. Pick another thread from the list or start a new one.",
     "alreadyStarted": "The generation has already started and can't be canceled.",
     "noKey": "You don't have an API key yet. Ask an admin for one.",
     "submitting": "It's still being submitted. Cancel again in a few seconds.",
@@ -366,6 +367,31 @@
     },
     "generate": "Generate",
     "submitting": "Submitting…"
+  },
+  "threads": {
+    "label": "Threads",
+    "new": "New thread",
+    "earlier": "Earlier history",
+    "collapse": "Collapse the thread list",
+    "expand": "Expand the thread list",
+    "picker": "Thread list",
+    "fresh": {
+      "title": "New thread",
+      "lead": "Generate from the panel <wide>on the left</wide><narrow>below</narrow> and this thread joins the list, named after its first prompt."
+    },
+    "missing": {
+      "title": "Can't find that thread",
+      "lead": "It doesn't exist or was deleted. Generate here to start a new thread."
+    },
+    "delete": {
+      "label": "Delete {title}",
+      "title": "Delete thread",
+      "body": "This removes “{title}” from your thread list.",
+      "keeps": "Its videos and images stay in the Gallery, and your usage and spend don't change. Generations still running will finish normally.",
+      "confirm": "Delete",
+      "cancel": "Cancel",
+      "deleting": "Deleting…"
+    }
   },
   "mode": {
     "t2v": "Text to video",

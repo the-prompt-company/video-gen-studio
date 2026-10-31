@@ -10,6 +10,8 @@ import {
   uuid,
   index,
   uniqueIndex,
+  unique,
+  foreignKey,
   check,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
@@ -20,6 +22,7 @@ import { GENERATION_STATUSES } from "../lib/generation-status";
 import type { RequestId } from "../lib/higgsfield";
 import type { ObjectKey } from "../lib/storage";
 import type { TeamId } from "../lib/teams";
+import type { ThreadId } from "../lib/threads";
 
 export const teams = pgTable(
   "teams",
@@ -65,11 +68,33 @@ export const models = pgTable("models", {
   note: text("note"),
 });
 
+export const threads = pgTable(
+  "threads",
+  {
+    id: uuid("id").$type<ThreadId>().primaryKey().defaultRandom(),
+    userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: ["chat", "earlier"] }).notNull(),
+    title: text("title"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (t) => [
+    unique("threads_id_user_key").on(t.id, t.userId),
+    uniqueIndex("threads_earlier_key").on(t.userId).where(sql`${t.kind} = 'earlier'`),
+    index("threads_user_idx").on(t.userId),
+    check("threads_kind_check", sql`${t.kind} in ('chat', 'earlier')`),
+    check("threads_title_check", sql`(${t.kind} = 'chat') = (${t.title} is not null)`),
+    check("threads_earlier_only_deleted", sql`${t.kind} = 'chat' or ${t.deletedAt} is not null`),
+  ],
+);
+
 export const generations = pgTable(
   "generations",
   {
     id: uuid("id").primaryKey().defaultRandom(),
     userId: integer("user_id").notNull().references(() => users.id),
+    /** Null for the member's earlier history: every row made before threads, and any made without naming one. */
+    threadId: uuid("thread_id").$type<ThreadId>(),
     modelId: text("model_id").notNull(),
     prompt: text("prompt").notNull().default(""),
     params: jsonb("params").$type<Record<string, unknown>>().notNull().default({}),
@@ -115,9 +140,15 @@ export const generations = pgTable(
   (t) => [
     index("generations_user_created_idx").on(t.userId, t.createdAt),
     index("generations_status_idx").on(t.status),
+    // A thread's rows and the earlier history's rows each get their own index: after `thread_id is null` the planner
+    // cannot use a composite index's created_at order, and filtered every newer row of the member instead.
+    index("generations_user_thread_created_idx").on(t.userId, t.threadId, t.createdAt).where(sql`${t.threadId} is not null`),
+    index("generations_user_earlier_created_idx").on(t.userId, t.createdAt).where(sql`${t.threadId} is null`),
+    foreignKey({ name: "generations_thread_owner_fk", columns: [t.threadId, t.userId], foreignColumns: [threads.id, threads.userId] }),
   ],
 );
 
 export type User = typeof users.$inferSelect;
 export type Model = typeof models.$inferSelect;
 export type Generation = typeof generations.$inferSelect;
+export type Thread = typeof threads.$inferSelect;

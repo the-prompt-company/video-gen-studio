@@ -1,11 +1,13 @@
 import { after } from "next/server";
-import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
-import { getDb, schema } from "@/db";
+import { and, desc, eq, inArray, lt } from "drizzle-orm";
+import { dbNowMs, getDb, schema } from "@/db";
 import type { User } from "@/db/schema";
 import { requireUser, errorResponse, HttpError } from "@/lib/auth";
 import { FAMILIES, isFamilyId, MODES, planGeneration, type Draft, type Mode } from "@/lib/catalog";
-import { isGenerationId, publicGeneration, settle, submitGeneration } from "@/lib/generations";
+import { isGenerationId, publicGeneration, settle, submitGeneration, unavailableFor } from "@/lib/generations";
 import { loadModelSetting } from "@/lib/model-settings";
+import { claimThread, threadFeed } from "@/lib/thread-store";
+import { EARLIER, parseThreadRef, type ThreadRef } from "@/lib/threads";
 import { scopeCondition, settleScope } from "@/lib/scope";
 
 /** The copy a settle schedules with `after` runs inside this budget. MIRROR_LEASE_S in generations.ts outlasts it. */
@@ -14,11 +16,11 @@ export const maxDuration = 300;
 const MAX_IDS = 24;
 const MAX_REFS = 16;
 
-/**
- * The database's clock in epoch ms. It wrote created_at, so the playground times live rows by it, not by the member's
- * computer clock.
- */
-const dbNowMs = sql<number>`extract(epoch from now()) * 1000`.mapWith(Number);
+function threadRefOf(raw: unknown): ThreadRef {
+  const ref = parseThreadRef(raw);
+  if (!ref) throw new HttpError(404, "noSuchThread");
+  return ref;
+}
 
 /** Settle the listed rows the caller may settle. The client poll sends every live id in one request per tick. */
 async function pollRows(user: User, raw: string) {
@@ -36,8 +38,10 @@ async function pollRows(user: User, raw: string) {
 
 /**
  * GET /api/generations?ids=<id>,<id> — settle and return those rows (max 24): own, or any for an admin.
+ * GET /api/generations?thread=<id|earlier>&limit=12 — the newest rows of one of the caller's threads, 404 for a thread
+ * the caller cannot see.
  * GET /api/generations?before=<iso>&limit=24&status=completed — the caller's own rows.
- * Both answer { items, now }: `now` is the database's clock when the rows were read, absent when none matched.
+ * All answer { items, now }: `now` is the database's clock when the rows were read, absent when none matched.
  */
 export async function GET(req: Request) {
   try {
@@ -49,6 +53,12 @@ export async function GET(req: Request) {
       return Response.json({ items: rows.map((g) => publicGeneration(g)), now });
     }
     const limit = Math.min(60, Math.max(1, Number(url.searchParams.get("limit") ?? 24)));
+    const thread = url.searchParams.get("thread");
+    if (thread !== null) {
+      const feed = await threadFeed(user.id, threadRefOf(thread), limit);
+      if (!feed) throw new HttpError(404, "noSuchThread");
+      return Response.json({ items: feed.rows.map((g) => publicGeneration(g)), now: feed.now });
+    }
     const before = url.searchParams.get("before");
     const status = url.searchParams.get("status");
 
@@ -107,23 +117,31 @@ function parseDraft(raw: unknown): Draft {
 
 /**
  * POST /api/generations — submit one generation. The body is a Draft: { family, mode, prompt, params, images,
- * videos: [{ url, seconds }], startFromImage }. 201 when Higgsfield accepted it, 202 when it waits as 제출 대기 and
- * submits itself again, 502 when Higgsfield refused it, 400 when the plan is not ready. Every answer after insert
- * carries the row as `item`, whose own reason says why a refused one failed, and estimatedCostUsd is the row's cost,
- * decided now.
+ * videos: [{ url, seconds }], startFromImage } and `thread`, the id of the thread it goes into: an existing one, a new
+ * uuid the browser chose (the first generation creates that thread), or `earlier`, which is also where a body with no
+ * thread goes. 201 when Higgsfield accepted it, 202 when it waits as 제출 대기 and submits itself again, 502 when
+ * Higgsfield refused it, 400 when the plan is not ready, 404 when the thread is not the caller's to add to. Every answer
+ * after insert carries the row as `item` and its thread as `thread`; the row's own reason says why a refused one
+ * failed, and estimatedCostUsd is the row's cost, decided now.
  */
 export async function POST(req: Request) {
   try {
     const user = await requireUser();
-    const draft = parseDraft(await req.json().catch(() => ({})));
+    const body: unknown = await req.json().catch(() => ({}));
+    const draft = parseDraft(body);
+    const ref = threadRefOf((body as { thread?: unknown } | null)?.thread ?? EARLIER);
     const setting = await loadModelSetting(draft.family);
     if (!setting.enabled) throw new HttpError(400, "modelDisabled", { model: FAMILIES[draft.family].name });
     const plan = planGeneration(draft, setting.rateUsd);
     if (!plan.ready) throw HttpError.of(400, plan.blocker);
 
-    const row = await submitGeneration(user, plan, after);
+    // Refuse before the claim, so a submit that cannot run never creates and titles a thread.
+    const blocked = unavailableFor(plan.family, user);
+    if (blocked) throw HttpError.of(blocked.status, blocked.error);
+    const { threadId, thread } = await claimThread(user.id, ref, plan.prompt);
+    const row = await submitGeneration(user, plan, after, threadId);
     return Response.json(
-      { item: publicGeneration(row), estimatedCostUsd: Number(row.costUsd) },
+      { item: publicGeneration(row), thread, estimatedCostUsd: Number(row.costUsd) },
       { status: row.status === "failed" ? 502 : row.status === "pending" ? 202 : 201 },
     );
   } catch (e) {

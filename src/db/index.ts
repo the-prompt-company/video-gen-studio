@@ -1,4 +1,5 @@
 import postgres from "postgres";
+import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { DrizzleQueryError } from "drizzle-orm/errors";
 import * as schema from "./schema";
@@ -52,6 +53,12 @@ export function getDb() {
 }
 
 export { schema };
+
+/**
+ * The database's clock in epoch ms. It wrote created_at, so the playground times live rows by it, not by the member's
+ * computer clock.
+ */
+export const dbNowMs = sql<number>`extract(epoch from now()) * 1000`.mapWith(Number);
 
 export const UNIQUE_VIOLATION = "23505";
 export const FOREIGN_KEY_VIOLATION = "23503";
