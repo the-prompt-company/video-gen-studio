@@ -318,7 +318,6 @@ async function everyMode({ page, ev, h, seedance, h3, gpt, uploads, fake }) {
     await clearRefs();
   }
 
-  // GPT Image 2: the prompt alone is a generation, attached images make it an edit.
   if (gpt) {
     const openai = async () => (await stats()).openai.requests;
     const imageCall = async (label, prompt, op, check) => {

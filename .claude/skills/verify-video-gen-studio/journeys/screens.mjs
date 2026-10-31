@@ -238,7 +238,6 @@ export default async function screens({ page, ev, base, env, webDir, local, cred
     ev.note(`cost line: ${factLine}`);
     await review("cost-bar", a, facts);
 
-    // A start frame beside the second image and the video: the blocker counts what it leaves out.
     await h.markFrame("1", "ref-landscape-1.jpg", "start");
     const others = await ta("errors.framesWithOthers", { count: 2 });
     if (lang === "ko" && !others.includes("첨부 2개를")) ev.fail(`the Korean blocker reads "${others}"`);

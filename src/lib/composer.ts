@@ -53,7 +53,6 @@ export type Action =
 /** A stored generation as 다시 reads it. */
 export type Turn = { modelId: string; params: unknown; imageRefs: readonly string[]; videoRefs: readonly string[] };
 
-/** The file name at the end of a URL. */
 function nameOf(url: string): string {
   try {
     return decodeURIComponent(new URL(url).pathname.split("/").pop() ?? "") || url;
