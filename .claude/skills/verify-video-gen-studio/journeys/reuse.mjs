@@ -194,7 +194,12 @@ export default async function reuse({ page, ev, base, env, webDir, local }) {
     const editPrompt = `[reuse] ${stamp} 두 등대를 한 장면으로`;
     await prompt.fill(editPrompt);
     await submit("reference→image");
-    const sentEdit = (await stats()).openai.requests.filter((r) => r.body.prompt === editPrompt);
+    // The image call runs in after(), so it can reach the fake after the POST has answered.
+    let sentEdit = [];
+    for (let i = 0; i < 50 && sentEdit.length === 0; i++) {
+      if (i > 0) await a.waitForTimeout(200);
+      sentEdit = (await stats()).openai.requests.filter((r) => r.body.prompt === editPrompt);
+    }
     if (sentEdit.length !== 1 || sentEdit[0].op !== "edits" || JSON.stringify(sentEdit[0].body.images) !== JSON.stringify([{ image_url: stored.b }, { image_url: stored.a }])) {
       ev.fail(`the OpenAI edit received ${JSON.stringify(sentEdit.map((r) => [r.op, r.body.images]))}`);
     }
