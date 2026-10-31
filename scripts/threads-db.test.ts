@@ -195,3 +195,50 @@ test("a thread's feed is its own newest rows, newest first, up to the limit", as
   assert.deepEqual(idsOf((await threadFeed(me, ref, 12))?.rows), [newest, middle, oldest]);
   assert.equal(typeof (await threadFeed(me, ref, 12))?.now, "number");
 });
+
+test("older pages continue from the oldest row the page holds, to the last row, then say none remain", async () => {
+  const me = await member();
+  const ref = chat();
+  const { threadId } = await claimThread(me, ref, "pages");
+  const rows = [];
+  for (let minutes = 50; minutes > 0; minutes -= 10) rows.unshift(await generate(me, threadId, minutes));
+  const first = await threadFeed(me, ref, 2);
+  assert.deepEqual([idsOf(first?.rows), first?.more], [rows.slice(0, 2), true]);
+  const second = await threadFeed(me, ref, 2, rows[1]);
+  assert.deepEqual([idsOf(second?.rows), second?.more], [rows.slice(2, 4), true]);
+  const last = await threadFeed(me, ref, 2, rows[3]);
+  assert.deepEqual([idsOf(last?.rows), last?.more], [[rows[4]], false]);
+  assert.equal((await threadFeed(me, ref, 12))?.more, false);
+
+  const earlierRows = [await generate(me, null, 9), await generate(me, null, 8)].reverse();
+  assert.deepEqual(idsOf((await threadFeed(me, earlier, 1, earlierRows[0]))?.rows), [earlierRows[1]]);
+});
+
+test("rows created in the same microsecond page apart by id, so none is skipped or repeated", async () => {
+  const me = await member();
+  const ref = chat();
+  const { threadId } = await claimThread(me, ref, "ties");
+  const at = new Date(Date.now() - 60_000);
+  const made = await getDb()
+    .insert(schema.generations)
+    .values(Array.from({ length: 3 }, (_, i) => ({ userId: me, threadId, modelId: "bytedance/seedance-2.0/text-to-video", prompt: `tie ${i}`, status: "completed" as const, durationS: 5, costUsd: "0.4925", createdAt: at })))
+    .returning({ id: schema.generations.id });
+  const seen: string[] = [];
+  let page = await threadFeed(me, ref, 1);
+  while (page) {
+    seen.push(...page.rows.map((r) => r.id));
+    if (!page.more) break;
+    page = await threadFeed(me, ref, 1, seen[seen.length - 1]);
+  }
+  assert.deepEqual([...seen].sort(), made.map((m) => m.id).sort());
+});
+
+test("a cursor that is not the member's row finds nothing", async () => {
+  const me = await member();
+  const other = await member();
+  const ref = chat();
+  const { threadId } = await claimThread(me, ref, "cursor");
+  await generate(me, threadId, 10);
+  const foreign = await generate(other, null, 20);
+  assert.equal(await threadFeed(me, ref, 12, foreign), null);
+});

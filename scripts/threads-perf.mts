@@ -2,7 +2,8 @@
  * Measures 0011 and the two thread queries on about 20k generation rows. In a fresh database next to the local one
  * DATABASE_URL names, it applies migrations up to 0010, inserts 20 members × 1000 rows with no thread (the shape 0011
  * meets in production), times applying 0011, then moves 800 of each member's rows into 80 threads and runs ANALYZE.
- * It times listThreads and threadFeed (a chat thread and the earlier history) through thread-store itself, with and
+ * It times listThreads and threadFeed (a chat thread and the earlier history, their newest page and an older page from
+ * a cursor) through thread-store itself, with and
  * without 0011's two generations indexes, alternating the two sides, and has auto_explain log every statement of
  * one more call per query so the plans and the statement count come from the real calls. The database is dropped at
  * the end. Local Postgres only: the verify skill's Docker container is `vgs-threads-pg`.
@@ -101,6 +102,8 @@ try {
   await client`analyze threads`;
   const [member] = await client`select id from users order by id limit 1`;
   const [chat] = await client`select id from threads where user_id = ${member.id} and title = 'perf thread 40'`;
+  const [chatCursor] = await client`select id from generations where thread_id = ${chat.id} order by created_at desc, id desc offset 4 limit 1`;
+  const [earlierCursor] = await client`select id from generations where user_id = ${member.id} and thread_id is null order by created_at desc, id desc offset 11 limit 1`;
   await client.end();
 
   const me = member.id as number;
@@ -109,6 +112,8 @@ try {
     listThreads: () => listThreads(me),
     feedChat: () => threadFeed(me, chatRef, 12),
     feedEarlier: () => threadFeed(me, { kind: "earlier" }, 12),
+    feedChatOlder: () => threadFeed(me, chatRef, 12, chatCursor.id),
+    feedEarlierOlder: () => threadFeed(me, { kind: "earlier" }, 12, earlierCursor.id),
   };
   const check = async () => {
     const list = await calls.listThreads();
@@ -116,13 +121,16 @@ try {
     const earlierFeed = await calls.feedEarlier();
     if (list.length !== THREADS + 1 || list[list.length - 1].kind !== "earlier") throw new Error(`list has ${list.length} threads`);
     if (chatFeed?.rows.length !== PER_THREAD || earlierFeed?.rows.length !== 12) throw new Error("a feed came back short");
-    return `list ${list.length} threads, chat feed ${chatFeed.rows.length} rows, earlier feed ${earlierFeed.rows.length} rows`;
+    const chatOlder = await calls.feedChatOlder();
+    const earlierOlder = await calls.feedEarlierOlder();
+    if (chatOlder?.rows.length !== PER_THREAD - 5 || chatOlder.more || earlierOlder?.rows.length !== 12 || !earlierOlder.more) throw new Error("an older page came back wrong");
+    return `list ${list.length} threads, chat feed ${chatFeed.rows.length} rows, earlier feed ${earlierFeed.rows.length} rows, older pages ${chatOlder.rows.length} and ${earlierOlder.rows.length} rows`;
   };
 
-  const results = {
-    indexed: { listThreads: [] as number[], feedChat: [] as number[], feedEarlier: [] as number[] },
-    unindexed: { listThreads: [] as number[], feedChat: [] as number[], feedEarlier: [] as number[] },
-  };
+  const results = Object.fromEntries(["indexed", "unindexed"].map((side) => [side, Object.fromEntries(Object.keys(calls).map((name) => [name, [] as number[]]))])) as Record<
+    "indexed" | "unindexed",
+    Record<keyof typeof calls, number[]>
+  >;
   const setIndex = async (on: boolean) => {
     const c = raw();
     if (on) {

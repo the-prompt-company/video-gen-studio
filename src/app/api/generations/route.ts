@@ -37,8 +37,9 @@ async function pollRows(user: User, raw: string) {
 
 /**
  * GET /api/generations?ids=<id>,<id> — settle and return those rows (max 24).
- * GET /api/generations?thread=<id|earlier>&limit=12 — the newest rows of one of the caller's threads, 404 for a thread
- * the caller cannot see.
+ * GET /api/generations?thread=<id|earlier>&limit=12[&before=<generation id>] — the newest rows of one of the caller's
+ * threads, or the rows just older than `before`, the oldest row the page holds; `more` says whether older rows remain.
+ * 404 for a thread the caller cannot see.
  * GET /api/generations?before=<iso>&limit=24&status=completed — the caller's own rows.
  * All answer { items, now }: `now` is the database's clock when the rows were read, absent when none matched.
  */
@@ -54,9 +55,11 @@ export async function GET(req: Request) {
     const limit = Math.min(60, Math.max(1, Number(url.searchParams.get("limit") ?? 24)));
     const thread = url.searchParams.get("thread");
     if (thread !== null) {
-      const feed = await threadFeed(user.id, threadRefOf(thread), limit);
+      const cursor = url.searchParams.get("before");
+      if (cursor !== null && !isGenerationId(cursor)) throw new HttpError(404, "noSuchGeneration");
+      const feed = await threadFeed(user.id, threadRefOf(thread), limit, cursor);
       if (!feed) throw new HttpError(404, "noSuchThread");
-      return Response.json({ items: feed.rows.map((g) => publicGeneration(g)), now: feed.now });
+      return Response.json({ items: feed.rows.map((g) => publicGeneration(g)), more: feed.more, now: feed.now });
     }
     const before = url.searchParams.get("before");
     const status = url.searchParams.get("status");
