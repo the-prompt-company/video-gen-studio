@@ -5,7 +5,7 @@ This directory is the maintained source for verifying the user-facing behavior o
 ## Baseline preconditions
 
 - Launch with `vgs launch` from `web/`; the instance is `http://localhost:3100` (or `VGS_PORT`).
-- `.env.local` points at the team Supabase project; there is no disposable database. Mutate only what a recipe restores, what is tagged `[목업]`, or a `vgs-pw-*@example.test`, `vgs-imp-<stamp>-*@example.test`, `vgs-set-*@example.test`, `vgs-team-<stamp>-*@example.test` or `vgs-loc-<stamp>-*@example.test` member (and `vgs-team-<stamp>-*` team) the password, import, settings, teams and locale recipes create and delete.
+- `.env.local` points at the team Supabase project; there is no disposable database. Mutate only what a recipe restores, what is tagged `[목업]`, or a `vgs-pw-*@example.test`, `vgs-imp-<stamp>-*@example.test`, `vgs-set-*@example.test`, `vgs-team-<stamp>-*@example.test` `vgs-loc-<stamp>-*@example.test` or `vgs-tg-<stamp>-*@example.test` member (and `vgs-team-<stamp>-*` or `vgs-tg-<stamp>-*` team) the password, import, settings, teams, locale and team-gallery recipes create and delete.
 - Credentials are `VGS_USER`/`VGS_PASS`, defaulting to the seeded admin. Admin-only recipes say so.
 - `vgs doctor` reports `ok: true` with the expected port, pid, and role before any drive.
 - Never drive an instance that `vgs launch` did not start (the developer's `npm run dev` on 3000 is off limits).
@@ -51,7 +51,7 @@ Keep implementation details out of the map. Name only user paths, stable handles
 - [Teams](./teams.md) covers the 팀 tab (create, case-blind duplicate, rename, delete to 미소속), the users table's 팀 column, filter, checkboxes and 팀 지정, the editor's 팀 select, a member's team in 설정, and the admin team routes refusing members. Creates and deletes two disposable members and two teams.
 - [Playground](./playground.md) covers the drawer, the two-model select, the generation mode and 이 이미지로 시작, aspect pills, parameters, the reference dialog, the generate gate, and every model and mode against the fake.
 - [Images](./images.md) covers GPT Image 2: the 이미지 group in the model select, the no-key state, the image drawer, text→image and reference→image against the fake, and the result on the stage, in the gallery and on the dashboard. Creates generation rows, so it runs on a local database only.
-- [Gallery](./gallery.md) covers the tile grid, the detail dialog (video or image) with download, and the admin scope toggle.
+- [Gallery](./gallery.md) covers the tile grid, the detail dialog (video or image) with download, the admin scope toggle, and the team filters (내 것 / 팀 / 전체) with the server refusals for a teammate's and another team's rows. The team journey creates and deletes four disposable members and two teams; local database only.
 - [Dashboard](./dashboard.md) covers the personal usage stats, chart/empty states, and agreement with the generations API.
 - [Errors](./errors.md) covers server refusals and stored failure reasons in the page language, provider text and old Korean reasons as written, and the error wire format. Creates and deletes three disposable members; local database only.
 - [Formats](./formats.md) covers dates in Seoul time per language, relative times, and dollars on the dashboard, gallery, playground and admin, with no hydration warning. Local database only.

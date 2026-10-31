@@ -196,11 +196,20 @@
   "gallery": {
     "lead": "{count, plural, one {# finished result.} other {# finished results.}}{expiring, select, yes { Results that aren't kept permanently stay on Higgsfield for only 7 days, so download the ones you need.} other {}}",
     "scope": {
+      "label": "Whose results",
       "mine": "Mine",
-      "all": "All"
+      "team": "Team",
+      "all": "All",
+      "everyone": "All",
+      "noTeam": "Once you're on a team, your teammates' results show up here too. An admin assigns teams."
     },
     "empty": "No finished results yet. Make your first one in the <link>Playground</link>.",
+    "emptyTeam": "Your teammates have no finished results yet.",
     "openDetail": "View details: {prompt}",
+    "owner": {
+      "self": "You",
+      "teammate": "Teammate"
+    },
     "retention": {
       "line": "Kept: {value}",
       "label": "Kept",

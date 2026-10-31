@@ -67,6 +67,7 @@ Each language button in the picker shows its own name (`한국어`, `English`, `
 | 회원, 사용자 | member | 成员 | One word per language for a person with an account |
 | 관리자 | admin | 管理员 | The person; the page is 어드민 |
 | 팀 | team | 团队 | |
+| 팀원 | teammate | 团队成员 | A member of the viewer's own team. Also stands in for a teammate's name in the gallery when they have no nickname |
 | 미소속 | No team | 未分配团队 | |
 | API 키 | API key | API 密钥 | |
 | 생성 설정 | Generation settings | 生成设置 | The playground's form, called the drawer in code |

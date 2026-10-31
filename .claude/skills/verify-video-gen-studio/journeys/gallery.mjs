@@ -35,14 +35,14 @@ export default async function gallery({ page, ev }) {
   await page.keyboard.press("Escape");
   if (await dialog.isVisible().catch(() => false)) ev.fail("Esc did not close the detail dialog");
 
-  const all = page.getByRole("link", { name: await ev.t("gallery.scope.all"), exact: true });
-  if (await all.isVisible()) {
-    await all.click();
-    await page.waitForURL("**/gallery?all=1");
+  const everyone = page.getByRole("link", { name: await ev.t("gallery.scope.everyone"), exact: true });
+  if (await everyone.isVisible()) {
+    await everyone.click();
+    await page.waitForURL("**/gallery?scope=everyone");
     await page.waitForLoadState("networkidle");
     const allCount = await tiles.count();
-    if (allCount < count) ev.fail(`scope all (${allCount}) shows fewer tiles than scope mine (${count})`);
-    ev.note(`admin scope toggle: mine ${count} → all ${allCount}`);
-    await ev.shot("all-scope");
+    if (allCount < count) ev.fail(`scope everyone (${allCount}) shows fewer tiles than scope mine (${count})`);
+    ev.note(`admin scope toggle: mine ${count} → everyone ${allCount}`);
+    await ev.shot("everyone-scope");
   } else ev.note("not an admin: scope toggle absent (expected)");
 }
