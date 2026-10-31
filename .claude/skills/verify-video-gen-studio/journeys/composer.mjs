@@ -31,6 +31,9 @@ export default async function composer({ page, ev, base, env, webDir, local }) {
     await p.screenshot({ path: join(reviewDir, `${surface}-${lang}-${viewport}.png`) });
     const [scroll, inner] = await p.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
     if (scroll !== inner) sideways.push(`${surface} ${scroll}>${inner}`);
+    // The stream scrolls on its own, so a turn wider than it would not widen the page.
+    const inside = await p.evaluate(() => [...document.querySelectorAll("[role=region]")].filter((el) => el.scrollWidth > el.clientWidth + 1).map((el) => el.getAttribute("aria-label")));
+    if (inside.length) sideways.push(`${surface} inside ${inside.join(", ")}`);
   };
   const file = (name) => join(webDir, "public", "mock", name);
   const LANDSCAPE = [file("ref-landscape-1.jpg"), file("ref-landscape-2.jpg")];
@@ -229,20 +232,34 @@ export default async function composer({ page, ev, base, env, webDir, local }) {
       return dt;
     }, readFileSync(LANDSCAPE[0]).toString("base64"));
     const before = await (await refList()).count();
-    await box.locator(":scope > div").first().dispatchEvent("drop", { dataTransfer: dropped });
+    const target = box.locator(":scope > div").first();
+    await target.dispatchEvent("dragenter", { dataTransfer: dropped });
+    const accepts = await target.evaluate((el, dt) => !el.dispatchEvent(new DragEvent("dragover", { dataTransfer: dt, bubbles: true, cancelable: true })), dropped);
+    if (!accepts) ev.fail("the composer should accept a file dragged over it (dragover default prevented)");
+    await target.dispatchEvent("drop", { dataTransfer: dropped });
     await settled("drop");
     if ((await (await refList()).count()) !== before + 1) ev.fail("a dropped image should be added");
     ev.note("drag and drop added a reference");
 
+    // GPT Image 2 keeps its references in Blob; sent with a Higgsfield model they are deleted when the row ends.
+    await pickModel(SEEDANCE, "video");
+    await expectChip(SEEDANCE, "r2v", "the image references carried to Seedance");
+    await prompt.fill(`[composer] ${stamp} 마지막 장면`);
+    const three = await submit("blob references");
+    if (three.thread.id !== one.thread.id) ev.fail(`the third generation went to thread ${three.thread.id}`);
+    await box.getByText(await ta("playground.note.spent", { count: before + 1 })).waitFor({ timeout: 10_000 });
+    if ((await (await refList()).count()) !== 0) ev.fail("the Blob references should leave the composer after a Higgsfield send");
+    ev.note(`spent: ${before + 1} Blob references left the composer after the Seedance send`);
+
     for (let i = 0; ; i++) {
-      const read = await ev.api(`/api/generations?ids=${one.item.id},${two.item.id}`, undefined, a);
+      const read = await ev.api(`/api/generations?ids=${one.item.id},${two.item.id},${three.item.id}`, undefined, a);
       if ((read.body?.items ?? []).every((x) => x.status === "completed")) break;
-      if (i === 60) ev.fail("the two generations did not complete");
+      if (i === 60) ev.fail("the three generations did not complete");
       await a.waitForTimeout(1000);
     }
     const result = await ta("generation.video");
     await turnOne.getByLabel(result, { exact: true }).waitFor({ timeout: 20_000 });
-    await stream.locator(`article[data-id="${two.item.id}"]`).getByLabel(result, { exact: true }).waitFor({ timeout: 20_000 });
+    await stream.locator(`article[data-id="${three.item.id}"]`).getByLabel(result, { exact: true }).waitFor({ timeout: 20_000 });
     await review("stream", a);
 
     await sql`
@@ -254,7 +271,7 @@ export default async function composer({ page, ev, base, env, webDir, local }) {
     if (threadOf() !== one.thread.id) ev.fail(`reload left the thread for ${threadOf()}`);
     const articles = stream.locator("article[data-id]");
     await a.waitForFunction(() => document.querySelectorAll("article[data-id]").length === 12, null, { timeout: 20_000 }).catch(() => ev.fail("a reload should show the newest 12 turns"));
-    if ((await articles.last().getAttribute("data-id")) !== two.item.id) ev.fail("the newest turn should be at the bottom");
+    if ((await articles.last().getAttribute("data-id")) !== three.item.id) ev.fail("the newest turn should be at the bottom");
     const atBottom = await stream.evaluate((el) => el.scrollHeight - el.scrollTop - el.clientHeight < 80);
     if (!atBottom) ev.fail("the stream should open at the newest turn");
     ev.note("reload kept the thread and opened at the newest turn");
@@ -271,12 +288,12 @@ export default async function composer({ page, ev, base, env, webDir, local }) {
     await review("older-loading", a);
     const topBefore = await stream.locator(`article[data-id="${topId}"]`).evaluate((el) => el.getBoundingClientRect().top);
     release();
-    await a.waitForFunction(() => document.querySelectorAll("article[data-id]").length === 16, null, { timeout: 20_000 }).catch(() => ev.fail("scrolling up should load the four older turns"));
+    await a.waitForFunction(() => document.querySelectorAll("article[data-id]").length === 17, null, { timeout: 20_000 }).catch(() => ev.fail("scrolling up should load the five older turns"));
     await a.unroute(olderPage);
     const topAfter = await stream.locator(`article[data-id="${topId}"]`).evaluate((el) => el.getBoundingClientRect().top);
     if (Math.abs(topAfter - topBefore) > 4) ev.fail(`the turn at the top moved from ${topBefore} to ${topAfter} when older turns loaded`);
     await stream.getByText(await ta("playground.older.start")).waitFor();
-    ev.note(`older turns: 12 → 16, the top turn stayed at ${Math.round(topBefore)} px`);
+    ev.note(`older turns: 12 → 17, the top turn stayed at ${Math.round(topBefore)} px`);
     await a.getByRole("button", { name: await ta("playground.latest") }).click();
     for (let i = 0; !(await stream.evaluate((el) => el.scrollHeight - el.scrollTop - el.clientHeight < 80)); i++) {
       if (i === 25) ev.fail("the jump-to-latest button should scroll to the newest turn");

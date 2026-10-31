@@ -185,10 +185,15 @@ export default async function screens({ page, ev, base, env, webDir, local, cred
     await h.turns.first().waitFor({ timeout: 15_000 });
 
     await h.turns.filter({ hasText: `[목업] i18n3 ${stamp} reuse me` }).getByRole("button", { name: await ta("playground.actions.reuse"), exact: true }).click();
-    const blockerText = await ta("errors.paramRange", { label: await ta("params.duration"), min: 4, max: 15 });
+    // The row asks for 20 s, which Seedance refuses, so 다시 falls back to the default length.
+    const summary = await ta("playground.settings.open", { summary: "" });
+    const chip = h.box.getByRole("button", { name: new RegExp(`^${summary}`) });
+    if (!(await chip.innerText()).includes(await ta("playground.summary.duration", { seconds: "5" }))) ev.fail(`다시 should fall back to 5 s, the chip reads "${await chip.innerText()}"`);
+    await h.prompt.fill("");
+    const blockerText = await ta("errors.promptRequired", { model: "Seedance 2.0", mode: "t2v" });
     const blocker = h.status.filter({ hasText: blockerText });
     await blocker.waitFor({ timeout: 10_000 });
-    ev.note(`blocker: "${blockerText}"`);
+    ev.note(`blocker: "${blockerText}"; 다시 dropped the stored 20 s for 5 s`);
     await review("blocker", a, blocker);
 
     for (const [family, output, surface] of [[H3, "video", "model-menu-h3"], [GPT, "image", "model-menu-gpt-image-2"], [SEEDANCE, "video", "model-menu-seedance"]]) {

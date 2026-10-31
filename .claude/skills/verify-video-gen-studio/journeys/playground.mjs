@@ -275,14 +275,15 @@ async function everyMode({ page, ev, h, seedance, h3, uploads, fake }) {
     await h.pickMode("reference", "r2v");
     await clearRefs();
     if (family === H3) {
+      const reference = h.status.filter({ hasText: await t("errors.referenceRequired", { mode: "r2v" }) });
+      if (!(await reference.isVisible()) || (await h.generate.isEnabled())) ev.fail("H3 references with nothing attached should say why (errors.referenceRequired) and keep 생성하기 off");
+      await h.pickMode("text", "t2v");
       await h.prompt.fill("");
-      const blocker = h.status.filter({ hasText: await t("errors.promptRequired", { model: "MiniMax H3", mode: "r2v" }) });
-      if (!(await blocker.isVisible()) || (await h.generate.isEnabled())) {
-        const reference = h.status.filter({ hasText: await t("errors.referenceRequired", { mode: "r2v" }) });
-        if (!(await reference.isVisible()) || (await h.generate.isEnabled())) ev.fail("H3 references with nothing attached and no prompt should say why and keep 생성하기 off");
-      }
+      const prompt = h.status.filter({ hasText: await t("errors.promptRequired", { model: "MiniMax H3", mode: "t2v" }) });
+      if (!(await prompt.isVisible()) || (await h.generate.isEnabled())) ev.fail("H3 text without a prompt should say why (errors.promptRequired) and keep 생성하기 off");
       ev.note(`pg-blocker: ${(await h.status.allInnerTexts()).join(" | ")}`);
       await ev.shot("h3-blocked");
+      await h.pickMode("reference", "r2v");
     }
     await h.prompt.fill(`검증 ${short}: 등대 위로 천천히 상승하는 카메라`);
 
@@ -301,7 +302,7 @@ async function everyMode({ page, ev, h, seedance, h3, uploads, fake }) {
     await submitAndRead(`${short} first and end frame`, `${family}/image-to-video`, (b, item) =>
       typeof b.image_url !== "string" || b.image_url !== item.imageRefs[0]
         ? "image_url should be the start frame"
-        : b.end_image_url !== item.imageRefs[1]
+        : item.imageRefs.length !== 2 || b.end_image_url !== item.imageRefs[1]
           ? "end_image_url should be the end frame"
           : "image_urls" in b
             ? "image_urls must not be sent"

@@ -333,7 +333,8 @@
       "switched": "已添加参考素材，生成方式已改为{mode, select, r2v {参考生视频} other {参考生图}}。",
       "removed": "{to, select, text {文本方式只发送提示词。} other {}}已移除 {count, plural, other {# 个参考素材}}。",
       "undo": "撤销",
-      "reused": "已填入该结果的模型、生成方式、提示词和设置。{refs, select, yes {请重新添加参考素材。} other {}}"
+      "reused": "已填入该结果的模型、生成方式、提示词和设置。{refs, select, yes {请重新添加参考素材。} other {}}",
+      "spent": "已从输入框移除 {count, plural, other {# 个}}仅供本次生成使用的参考素材。生成结束后这些素材会被删除，如需再次使用，请重新上传。"
     },
     "cost": {
       "label": "预计",

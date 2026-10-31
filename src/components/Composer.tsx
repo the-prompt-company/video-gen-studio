@@ -165,21 +165,23 @@ function ParamControl({ spec, value, onChange }: { spec: ParamSpec; value: unkno
 function Thumb({ a, tag, caption, removeLabel, onRemove, className }: { a: Attachment; tag?: string; caption: string; removeLabel: string; onRemove: () => void; className: string }) {
   const t = useTranslations("playground");
   return (
-    <div className={`relative shrink-0 overflow-hidden rounded-md bg-surface-2 ${className}`}>
-      {a.kind === "image" ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={a.preview} alt={a.name} className="h-full w-full object-cover" />
-      ) : (
-        <video src={a.preview} muted playsInline preload="metadata" aria-label={a.name} className="h-full w-full object-cover" />
-      )}
-      {tag && <span aria-hidden className="font-display absolute left-1.5 top-1 text-sm text-foreground drop-shadow">{tag}</span>}
-      <span aria-hidden className="absolute bottom-1 left-1.5 text-[11px] text-foreground drop-shadow">{caption}</span>
-      {a.url === null && (
-        <span className="absolute inset-0 grid place-items-center bg-background/60">
-          <span aria-hidden className="h-5 w-5 animate-spin rounded-full border-2 border-foreground border-t-transparent" />
-          <span className="sr-only">{t("uploading")}</span>
-        </span>
-      )}
+    <div className={`relative shrink-0 ${className}`}>
+      <div className="absolute inset-0 overflow-hidden rounded-md bg-surface-2">
+        {a.kind === "image" ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={a.preview} alt={a.name} className="h-full w-full object-cover" />
+        ) : (
+          <video src={a.preview} muted playsInline preload="metadata" aria-label={a.name} className="h-full w-full object-cover" />
+        )}
+        {tag && <span aria-hidden className="font-display absolute left-1.5 top-1 text-sm text-foreground drop-shadow">{tag}</span>}
+        <span aria-hidden className="absolute bottom-1 left-1.5 text-[11px] text-foreground drop-shadow">{caption}</span>
+        {a.url === null && (
+          <span className="absolute inset-0 grid place-items-center bg-background/60">
+            <span aria-hidden className="h-5 w-5 animate-spin rounded-full border-2 border-foreground border-t-transparent" />
+            <span className="sr-only">{t("uploading")}</span>
+          </span>
+        )}
+      </div>
       <button type="button" aria-label={removeLabel} onClick={onRemove} className={REMOVE}>
         <Icon name="x" className="h-3.5 w-3.5" />
       </button>
@@ -187,7 +189,20 @@ function Thumb({ a, tag, caption, removeLabel, onRemove, className }: { a: Attac
   );
 }
 
-export function Composer({ ref, offers, largeUploadPrefix, onSubmit }: { ref?: Ref<ComposerHandle>; offers: Offer[]; largeUploadPrefix: string | null; onSubmit: (draft: Draft) => Promise<Reason | null> }) {
+export function Composer({
+  ref,
+  offers,
+  largeUploadPrefix,
+  threadKey,
+  onSubmit,
+}: {
+  ref?: Ref<ComposerHandle>;
+  offers: Offer[];
+  largeUploadPrefix: string | null;
+  /** Another thread on the stream clears the last send's error. */
+  threadKey: string;
+  onSubmit: (draft: Draft) => Promise<Reason | null>;
+}) {
   const t = useTranslations("playground");
   const tMode = useTranslations("mode");
   const tFamilies = useTranslations("families");
@@ -206,6 +221,11 @@ export function Composer({ ref, offers, largeUploadPrefix, onSubmit }: { ref?: R
   const [prompt, setPrompt] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<Reason | null>(null);
+  const [errorThread, setErrorThread] = useState(threadKey);
+  if (threadKey !== errorThread) {
+    setErrorThread(threadKey);
+    setError(null);
+  }
   const [open, setOpen] = useState<"model" | "settings" | "add" | null>(null);
   const [dragging, setDragging] = useState(false);
   const promptRef = useRef<HTMLTextAreaElement>(null);
@@ -250,6 +270,19 @@ export function Composer({ ref, offers, largeUploadPrefix, onSubmit }: { ref?: R
     el.style.height = "auto";
     el.style.height = `${el.scrollHeight}px`;
   }, [prompt]);
+
+  // A file dropped beside the composer would make the browser open it and leave the page.
+  useEffect(() => {
+    const keep = (e: DragEvent) => {
+      if (e.dataTransfer?.types.includes("Files")) e.preventDefault();
+    };
+    window.addEventListener("dragover", keep);
+    window.addEventListener("drop", keep);
+    return () => {
+      window.removeEventListener("dragover", keep);
+      window.removeEventListener("drop", keep);
+    };
+  }, []);
 
   useImperativeHandle(
     ref,
@@ -301,7 +334,7 @@ export function Composer({ ref, offers, largeUploadPrefix, onSubmit }: { ref?: R
         problems.push(current.provider === "openai" ? t("upload.blobForImages") : t("upload.blobForLarge", { mb: String(SMALL / 1024 / 1024) }));
         continue;
       }
-      const base = { id: crypto.randomUUID(), name: file.name, preview: URL.createObjectURL(file), url: null };
+      const base = { id: crypto.randomUUID(), name: file.name, preview: URL.createObjectURL(file), url: null, blob: viaBlob };
       if (isVideo) {
         const seconds = await readVideoSeconds(file);
         if (seconds === null) {
@@ -314,7 +347,10 @@ export function Composer({ ref, offers, largeUploadPrefix, onSubmit }: { ref?: R
         items.push({ a: { ...base, kind: "image", w: size?.w ?? null, h: size?.h ?? null }, file, viaBlob });
       }
     }
-    const { placed, refused } = fit(latest.current, items.map((x) => x.a), slot);
+    const fitted = fit(latest.current, items.map((x) => x.a), slot);
+    const { placed, refused } = fitted;
+    // A second attach may start before React renders this one; it must see these files already placed.
+    latest.current = fitted.composer;
     problems.push(...refused.map(refusalText));
     if (problems.length > 0) setError({ text: [...new Set(problems)].join(" · ") });
     if (placed.length === 0) return;
@@ -340,7 +376,7 @@ export function Composer({ ref, offers, largeUploadPrefix, onSubmit }: { ref?: R
     const reason = await onSubmit(draft);
     setSubmitting(false);
     if (reason) setError(reason);
-    else dispatch({ type: "dismiss" });
+    else dispatch({ type: "sent" });
   }
 
   function pickFamily(next: FamilyId) {
@@ -376,6 +412,7 @@ export function Composer({ ref, offers, largeUploadPrefix, onSubmit }: { ref?: R
           if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false);
         }}
         onDrop={(e) => {
+          if (!e.dataTransfer.types.includes("Files")) return;
           e.preventDefault();
           setDragging(false);
           void attach([...e.dataTransfer.files]);
@@ -383,7 +420,7 @@ export function Composer({ ref, offers, largeUploadPrefix, onSubmit }: { ref?: R
         className={`relative mx-auto grid w-full max-w-[820px] grid-cols-[minmax(0,1fr)] gap-2 rounded-xl border bg-surface p-3 pb-2.5 transition-colors ${dragging ? "border-foreground" : "border-border"}`}
       >
         {kind === "firstFrame" && (
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div role="group" aria-label={t("frames.label")} className="flex flex-wrap items-center gap-2.5">
             {SLOTS.filter((s) => s === "start" || family.modes.endFrame).map((s, i) => {
               const a = state.attach.kind === "firstFrame" ? state.attach[s] : null;
               const label = t("frames.slot", { slot: s });
@@ -454,6 +491,7 @@ export function Composer({ ref, offers, largeUploadPrefix, onSubmit }: { ref?: R
           id="prompt"
           ref={promptRef}
           rows={2}
+          aria-keyshortcuts="Control+Enter Meta+Enter"
           value={prompt}
           placeholder={t("promptPlaceholder")}
           onChange={(e) => setPrompt(e.target.value)}
@@ -473,7 +511,9 @@ export function Composer({ ref, offers, largeUploadPrefix, onSubmit }: { ref?: R
                 ? t("note.switched", { mode: state.note.mode })
                 : state.note.kind === "removed"
                   ? t("note.removed", { to: kind, count: state.note.count })
-                  : t("note.reused", { refs: state.note.needsAttachments ? "yes" : "no" })}
+                  : state.note.kind === "spent"
+                    ? t("note.spent", { count: state.note.count })
+                    : t("note.reused", { refs: state.note.needsAttachments ? "yes" : "no" })}
             </span>
             {state.note.kind === "removed" && (
               <button type="button" onClick={() => dispatch({ type: "undo" })} className="min-h-11 text-foreground underline underline-offset-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:min-h-7">
@@ -483,12 +523,14 @@ export function Composer({ ref, offers, largeUploadPrefix, onSubmit }: { ref?: R
           </p>
         )}
         {error && <ErrorText>{errorText(error)}</ErrorText>}
-        {blockers.map((b) => (
-          <p key={b.code} role="status" className="flex items-start gap-2 px-1 text-xs leading-relaxed text-foreground-2">
-            <span aria-hidden className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" />
-            {errorText(b)}
-          </p>
-        ))}
+        <div role="status" className="grid gap-2 empty:hidden">
+          {blockers.map((b) => (
+            <p key={b.code} className="flex items-start gap-2 px-1 text-xs leading-relaxed text-foreground-2">
+              <span aria-hidden className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" />
+              {errorText(b)}
+            </p>
+          ))}
+        </div>
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <div className="-mx-1 flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto px-1 py-0.5 [scrollbar-width:none] sm:overflow-visible">
@@ -521,7 +563,7 @@ export function Composer({ ref, offers, largeUploadPrefix, onSubmit }: { ref?: R
                 {priced ? [...facts, t("cost.rate", { rate: rate(offer) })].join(" · ") : t("cost.unpriced", { facts: facts.join(" · ") })}
               </div>
             </div>
-            <Button onClick={generate} disabled={!canGenerate} title={t("shortcut")} aria-keyshortcuts="Control+Enter Meta+Enter" className="h-11 shrink-0 sm:h-10">
+            <Button onClick={generate} disabled={!canGenerate} title={t("shortcut")} className="h-11 shrink-0 sm:h-10">
               {submitting ? t("submitting") : upload ? t("uploading") : t("generate")}
             </Button>
           </div>
@@ -566,7 +608,7 @@ export function Composer({ ref, offers, largeUploadPrefix, onSubmit }: { ref?: R
                 const on = family.modes.output === o;
                 const first = offers.find((x) => FAMILIES[x.family].modes.output === o && pickable(x));
                 return (
-                  <button key={o} type="button" aria-pressed={on} disabled={!on && !first} onClick={() => !on && first && pickFamily(first.family)} className="inline-flex h-10 items-center gap-1.5 rounded-full px-4 text-[13px] text-muted transition focus:outline-none focus-visible:ring-2 focus-visible:ring-accent aria-pressed:bg-foreground aria-pressed:font-medium aria-pressed:text-background disabled:opacity-45 sm:h-8">
+                  <button key={o} type="button" aria-pressed={on} disabled={!on && !first} onClick={() => !on && first && pickFamily(first.family)} className="inline-flex h-11 items-center gap-1.5 rounded-full px-4 text-[13px] text-muted transition focus:outline-none focus-visible:ring-2 focus-visible:ring-accent aria-pressed:bg-foreground aria-pressed:font-medium aria-pressed:text-background disabled:opacity-45 sm:h-8">
                     <Icon name={o === "video" ? "film" : "image"} />
                     {t("output", { output: o })}
                   </button>

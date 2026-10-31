@@ -127,6 +127,8 @@ export function Playground({
     if (serverNow !== undefined) clockOffset.current = serverNow - (sentAt + Date.now()) / 2;
   }
 
+  // Older pages wait for the thread's newest page, which replaces whatever this tab cached of it.
+  const [answered, setAnswered] = useState<string | null>(null);
   useEffect(() => {
     if (selectedId === null) return;
     let current = true;
@@ -140,6 +142,7 @@ export function Playground({
         syncClock(sentAt, body?.now);
         setLoadFailure(null);
         setFeeds((feeds) => withAnswer(feeds, selectedId, body?.items ?? [], body?.more ?? false));
+        setAnswered(selectedId);
       })
       .catch(() => current && setLoadFailure({ thread: selectedId, reason: { code: "network" } }));
     return () => {
@@ -152,9 +155,10 @@ export function Playground({
     const oldest = feedsRef.current.byThread[thread]?.rows.at(-1);
     if (!oldest) return false;
     const res = await fetch(`/api/generations?thread=${thread}&limit=${FEED_LIMIT}&before=${oldest.id}`).catch(() => null);
+    if (res?.status === 404) setKnown((list) => list.filter((x) => x.id !== thread));
     const body = (await res?.json().catch(() => null)) as FeedAnswer | null;
     if (!res?.ok || !body?.items || stageThreadRef.current !== thread) return false;
-    setFeeds((feeds) => withOlder(feeds, thread, body.items ?? [], body.more ?? false));
+    setFeeds((feeds) => withOlder(feeds, thread, oldest.id, body.items ?? [], body.more ?? false));
     return body.items.length > 0;
   }, [feedsRef, stageThreadRef]);
 
@@ -251,11 +255,13 @@ export function Playground({
 
   function pickThread(id: string) {
     if (id !== threadParam) showThread(id, "push");
+    setCancelError(null);
   }
 
   function startThread() {
     setDraftId(newThreadId());
     if (threadParam !== null) showThread(null, "push");
+    setCancelError(null);
   }
 
   function threadDeleted(id: string) {
@@ -309,13 +315,13 @@ export function Playground({
           <p className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{title}</p>
           {gallery}
         </div>
-        <Stream ref={stream} threadKey={stageThread} rows={items} more={feed?.more ?? false} offset={clockOffset} empty={empty} onOlder={loadOlder} onCancel={cancel} onReuse={reuse} />
+        <Stream ref={stream} threadKey={stageThread} rows={items} more={(feed?.more ?? false) && answered === stageThread} offset={clockOffset} empty={empty} onOlder={loadOlder} onCancel={cancel} onReuse={reuse} />
         {cancelError && (
           <div className="mx-auto w-full max-w-[820px] px-3 sm:px-4">
             <ErrorText>{errorText(cancelError)}</ErrorText>
           </div>
         )}
-        <Composer ref={composer} offers={offers} largeUploadPrefix={largeUploadPrefix} onSubmit={submit} />
+        <Composer ref={composer} offers={offers} largeUploadPrefix={largeUploadPrefix} threadKey={stageThread} onSubmit={submit} />
       </div>
       {deleting && <DeleteThreadDialog thread={deleting} onClose={() => setDeleting(null)} onDeleted={threadDeleted} />}
     </div>

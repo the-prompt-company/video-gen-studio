@@ -15,10 +15,11 @@ Every handle is a message key the journey reads with `ev.t`; the Korean text fol
 - `cmp-limits` references stop at the model's limits (`playground.upload.tooMany`), the counter reads `playground.refs.imageCount` · `playground.refs.videoCount`, a model change keeps the attachments, and over the new model's limit the status line reads `errors.tooManyImages` (or `errors.noVideoRefs` for a video on GPT Image 2) with 생성하기 off.
 - `cmp-add` + (`playground.refs.add`) opens a menu whose rows (`playground.refs.uploadImages`, `playground.refs.uploadVideos`) open the file picker; it stays open for more files. Files dropped on the composer are added too.
 - `cmp-keyboard` Ctrl+Enter (Cmd+Enter) in the prompt generates.
+- `cmp-spent` references kept in Blob (GPT Image 2 uploads, and Higgsfield files over 4 MB) leave the composer after a Higgsfield send with `playground.note.spent`, because the row deletes them when it ends; GPT Image 2 sends keep them.
 - `cmp-threads` the first generation from a new thread creates it (the URL gains `?thread=`); the next one stays in it.
 - `cmp-older` the stream shows the newest 12 turns and opens at the bottom; scrolling to the top loads 12 older ones (`playground.older.loading`) while the turn at the top stays in place, and the start reads `playground.older.start`. `playground.latest` jumps back to the newest turn.
 - `cmp-reload` a reload keeps the thread and opens at its newest turn.
-- `cmp-sideways` at 390 px nothing scrolls sideways.
+- `cmp-sideways` at 390 px nothing scrolls sideways, the page or any region inside it.
 
 ## How to get to it (user POV)
 
@@ -32,7 +33,7 @@ Preconditions:
 - Run it as the admin, once per language and viewport: `VGS_LOCALE=en-US VGS_MOBILE=1 VGS_FAKE_HF=http://localhost:4900 vgs run composer`.
 
 - **Member.** Creates `vgs-cmp-<stamp>@example.test` with a fake key, sets the Seedance and H3 rates for the run, and deletes the member with its rows and threads and restores the rates in `finally`.
-- **Steps.** `new-thread`, `composer-text`, `model-menu`, `blocker` (frames with no start frame), `composer-frames`, `settings` (720p and 8 s change the summary and the estimate), the frames generation into a new thread with the fake's body checked, frames → references → text → 되돌리기, seven images give six and a video (`composer-references`), H3's five-image blocker, a Ctrl+Enter generation into the same thread, GPT Image 2's video blocker, + in text mode, a dropped file, `stream`, 14 older rows inserted and the reload, `older-loading` held by the harness, the jump to the latest.
+- **Steps.** `new-thread`, `composer-text`, `model-menu`, `blocker` (frames with no start frame), `composer-frames`, `settings` (720p and 8 s change the summary and the estimate), the frames generation into a new thread with the fake's body checked, frames → references → text → 되돌리기, seven images give six and a video (`composer-references`), H3's five-image blocker, a Ctrl+Enter generation into the same thread, GPT Image 2's video blocker, + in text mode, a dropped file (dragenter, a dragover the composer accepts, drop), the two Blob references sent with Seedance leaving with `playground.note.spent`, `stream`, 14 older rows inserted and the reload, `older-loading` held by the harness, the jump to the latest.
 - **Proof.** Review images at `.impeccable/review/composer/<surface>-<ko|en|zh-CN>-<desktop|mobile>.png`; `log.md` records the end-frame body, the settings summary and cost, and the top turn's position before and after the older page.
 
 ## Gotchas

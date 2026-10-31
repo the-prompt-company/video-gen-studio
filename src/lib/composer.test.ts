@@ -8,8 +8,8 @@ const H3: FamilyId = "minimax/h3";
 const GPT: FamilyId = "openai/gpt-image-2";
 
 let n = 0;
-const image = (url: string | null = `https://cdn.test/i${++n}.jpg`): Attachment => ({ id: `img-${++n}`, kind: "image", name: "a.jpg", preview: `blob:${n}`, url, w: 1280, h: 720 });
-const video = (seconds = 3): Attachment => ({ id: `vid-${++n}`, kind: "video", name: "c.mp4", preview: `blob:${n}`, url: `https://cdn.test/v${n}.mp4`, seconds });
+const image = (url: string | null = `https://cdn.test/i${++n}.jpg`, blob = false): Attachment => ({ id: `img-${++n}`, kind: "image", name: "a.jpg", preview: `blob:${n}`, url, blob, w: 1280, h: 720 });
+const video = (seconds = 3, blob = false): Attachment => ({ id: `vid-${++n}`, kind: "video", name: "c.mp4", preview: `blob:${n}`, url: `https://cdn.test/v${n}.mp4`, blob, seconds });
 const run = (c: Composer, ...actions: Action[]) => actions.reduce(composerReducer, c);
 const ids = (c: Composer) => attachmentsOf(c.attach).map((a) => a.id);
 
@@ -89,8 +89,12 @@ test("an upload that answers after a switch still lands, in the composer and in 
   assert.equal(uploading(back), false);
   assert.equal(attachmentsOf(back.attach)[0].url, "https://cdn.test/done.jpg");
 
-  const failed = run(added, { type: "mode", kind: "text" }, { type: "failed", id: pending.id }, { type: "undo" });
-  assert.deepEqual(ids(failed), [], "a failed upload leaves nothing to restore");
+  const failed = run(added, { type: "mode", kind: "text" }, { type: "failed", id: pending.id });
+  assert.equal(failed.note, null, "a failed upload leaves nothing to restore, so the undo goes");
+
+  const other = image();
+  const two = run(newComposer(SEEDANCE), { type: "add", items: [pending, other] }, { type: "mode", kind: "text" }, { type: "failed", id: pending.id });
+  assert.deepEqual(two.note && two.note.kind === "removed" && two.note.count, 1, "the note counts what undo still restores");
 });
 
 test("taking a reference off ends the chance to undo the last switch", () => {
@@ -132,4 +136,22 @@ test("다시 sets the row's model, mode and settings with empty attachments, and
   const text = run(newComposer(SEEDANCE), { type: "reuse", family: H3, kind: "text", params: {} });
   assert.deepEqual(text.note, { kind: "reused", needsAttachments: false });
   assert.equal(modeOfComposer(run(newComposer(SEEDANCE), { type: "reuse", family: GPT, kind: "firstFrame", params: {} })), "r2i");
+});
+
+test("after a Higgsfield send the Blob references leave the composer and say so; other references stay", () => {
+  const [small, large, clip] = [image(), image("https://blob.test/refs/1/large.jpg", true), video(4, true)];
+  const sent = run(newComposer(SEEDANCE), { type: "add", items: [small, large, clip] }, { type: "sent" });
+  assert.deepEqual([ids(sent), sent.note], [[small.id], { kind: "spent", count: 2 }]);
+  const gpt = run(newComposer(GPT), { type: "add", items: [image("https://blob.test/refs/1/a.png", true)] }, { type: "sent" });
+  assert.deepEqual([attachmentsOf(gpt.attach).length, gpt.note], [1, null], "an OpenAI row keeps its Blob references for the next attempt");
+});
+
+test("a second attach in a row keeps the note that the first one switched to references", () => {
+  const c = run(newComposer(SEEDANCE), { type: "add", items: [image()] }, { type: "add", items: [image()] });
+  assert.deepEqual(c.note, { kind: "switched", mode: "r2v" });
+});
+
+test("다시 keeps only the settings the model takes, so a stored 20 s falls back to the default", () => {
+  const reused = run(newComposer(SEEDANCE), { type: "reuse", family: SEEDANCE, kind: "text", params: { duration: 20, resolution: "720p", seed: 7 } });
+  assert.deepEqual(reused.params, { ...defaultParams(SEEDANCE), resolution: "720p" });
 });

@@ -209,7 +209,7 @@ const GPT_IMAGE_2_IMAGE_USD: Record<ImageQuality, Record<PricedSize, number>> = 
   high: { "1024x1024": 0.211, "1024x1536": 0.165, "1536x1024": 0.165 },
 };
 /**
- * The drawer's aspect choices and the size each sends. 16:9 and 9:16 have no published price; they have fewer pixels
+ * The aspect choices and the size each sends. 16:9 and 9:16 have no published price; they have fewer pixels
  * than the same orientation's standard size and are estimated at its price, which usage then replaces.
  */
 const GPT_IMAGE_2_SHAPES: Record<string, { size: string; label: string; priced: PricedSize }> = {
@@ -395,9 +395,13 @@ function coerce(p: ParamSpec, v: unknown): string | number | boolean | null {
   }
 }
 
-/** Every param of the model at its default, coerced, whichever mode takes it. */
+/** Every param of the model, whichever mode takes it: the given value where the model takes it, else its default. */
+export function paramsWithDefaults(family: FamilyId, given: Readonly<Record<string, unknown>> = {}): Params {
+  return Object.fromEntries(FAMILIES[family].params.map((p) => [p.key, (coerce(p, given[p.key]) ?? coerce(p, undefined)) as string | number | boolean]));
+}
+
 export function defaultParams(family: FamilyId): Params {
-  return Object.fromEntries(FAMILIES[family].params.map((p) => [p.key, coerce(p, undefined) as string | number | boolean]));
+  return paramsWithDefaults(family);
 }
 
 /** Rounded to 4 decimals, the scale of cost_usd. Prices the estimate before submit and the provider's usage after. */

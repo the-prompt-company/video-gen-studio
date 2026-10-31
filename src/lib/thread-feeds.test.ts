@@ -41,10 +41,11 @@ test("a thread's answer keeps only the rows this tab sent after the newest row t
 
 test("an older page goes below the rows shown, once each, and says whether more remain", () => {
   const shown: Feeds = { byThread: { a: feed([row("n2", 30), row("n1", 20)], true) }, galleryTotal: 5 };
-  const after = withOlder(shown, "a", [row("n1", 20), row("o2", 10), row("o1", 5)], false);
+  const after = withOlder(shown, "a", "n1", [row("n1", 20), row("o2", 10), row("o1", 5)], false);
   assert.deepEqual(ids(after, "a"), ["n2:completed", "n1:completed", "o2:completed", "o1:completed"]);
   assert.equal(after.byThread.a.more, false);
   assert.equal(after.galleryTotal, 5, "rows that were finished before this tab saw them are not new in the gallery");
+  assert.equal(withOlder(shown, "a", "o9", [row("o8", 1)], false), shown, "a page for a cursor the thread no longer ends at is dropped");
 });
 
 test("an empty answer keeps what this tab sent, and dropping a thread forgets its rows", () => {

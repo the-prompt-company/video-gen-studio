@@ -82,11 +82,11 @@ const Turn = memo(function Turn({ g, n, offset, onCancel, onReuse }: TurnProps) 
     <article data-id={g.id} aria-label={t("feed.item", { n: String(n), status: label })} className="grid gap-2.5">
       <div className="flex justify-end">
         <div className="grid max-w-[min(620px,92%)] gap-2 rounded-xl border border-border bg-surface-2 px-3.5 py-2.5">
-          <p className={`max-h-60 overflow-y-auto whitespace-pre-wrap text-sm leading-relaxed [overflow-wrap:anywhere] ${g.prompt ? "text-foreground" : "text-muted"}`}>{g.prompt || tGeneration("noPrompt")}</p>
+          <p className={`whitespace-pre-wrap text-sm leading-relaxed [overflow-wrap:anywhere] ${g.prompt ? "text-foreground" : "text-muted"}`}>{g.prompt || tGeneration("noPrompt")}</p>
           {refs.length > 0 && (
             <ul aria-label={t("feed.refsLabel", { images: g.imageRefs.length, videos: g.videoRefs.length })} className="flex flex-wrap gap-1.5">
-              {refs.map((r) => (
-                <RefThumb key={r.url} {...r} />
+              {refs.map((r, i) => (
+                <RefThumb key={i} {...r} />
               ))}
             </ul>
           )}
@@ -254,7 +254,7 @@ export function Stream({
     <div className="relative min-h-0 flex-1">
       <div
         ref={scroller}
-        tabIndex={-1}
+        tabIndex={0}
         aria-label={t("stream")}
         role="region"
         onScroll={(e) => {
@@ -263,7 +263,7 @@ export function Stream({
           pinned.current = bottom;
           if (bottom !== atBottom) setAtBottom(bottom);
         }}
-        className="h-full overflow-y-auto overscroll-contain [overflow-anchor:none] focus:outline-none"
+        className="h-full overflow-y-auto overscroll-contain [overflow-anchor:none] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
       >
         <div ref={content} className={`mx-auto grid min-h-full w-full max-w-[820px] grid-cols-[minmax(0,1fr)] gap-7 px-3 py-6 sm:px-4 ${rows.length === 0 ? "place-content-center" : "content-end"}`}>
           {rows.length === 0 ? (

@@ -32,8 +32,10 @@ export function withAnswer(feeds: Feeds, thread: string, answered: readonly Publ
   return { byThread: { ...feeds.byThread, [thread]: { rows: [...sentSince, ...answered], more } }, galleryTotal: feeds.galleryTotal + done };
 }
 
-export function withOlder(feeds: Feeds, thread: string, older: readonly PublicGeneration[], more: boolean): Feeds {
+/** Dropped unless the thread still ends at `cursor`: a newer answer may have reset it to the newest page meanwhile. */
+export function withOlder(feeds: Feeds, thread: string, cursor: string, older: readonly PublicGeneration[], more: boolean): Feeds {
   const feed = feeds.byThread[thread] ?? NONE;
+  if (feed.rows.at(-1)?.id !== cursor) return feeds;
   const rows = [...feed.rows, ...older.filter((o) => !feed.rows.some((x) => x.id === o.id))];
   return { ...feeds, byThread: { ...feeds.byThread, [thread]: { rows, more } } };
 }

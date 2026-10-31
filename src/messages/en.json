@@ -333,7 +333,8 @@
       "switched": "Switched to {mode, select, r2v {Reference to video} other {Reference to image}} for the reference.",
       "removed": "{to, select, text {Text mode sends the prompt only. } other {}}Removed {count, plural, one {# reference} other {# references}}.",
       "undo": "Undo",
-      "reused": "Filled in this result's model, mode, prompt and settings.{refs, select, yes { Add the references again.} other {}}"
+      "reused": "Filled in this result's model, mode, prompt and settings.{refs, select, yes { Add the references again.} other {}}",
+      "spent": "Removed {count, plural, one {# reference} other {# references}} kept only for this generation. {count, plural, one {It's} other {They're}} deleted when it finishes, so upload {count, plural, one {it} other {them}} again to reuse."
     },
     "cost": {
       "label": "Est.",

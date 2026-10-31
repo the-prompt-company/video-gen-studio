@@ -10,7 +10,7 @@ The gallery, the dashboard and the playground read fully in the browser's langua
 - `scr-empty` a member with no results sees `gallery.empty` with a link to `/playground`.
 - `scr-no-key` a member without an API key sees `errors.noKey` in the composer once Seedance is picked, and 생성하기 stays off.
 - `scr-scope` the admin's `gallery.scope.all` and `gallery.scope.mine` links switch scope, and the admin's `users.locale` does not move.
-- `scr-blocker` reusing a row that asks for 20 s (its turn's `playground.actions.reuse`, in the earlier history) puts `errors.paramRange` with the `params.duration` label in the composer's status line.
+- `scr-blocker` reusing a row that asks for 20 s (its turn's `playground.actions.reuse`, in the earlier history) falls back to `playground.summary.duration` 5 s, and an empty prompt then reads `errors.promptRequired` with the model and mode in the composer's status line.
 - `scr-menus` each model's row in the model menu starts with its untranslated name, its `families.*.note` shows, and GPT Image 2's settings pills read `paramValues.*`.
 - `scr-refs` two images and a video read `playground.refs.imageCount` and `playground.refs.videoCount` in the composer, with remove buttons named by `playground.refs.removeLabel`.
 - `scr-particles` choosing text takes the three references away and reads `playground.note.removed` (`레퍼런스 3개를 뺐습니다` in Korean), with no particle that disagrees with its noun.

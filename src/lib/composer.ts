@@ -1,8 +1,11 @@
-import { defaultParams, FAMILIES, type Draft, type FamilyId, type Mode, type ModeKind } from "@/lib/catalog";
+import { defaultParams, FAMILIES, paramsWithDefaults, type Draft, type FamilyId, type Mode, type ModeKind } from "@/lib/catalog";
 
-type AttachmentBase = { id: string; name: string; preview: string; url: string | null };
+/**
+ * `url` is null until the upload answers. `blob`: uploaded to our Blob store, whose references a Higgsfield row
+ * deletes when it ends.
+ */
+type AttachmentBase = { id: string; name: string; preview: string; url: string | null; blob: boolean };
 
-/** `url` is null until the upload answers. */
 export type Attachment = AttachmentBase & ({ kind: "image"; w: number | null; h: number | null } | { kind: "video"; seconds: number });
 
 export type Attachments =
@@ -16,7 +19,8 @@ export type Slot = "start" | "end";
 export type Note =
   | { kind: "switched"; mode: Mode }
   | { kind: "removed"; count: number; restore: Attachments }
-  | { kind: "reused"; needsAttachments: boolean };
+  | { kind: "reused"; needsAttachments: boolean }
+  | { kind: "spent"; count: number };
 
 export type Composer = { family: FamilyId; params: Readonly<Record<string, unknown>>; attach: Attachments; note: Note | null };
 
@@ -33,7 +37,8 @@ export type Action =
   /** Its upload failed: gone from the attachments and from what 되돌리기 restores. */
   | { type: "failed"; id: string }
   | { type: "undo" }
-  | { type: "dismiss" }
+  /** A submit went. The Blob references a Higgsfield row was sent with are deleted when it ends, so they leave. */
+  | { type: "sent" }
   | { type: "reuse"; family: FamilyId; kind: ModeKind; params: Readonly<Record<string, unknown>> };
 
 const EMPTY: Record<ModeKind, Attachments> = {
@@ -129,7 +134,7 @@ export function fit(c: Composer, items: readonly Attachment[], slot?: Slot): { c
     next = { kind: "reference", items: list };
   }
   if (placed.length === 0) return { composer: c, placed, refused };
-  const note: Note | null = switched ? { kind: "switched", mode: family.modes.reference } : null;
+  const note: Note | null = switched ? { kind: "switched", mode: family.modes.reference } : c.note?.kind === "switched" ? c.note : null;
   return { composer: { ...c, attach: next, note }, placed, refused };
 }
 
@@ -141,8 +146,12 @@ function mapAttachments(a: Attachments, f: (x: Attachment) => Attachment | null)
 
 /** The note's restore too: an upload can land after a switch moved its attachment there. */
 function everywhere(c: Composer, f: (x: Attachment) => Attachment | null): Composer {
-  const note = c.note?.kind === "removed" ? { ...c.note, restore: mapAttachments(c.note.restore, f) } : c.note;
-  return { ...c, attach: mapAttachments(c.attach, f), note };
+  const attach = mapAttachments(c.attach, f);
+  if (c.note?.kind !== "removed") return { ...c, attach };
+  const restore = mapAttachments(c.note.restore, f);
+  const kept = new Set(attachmentsOf(attach).map((x) => x.id));
+  const count = attachmentsOf(restore).filter((x) => !kept.has(x.id)).length;
+  return { ...c, attach, note: count > 0 ? { ...c.note, restore, count } : null };
 }
 
 export function composerReducer(c: Composer, action: Action): Composer {
@@ -167,13 +176,16 @@ export function composerReducer(c: Composer, action: Action): Composer {
       return { ...c, attach: mapAttachments(c.attach, (x) => (x.id === action.id ? null : x)), note: null };
     case "undo":
       return c.note?.kind === "removed" ? { ...c, attach: c.note.restore, note: null } : c;
-    case "dismiss":
-      return c.note ? { ...c, note: null } : c;
+    case "sent": {
+      if (FAMILIES[c.family].provider !== "higgsfield") return c.note ? { ...c, note: null } : c;
+      const spent = attachmentsOf(c.attach).filter((x) => x.blob).length;
+      return { ...c, attach: mapAttachments(c.attach, (x) => (x.blob ? null : x)), note: spent > 0 ? { kind: "spent", count: spent } : null };
+    }
     case "reuse": {
       const kind = FAMILIES[action.family].modes[action.kind] ? action.kind : "reference";
       return {
         family: action.family,
-        params: { ...defaultParams(action.family), ...action.params },
+        params: paramsWithDefaults(action.family, action.params),
         attach: EMPTY[kind],
         note: { kind: "reused", needsAttachments: kind !== "text" },
       };
