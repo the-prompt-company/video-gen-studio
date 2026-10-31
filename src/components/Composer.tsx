@@ -519,7 +519,7 @@ export function Composer({
         className={`relative mx-auto grid w-full max-w-[820px] grid-cols-[minmax(0,1fr)] gap-2 rounded-xl border bg-surface p-3 pb-2.5 transition-colors ${dragging ? "border-foreground" : "border-border"}`}
       >
         {all.length > 0 && (
-          <div className="grid gap-1.5">
+          <div className="grid gap-2.5">
             <ul aria-label={t("refs.attached")} className="-m-1 flex min-w-0 gap-3 overflow-x-auto p-1 [scrollbar-width:thin]">
               {all.map((a) => {
                 const tag = tagOf(a);
@@ -660,7 +660,7 @@ export function Composer({
 
         {picker.list && <ResultList {...picker.list} attached={new Set(all.flatMap((a) => (a.url ? [a.url] : [])))} note={picker.videosHidden ? t("picker.hidden", { model: family.name }) : null} />}
         {dragging && (
-          <div aria-hidden className="pointer-events-none absolute inset-0 rounded-xl bg-background/85 p-1.5">
+          <div aria-hidden className="pointer-events-none absolute inset-0 rounded-xl bg-surface p-1.5">
             <div className="grid h-full place-content-center justify-items-center gap-1 rounded-lg border border-dashed border-foreground/60 px-4 text-center">
               <Icon name="plus" className="h-5 w-5 text-foreground" />
               <span className="text-sm font-medium text-foreground">{t("dropHere")}</span>
