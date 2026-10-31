@@ -4,6 +4,9 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const INITIAL = "oooooooo";
+const literal = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+/** The column headers an admin types in a sheet. Messages quote them as typed, in every language. */
+const HEADERS = { nickname: "nickname", email: "email", nicknameAlias: "닉네임", emailAlias: "이메일" };
 
 /** Feature: member import from .xlsx in admin, plus nickname and the reset to the initial password. See features/import.md. */
 export default async function importJourney({ page, ev, base, webDir, local }) {
@@ -20,56 +23,8 @@ export default async function importJourney({ page, ev, base, webDir, local }) {
     p.on("pageerror", (e) => appErrors.push(String(e)));
   };
   watchErrors(page);
-  const opener = page.getByRole("button", { name: "엑셀로 회원 만들기", exact: true });
-  const importer = page.getByRole("dialog", { name: "엑셀로 회원 만들기" });
-  const results = importer.getByRole("list", { name: "행별 결과" });
-  const openImport = async () => {
-    await opener.click();
-    await importer.waitFor({ timeout: 10_000 });
-  };
-  const closeImport = async () => {
-    await importer.getByRole("button", { name: await ev.t("common.close") }).click();
-    await importer.waitFor({ state: "hidden", timeout: 5_000 });
-  };
-
   const users = async () => (await ev.api("/api/admin/users")).body?.items ?? [];
   const member = async (username) => (await users()).find((u) => u.username === username);
-  const pick = async (name) => {
-    await importer.locator('input[type="file"]').setInputFiles(files[name]);
-  };
-  const expectAlert = async (pattern, what) => {
-    const alert = importer.getByRole("alert");
-    try {
-      await alert.filter({ hasText: pattern }).waitFor({ timeout: 30_000 });
-    } catch {
-      ev.fail(`${what}: expected an alert matching ${pattern}, got "${(await alert.allTextContents()).join(" | ")}"`);
-    }
-  };
-  const outcomes = async () => {
-    await results.waitFor({ timeout: 30_000 });
-    const byRow = {};
-    for (const text of await results.getByRole("listitem").allTextContents()) {
-      const row = /(\d+)행/.exec(text)?.[1];
-      if (row) byRow[row] = text;
-    }
-    return byRow;
-  };
-  const expectOutcome = (byRow, row, label, detail) => {
-    const text = byRow[row];
-    const found = !detail || (typeof detail === "string" ? text?.includes(detail) : detail.test(text));
-    if (!text || !text.includes(label) || !found) ev.fail(`row ${row}: expected "${label}"${detail ? ` and ${detail}` : ""}, got "${text}"`);
-  };
-  const confirmCreate = async (count) => {
-    const button = importer.getByRole("button", { name: `${count}명 만들기` });
-    await button.waitFor({ timeout: 10_000 });
-    const [res] = await Promise.all([
-      page.waitForResponse((r) => r.url().endsWith("/api/admin/users/import") && r.request().method() === "POST", { timeout: 90_000 }),
-      button.click(),
-    ]);
-    const timing = res.request().timing();
-    await importer.getByRole("status").filter({ hasText: `${count}명을 만들었습니다` }).waitFor({ timeout: 30_000 });
-    return Math.round(timing.responseEnd);
-  };
   const signIn = async (p, id, pw) => {
     await p.goto(`${base}/login`, { waitUntil: "networkidle" });
     await p.getByLabel("ID").fill(id);
@@ -80,22 +35,75 @@ export default async function importJourney({ page, ev, base, webDir, local }) {
   try {
     await ev.login("/admin");
     if (!(await page.locator("header").getByText("ADMIN", { exact: true }).isVisible())) ev.fail("run with an admin's VGS_USER/VGS_PASS");
+
+    const title = await ev.t("import.title");
+    const opener = page.getByRole("button", { name: title, exact: true });
+    const importer = page.getByRole("dialog", { name: title });
+    const results = importer.getByRole("list", { name: await ev.t("import.rows") });
+    const sheetRow = new RegExp(literal(await ev.t("import.row", { row: "\u0001" })).replace("\u0001", "(\\d+)"));
+    const temporary = await ev.t("members.temporary");
+    const openImport = async () => {
+      await opener.click();
+      await importer.waitFor({ timeout: 10_000 });
+    };
+    const closeImport = async () => {
+      await importer.getByRole("button", { name: await ev.t("common.close") }).click();
+      await importer.waitFor({ state: "hidden", timeout: 5_000 });
+    };
+    const pick = async (name) => {
+      await importer.locator('input[type="file"]').setInputFiles(files[name]);
+    };
+    const expectAlert = async (text, what) => {
+      const alert = importer.getByRole("alert");
+      try {
+        await alert.filter({ hasText: text }).waitFor({ timeout: 30_000 });
+      } catch {
+        ev.fail(`${what}: expected the alert "${text}", got "${(await alert.allTextContents()).join(" | ")}"`);
+      }
+    };
+    const outcomes = async () => {
+      await results.waitFor({ timeout: 30_000 });
+      const byRow = {};
+      for (const text of await results.getByRole("listitem").allTextContents()) {
+        const row = sheetRow.exec(text)?.[1];
+        if (row) byRow[row] = text;
+      }
+      return byRow;
+    };
+    const expectOutcome = async (byRow, row, outcome, detail) => {
+      const text = byRow[row];
+      const label = await ev.t(`import.outcome.${outcome}`);
+      const found = !detail || (typeof detail === "string" ? text?.includes(detail) : detail.test(text));
+      if (!text || !text.includes(label) || !found) ev.fail(`row ${row}: expected "${label}"${detail ? ` and ${detail}` : ""}, got "${text}"`);
+    };
+    const confirmCreate = async (count) => {
+      const button = importer.getByRole("button", { name: await ev.t("import.submit", { count }), exact: true });
+      await button.waitFor({ timeout: 10_000 });
+      const [res] = await Promise.all([
+        page.waitForResponse((r) => r.url().endsWith("/api/admin/users/import") && r.request().method() === "POST", { timeout: 90_000 }),
+        button.click(),
+      ]);
+      const timing = res.request().timing();
+      await importer.getByRole("status").filter({ hasText: await ev.t("import.done", { count }) }).waitFor({ timeout: 30_000 });
+      return Math.round(timing.responseEnd);
+    };
+
     await opener.waitFor({ timeout: 15_000 });
     await openImport();
-    if (!(await importer.getByRole("table", { name: "엑셀 형식 예시" }).isVisible())) ev.fail("the modal should show the expected format");
+    if (!(await importer.getByRole("table", { name: await ev.t("import.example.label") }).isVisible())) ev.fail("the modal should show the expected format");
     await ev.shot("import-modal");
 
     await pick("missing-column.xlsx");
-    await expectAlert(/email\(또는 이메일\) 열이 없습니다.*찾은 제목: 이름, 메일, nickname/, "missing email column");
+    await expectAlert(await ev.t("import.failure.missingColumns", { ...HEADERS, row: "1", missing: "email", found: "이름, 메일, nickname" }), "missing email column");
     await ev.shot("missing-column");
 
     await pick("too-many.xlsx");
-    await expectAlert(/200명까지.*201명/, "201 rows");
+    await expectAlert(await ev.t("errors.importTooMany", { max: 200, count: 201 }), "201 rows");
     await ev.shot("too-many");
 
     await pick("english-headers.xlsx");
     const english = await outcomes();
-    for (const row of ["2", "3", "4"]) expectOutcome(english, row, "만들 예정");
+    for (const row of ["2", "3", "4"]) await expectOutcome(english, row, "create");
     if (await member(email(1))) ev.fail("a dry run must not create anyone");
     await ev.shot("english-preview");
     const englishMs = await confirmCreate(3);
@@ -106,28 +114,29 @@ export default async function importJourney({ page, ev, base, webDir, local }) {
     ev.note(`english-headers: 3 created in ${englishMs} ms, each a user with its nickname and mustChangePassword=true`);
     await ev.shot("english-created");
     await new Promise((r) => setTimeout(r, 1000));
-    if (!(await importer.getByRole("status").filter({ hasText: "3명을 만들었습니다" }).isVisible())) ev.fail("the import result should stay in the modal until it is dismissed");
+    if (!(await importer.getByRole("status").filter({ hasText: await ev.t("import.done", { count: 3 }) }).isVisible())) ev.fail("the import result should stay in the modal until it is dismissed");
     await closeImport();
-    if (!(await opener.evaluate((el) => el === document.activeElement))) ev.fail("closing the import modal should return focus to 엑셀로 회원 만들기");
-    ev.note("the result stayed in the modal a second after creating; 닫기 dismissed it and returned focus to 엑셀로 회원 만들기");
+    if (!(await opener.evaluate((el) => el === document.activeElement))) ev.fail(`closing the import modal should return focus to "${title}"`);
+    ev.note(`the result stayed in the modal a second after creating; common.close dismissed it and returned focus to "${title}"`);
     const row1 = page.getByRole("row").filter({ hasText: email(1) });
     await row1.waitFor({ timeout: 15_000 });
-    if (!(await row1.getByText("김민지", { exact: true }).isVisible()) || !(await row1.getByText("임시 비밀번호", { exact: true }).isVisible())) ev.fail("the users table should show the nickname and the 임시 비밀번호 badge");
+    if (!(await row1.getByText("김민지", { exact: true }).isVisible()) || !(await row1.getByText(temporary, { exact: true }).isVisible())) ev.fail(`the users table should show the nickname and the "${temporary}" badge`);
     await row1.scrollIntoViewIfNeeded();
     await ev.shot("users-table-badge");
 
     await openImport();
-    if ((await results.count()) || !(await importer.getByText("엑셀 파일 고르기", { exact: true }).isVisible())) ev.fail("reopening the import modal should start from 엑셀 파일 고르기, not the dismissed result");
+    const pickFirst = await ev.t("import.pick.first");
+    if ((await results.count()) || !(await importer.getByText(pickFirst, { exact: true }).isVisible())) ev.fail(`reopening the import modal should start from "${pickFirst}", not the dismissed result`);
     await pick("mixed.xlsx");
     const mixed = await outcomes();
-    expectOutcome(mixed, "4", "만들 예정", new RegExp(email(4)));
-    expectOutcome(mixed, "6", "만들 예정");
-    expectOutcome(mixed, "7", "파일 안 중복", /4행과 이메일이 같습니다/);
-    expectOutcome(mixed, "8", "이미 있음");
-    expectOutcome(mixed, "9", "확인 필요", await ev.t("errors.emailInvalid"));
-    expectOutcome(mixed, "10", "확인 필요", await ev.t("errors.nameBlank", { kind: "nickname" }));
-    expectOutcome(mixed, "11", "확인 필요", await ev.t("errors.nameTooLong", { kind: "nickname", max: 30, length: 31 }));
-    expectOutcome(mixed, "12", "확인 필요", await ev.t("errors.nameControl", { kind: "nickname" }));
+    await expectOutcome(mixed, "4", "create", new RegExp(email(4)));
+    await expectOutcome(mixed, "6", "create");
+    await expectOutcome(mixed, "7", "duplicate", await ev.t("import.detail.duplicate", { row: "4" }));
+    await expectOutcome(mixed, "8", "exists");
+    await expectOutcome(mixed, "9", "invalid", await ev.t("errors.emailInvalid"));
+    await expectOutcome(mixed, "10", "invalid", await ev.t("errors.nameBlank", { kind: "nickname" }));
+    await expectOutcome(mixed, "11", "invalid", await ev.t("errors.nameTooLong", { kind: "nickname", max: 30, length: 31 }));
+    await expectOutcome(mixed, "12", "invalid", await ev.t("errors.nameControl", { kind: "nickname" }));
     if (Object.keys(mixed).length !== 8) ev.fail(`mixed.xlsx should preview 8 rows (blank rows skipped), got ${Object.keys(mixed).join(",")}`);
     ev.note("mixed.xlsx preview: rows 4,6 create; 7 duplicate of 4; 8 exists; 9-12 invalid with their reasons; blank rows 5 and 13 skipped");
     await ev.shot("mixed-preview");
@@ -141,18 +150,19 @@ export default async function importJourney({ page, ev, base, webDir, local }) {
 
     await pick("korean-headers.xlsx");
     const korean = await outcomes();
-    expectOutcome(korean, "2", "만들 예정", /정하늘/);
-    expectOutcome(korean, "3", "만들 예정", /오세훈/);
+    await expectOutcome(korean, "2", "create", /정하늘/);
+    await expectOutcome(korean, "3", "create", /오세훈/);
     await confirmCreate(2);
     ev.note("korean-headers: 2 created");
 
     await pick("two-hundred.xlsx");
     const full = await outcomes();
     if (Object.keys(full).length !== 200) ev.fail(`two-hundred.xlsx should preview 200 rows, got ${Object.keys(full).length}`);
-    const fit = await importer.evaluate((d) => {
+    const create200 = await ev.t("import.submit", { count: 200 });
+    const fit = await importer.evaluate((d, create200) => {
       const body = d.querySelector("footer")?.previousElementSibling;
       const box = d.getBoundingClientRect();
-      const button = [...d.querySelectorAll("footer button")].find((b) => b.textContent === "200명 만들기")?.getBoundingClientRect();
+      const button = [...d.querySelectorAll("footer button")].find((b) => b.textContent === create200)?.getBoundingClientRect();
       return {
         scrollsInside: body ? body.scrollHeight > body.clientHeight : false,
         noSideways: d.scrollWidth <= d.clientWidth && (body ? body.scrollWidth <= body.clientWidth : false),
@@ -161,9 +171,9 @@ export default async function importJourney({ page, ev, base, webDir, local }) {
         width: Math.round(box.width),
         pageScroll: Math.round(window.scrollY),
       };
-    });
-    if (!fit.scrollsInside || !fit.noSideways || !fit.inView || !fit.buttonInView) ev.fail(`the 200-row preview should scroll inside a modal that fits the viewport with 200명 만들기 in view: ${JSON.stringify(fit)}`);
-    ev.note(`two-hundred.xlsx preview: the modal (${fit.width}px wide) fits the viewport, its body scrolls inside with no sideways overflow, and 200명 만들기 stays in view`);
+    }, create200);
+    if (!fit.scrollsInside || !fit.noSideways || !fit.inView || !fit.buttonInView) ev.fail(`the 200-row preview should scroll inside a modal that fits the viewport with "${create200}" in view: ${JSON.stringify(fit)}`);
+    ev.note(`two-hundred.xlsx preview: the modal (${fit.width}px wide) fits the viewport, its body scrolls inside with no sideways overflow, and "${create200}" stays in view`);
     await ev.shot("two-hundred-preview");
     const fullMs = await confirmCreate(200);
     ev.note(`two-hundred.xlsx: 200 created in one request, ${fullMs} ms from request start to response end`);
@@ -187,30 +197,33 @@ export default async function importJourney({ page, ev, base, webDir, local }) {
     await page.reload({ waitUntil: "networkidle" });
     const row4 = page.getByRole("row").filter({ hasText: email(4) });
     await row4.waitFor({ timeout: 15_000 });
-    if (await row4.getByText("임시 비밀번호", { exact: true }).isVisible()) ev.fail("the badge should be gone after the member chose a password");
+    if (await row4.getByText(temporary, { exact: true }).isVisible()) ev.fail("the badge should be gone after the member chose a password");
     await new Promise((r) => setTimeout(r, 1100));
     await row4.click();
-    const edit = page.getByRole("dialog", { name: `${email(4)} 편집` });
+    const edit = page.getByRole("dialog", { name: await ev.t("members.edit", { username: email(4) }) });
     await edit.waitFor({ timeout: 10_000 });
 
-    const nickname = edit.getByLabel(/^닉네임/);
+    const nickname = edit.getByLabel(new RegExp(`^${literal(await ev.t("members.field.nickname"))}`));
+    const saveNickname = edit.getByRole("button", { name: await ev.t("common.save"), exact: true }).first();
     await nickname.fill("가".repeat(31));
-    await edit.getByRole("button", { name: "저장" }).first().click();
+    await saveNickname.click();
     await page.getByText(await ev.t("errors.nameTooLong", { kind: "nickname", max: 30, length: 31 })).waitFor({ timeout: 10_000 });
     await nickname.fill(`  새 이름 ${stamp} `);
-    await edit.getByRole("button", { name: "저장" }).first().click();
+    await saveNickname.click();
     await row4.getByText(`새 이름 ${stamp}`, { exact: true }).waitFor({ timeout: 10_000 });
     if ((await member(email(4)))?.nickname !== `새 이름 ${stamp}`) ev.fail("the nickname edit should persist trimmed");
     ev.note("admin nickname edit: 31 characters refused, a padded name saved trimmed");
     await ev.shot("nickname-edited");
 
-    await edit.getByRole("button", { name: "초기 비밀번호로 되돌리기" }).click();
-    const confirmBox = edit.getByRole("group", { name: "초기 비밀번호로 되돌리기" });
+    const resetTitle = await ev.t("members.reset.title");
+    await edit.getByRole("button", { name: resetTitle }).click();
+    const confirmBox = edit.getByRole("group", { name: resetTitle });
     await confirmBox.waitFor({ timeout: 5_000 });
+    if (!(await confirmBox.innerText()).includes(INITIAL)) ev.fail(`the reset confirmation should name the initial password ${INITIAL}, it says "${await confirmBox.innerText()}"`);
     await ev.shot("reset-confirm");
-    await confirmBox.getByRole("button", { name: "되돌리기", exact: true }).click();
-    await edit.getByText("임시 비밀번호 상태입니다").waitFor({ timeout: 15_000 });
-    await row4.getByText("임시 비밀번호", { exact: true }).waitFor({ timeout: 10_000 });
+    await confirmBox.getByRole("button", { name: await ev.t("members.reset.confirm"), exact: true }).click();
+    await edit.getByText(await ev.t("members.editor.temporaryNote")).waitFor({ timeout: 15_000 });
+    await row4.getByText(temporary, { exact: true }).waitFor({ timeout: 10_000 });
     if ((await member(email(4)))?.mustChangePassword !== true) ev.fail("the reset must set mustChangePassword");
     await ev.shot("reset-done");
 
@@ -220,7 +233,7 @@ export default async function importJourney({ page, ev, base, webDir, local }) {
     await memberPage.getByRole("alert").filter({ hasText: await ev.t("errors.wrongCredentials", undefined, memberPage) }).waitFor({ timeout: 20_000 });
     await signIn(memberPage, email(4), INITIAL);
     await memberPage.getByRole("heading", { level: 1, name: await ev.t("auth.heading.temporary.title", undefined, memberPage) }).waitFor({ timeout: 20_000 });
-    ev.note("after 초기 비밀번호로 되돌리기 the member was signed out, the chosen password stopped working, and oooooooo asks for a new one");
+    ev.note(`after "${resetTitle}" the member was signed out, the chosen password stopped working, and ${INITIAL} asks for a new one`);
     await ev.shot("reset-forces-change", { page: memberPage });
     if (appErrors.length) ev.fail(`browser errors other than HTTP statuses: ${appErrors.join(" | ").slice(0, 500)}`);
   } finally {

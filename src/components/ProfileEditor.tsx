@@ -2,10 +2,11 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Avatar } from "@/components/Avatar";
 import { Button, ErrorText, Field, Input } from "@/components/ui";
 import { AVATAR_MAX_BYTES, AVATAR_SIDE } from "@/lib/avatar";
-import { parseAppError, type AppError } from "@/lib/errors";
+import { parseAppError, type AppError, type Reason } from "@/lib/errors";
 import { MAX_NICKNAME_LENGTH, parseNickname, type ParsedNickname } from "@/lib/nickname";
 import { useErrorText } from "@/i18n/errors";
 
@@ -16,7 +17,13 @@ type Photo =
   | { kind: "saving"; blob: Blob; preview: string }
   | { kind: "removing" };
 
-type Note = { tone: "done" | "failed"; text: string } | null;
+/** What the last action did. The page words it at render, so a language switch rewords it too. */
+type Note =
+  | { kind: "done"; done: "photoSaved" | "photoRemoved" | "nicknameSaved" | "nicknameCleared" }
+  | { kind: "failed"; reason: Reason }
+  | { kind: "unreadablePhoto" };
+
+const NETWORK: Note = { kind: "failed", reason: { code: "network" } };
 
 /** Center square of the photo at AVATAR_SIDE px, as WebP where the browser encodes it and JPEG elsewhere. */
 async function squarePhoto(file: File): Promise<Blob> {
@@ -41,6 +48,19 @@ async function errorOf(res: Response): Promise<AppError> {
   return parseAppError(await res.json().catch(() => null), res.status);
 }
 
+function NoteLine({ note }: { note: Note | null }) {
+  const t = useTranslations("profile");
+  const errorText = useErrorText();
+  if (!note) return null;
+  if (note.kind === "failed") return <ErrorText>{errorText(note.reason)}</ErrorText>;
+  if (note.kind === "unreadablePhoto") return <ErrorText>{t("photo.unreadable")}</ErrorText>;
+  return (
+    <p role="status" className="break-keep text-sm text-foreground-2">
+      {t(`done.${note.done}`)}
+    </p>
+  );
+}
+
 export function ProfileEditor({
   username,
   nickname: savedNickname,
@@ -53,14 +73,15 @@ export function ProfileEditor({
   photoStorage: boolean;
 }) {
   const router = useRouter();
-  const errorText = useErrorText();
+  const t = useTranslations("profile");
+  const tCommon = useTranslations("common");
   const picker = useRef<HTMLInputElement>(null);
   const [photoUrl, setPhotoUrl] = useState(avatarUrl);
   const [photo, setPhoto] = useState<Photo>({ kind: "shown" });
-  const [photoNote, setPhotoNote] = useState<Note>(null);
+  const [photoNote, setPhotoNote] = useState<Note | null>(null);
   const [nickname, setNickname] = useState(savedNickname);
   const [typed, setTyped] = useState(savedNickname ?? "");
-  const [nicknameNote, setNicknameNote] = useState<Note>(null);
+  const [nicknameNote, setNicknameNote] = useState<Note | null>(null);
   const [savingNickname, setSavingNickname] = useState(false);
 
   const preview = photo.kind === "picked" || photo.kind === "saving" ? photo.preview : null;
@@ -80,7 +101,7 @@ export function ProfileEditor({
       setPhoto({ kind: "picked", blob, preview: URL.createObjectURL(blob) });
     } catch {
       setPhoto({ kind: "shown" });
-      setPhotoNote({ tone: "failed", text: "이 파일은 사진으로 열 수 없습니다. JPG, PNG, WebP 같은 이미지 파일을 고르세요" });
+      setPhotoNote({ kind: "unreadablePhoto" });
     }
   }
 
@@ -93,17 +114,17 @@ export function ProfileEditor({
       const res = await fetch("/api/me/avatar", { method: "PUT", headers: { "Content-Type": photo.blob.type }, body: photo.blob, cache: "no-store" });
       if (!res.ok) {
         setPhoto({ ...photo, kind: "picked" });
-        setPhotoNote({ tone: "failed", text: errorText(await errorOf(res)) });
+        setPhotoNote({ kind: "failed", reason: await errorOf(res) });
         return;
       }
       const body = (await res.json()) as { avatarUrl: string | null };
       setPhotoUrl(body.avatarUrl);
       setPhoto({ kind: "shown" });
-      setPhotoNote({ tone: "done", text: "사진을 저장했습니다." });
+      setPhotoNote({ kind: "done", done: "photoSaved" });
       router.refresh();
     } catch {
       setPhoto({ ...photo, kind: "picked" });
-      setPhotoNote({ tone: "failed", text: "서버에 연결할 수 없습니다. 연결을 확인하고 다시 저장하세요" });
+      setPhotoNote(NETWORK);
     }
   }
 
@@ -115,15 +136,15 @@ export function ProfileEditor({
       const res = await fetch("/api/me/avatar", { method: "DELETE", cache: "no-store" });
       setPhoto({ kind: "shown" });
       if (!res.ok) {
-        setPhotoNote({ tone: "failed", text: errorText(await errorOf(res)) });
+        setPhotoNote({ kind: "failed", reason: await errorOf(res) });
         return;
       }
       setPhotoUrl(null);
-      setPhotoNote({ tone: "done", text: "사진을 지웠습니다. 상단 메뉴에는 이름의 첫 글자가 보입니다." });
+      setPhotoNote({ kind: "done", done: "photoRemoved" });
       router.refresh();
     } catch {
       setPhoto({ kind: "shown" });
-      setPhotoNote({ tone: "failed", text: "서버에 연결할 수 없습니다. 연결을 확인하고 다시 시도하세요" });
+      setPhotoNote(NETWORK);
     }
   }
 
@@ -134,7 +155,7 @@ export function ProfileEditor({
     e.preventDefault();
     setPhotoNote(null);
     if (!parsed.ok) {
-      setNicknameNote({ tone: "failed", text: errorText(parsed.reason) });
+      setNicknameNote({ kind: "failed", reason: parsed.reason });
       return;
     }
     setSavingNickname(true);
@@ -147,16 +168,16 @@ export function ProfileEditor({
         cache: "no-store",
       });
       if (!res.ok) {
-        setNicknameNote({ tone: "failed", text: errorText(await errorOf(res)) });
+        setNicknameNote({ kind: "failed", reason: await errorOf(res) });
         return;
       }
       const body = (await res.json()) as { nickname: string | null };
       setNickname(body.nickname);
       setTyped(body.nickname ?? "");
-      setNicknameNote({ tone: "done", text: body.nickname ? "닉네임을 저장했습니다." : "닉네임을 지웠습니다. 상단 메뉴에 ID가 보입니다." });
+      setNicknameNote({ kind: "done", done: body.nickname ? "nicknameSaved" : "nicknameCleared" });
       router.refresh();
     } catch {
-      setNicknameNote({ tone: "failed", text: "서버에 연결할 수 없습니다. 연결을 확인하고 다시 저장하세요" });
+      setNicknameNote(NETWORK);
     } finally {
       setSavingNickname(false);
     }
@@ -166,25 +187,25 @@ export function ProfileEditor({
     <div className="space-y-8">
       <div className="space-y-3">
         <div className="flex items-center gap-5">
-          <Avatar name={name} url={preview ?? photoUrl} size="lg" alt={preview ? "새 프로필 사진 미리보기" : "프로필 사진"} />
+          <Avatar name={name} url={preview ?? photoUrl} size="lg" alt={preview ? t("avatar.preview") : t("avatar.current")} />
           <div className="flex flex-wrap gap-2">
             {photo.kind === "picked" || photo.kind === "saving" ? (
               <>
                 <Button type="button" size="sm" onClick={savePhoto} disabled={photo.kind === "saving"} aria-busy={photo.kind === "saving"}>
-                  {photo.kind === "saving" ? "저장 중…" : "사진 저장"}
+                  {photo.kind === "saving" ? t("saving") : t("photo.save")}
                 </Button>
                 <Button type="button" size="sm" variant="ghost" onClick={() => setPhoto({ kind: "shown" })} disabled={photo.kind === "saving"}>
-                  취소
+                  {tCommon("cancel")}
                 </Button>
               </>
             ) : (
               <>
                 <Button type="button" size="sm" variant="outline" onClick={() => picker.current?.click()} disabled={!photoStorage || busy}>
-                  {photo.kind === "preparing" ? "사진 준비 중…" : photoUrl ? "사진 바꾸기" : "사진 고르기"}
+                  {photo.kind === "preparing" ? t("photo.preparing") : photoUrl ? t("photo.change") : t("photo.choose")}
                 </Button>
                 {photoUrl && (
                   <Button type="button" size="sm" variant="ghost" onClick={removePhoto} disabled={!photoStorage || busy} aria-busy={photo.kind === "removing"}>
-                    {photo.kind === "removing" ? "지우는 중…" : "사진 삭제"}
+                    {photo.kind === "removing" ? t("photo.removing") : t("photo.remove")}
                   </Button>
                 )}
               </>
@@ -202,44 +223,30 @@ export function ProfileEditor({
           </div>
         </div>
         {photoStorage ? (
-          <p className="break-keep text-xs leading-relaxed text-subtle">
-            {preview
-              ? "미리보기입니다. 사진 저장을 눌러야 바뀝니다."
-              : `이미지 파일을 고르면 가운데를 정사각형으로 잘라 ${AVATAR_SIDE}×${AVATAR_SIDE}으로 줄인 뒤 올립니다.`}
-          </p>
+          <p className="break-keep text-xs leading-relaxed text-subtle">{preview ? t("photo.previewHint") : t("photo.cropHint", { side: String(AVATAR_SIDE) })}</p>
         ) : (
           <p role="status" className="break-keep rounded-md border border-border bg-surface px-3 py-2 text-xs leading-relaxed text-foreground-2">
-            사진 저장소(Vercel Blob)가 연결되지 않아 지금은 사진을 바꿀 수 없습니다. 관리자에게 연결을 요청하세요.
+            {t("photo.storageOff")}
           </p>
         )}
-        {photoNote?.tone === "failed" && <ErrorText>{photoNote.text}</ErrorText>}
-        {photoNote?.tone === "done" && (
-          <p role="status" className="break-keep text-sm text-foreground-2">
-            {photoNote.text}
-          </p>
-        )}
+        <NoteLine note={photoNote} />
       </div>
 
       <form onSubmit={saveNickname} className="space-y-3">
         <div className="flex items-end gap-2">
           <div className="min-w-0 flex-1">
-            <Field label="닉네임" hint={`${Array.from(typed.trim()).length}/${MAX_NICKNAME_LENGTH}`}>
+            <Field label={t("nickname.label")} hint={t("nickname.counter", { length: String(Array.from(typed.trim()).length), max: String(MAX_NICKNAME_LENGTH) })}>
               <Input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={username} autoComplete="nickname" aria-describedby="nickname-help" />
             </Field>
           </div>
           <Button type="submit" variant={unchanged ? "outline" : "primary"} disabled={savingNickname || unchanged} aria-busy={savingNickname}>
-            {savingNickname ? "저장 중…" : "닉네임 저장"}
+            {savingNickname ? t("saving") : t("nickname.save")}
           </Button>
         </div>
         <p id="nickname-help" className="break-keep text-xs leading-relaxed text-subtle">
-          비워 두고 저장하면 닉네임이 지워지고 ID가 보입니다. 다른 사람과 같아도 됩니다.
+          {t("nickname.help")}
         </p>
-        {nicknameNote?.tone === "failed" && <ErrorText>{nicknameNote.text}</ErrorText>}
-        {nicknameNote?.tone === "done" && (
-          <p role="status" className="break-keep text-sm text-foreground-2">
-            {nicknameNote.text}
-          </p>
-        )}
+        <NoteLine note={nicknameNote} />
       </form>
     </div>
   );

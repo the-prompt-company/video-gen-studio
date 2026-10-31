@@ -11,7 +11,9 @@
     "settings": "设置"
   },
   "common": {
-    "close": "关闭"
+    "close": "关闭",
+    "save": "保存",
+    "cancel": "取消"
   },
   "nav": {
     "label": "主菜单",
@@ -160,7 +162,7 @@
     "badTeamId": "teamId 应为团队编号，或以 null 表示未分配团队。",
     "badUserIds": "userIds 应为成员编号列表。",
     "noUsersChosen": "请至少选择一名成员。",
-    "tooManyUsers": "一次最多可指定 {max, plural, other {# 名成员}}。",
+    "tooManyUsers": "一次最多可分配 {max, plural, other {# 名成员}}。",
     "importNoRows": "缺少 rows 数组。",
     "importEmpty": "没有要创建的成员。请在标题行下方每行填写一名成员。",
     "importTooMany": "一次最多可创建 {max, plural, other {# 名成员}}，但此文件有 {count, plural, other {# 名}}。请按每份 {max, plural, other {# 名}}拆分文件后分别上传。",
@@ -195,11 +197,20 @@
   "gallery": {
     "lead": "已完成的结果共 {count, plural, other {# 个}}。{expiring, select, yes {未永久保存的结果在 Higgsfield 上只保留 7 天，请下载需要的结果。} other {}}",
     "scope": {
+      "label": "查看谁的结果",
       "mine": "我的",
-      "all": "全部"
+      "team": "团队",
+      "all": "全部",
+      "everyone": "全部",
+      "noTeam": "加入团队后，您也可以在这里查看团队成员的结果。团队由管理员分配。"
     },
     "empty": "还没有已完成的结果。请在<link>创作台</link>生成第一个结果。",
+    "emptyTeam": "团队成员还没有已完成的结果。",
     "openDetail": "查看详情：{prompt}",
+    "owner": {
+      "self": "我",
+      "teammate": "团队成员"
+    },
     "retention": {
       "line": "保存：{value}",
       "label": "保存",
@@ -437,5 +448,267 @@
       "h3": "10 秒",
       "gptImage2": "1 张 1024×1024 中等质量图片"
     }
+  },
+  "settings": {
+    "lead": "更改顶部菜单中显示的照片和昵称、界面语言以及登录密码。",
+    "profile": {
+      "title": "个人资料",
+      "lead": "您的照片和昵称会显示在顶部菜单中。未设置昵称时，将显示 ID。"
+    },
+    "account": {
+      "title": "账号",
+      "lead": "登录 ID 和所属团队无法自行更改。如需更改，请联系管理员。",
+      "team": "团队"
+    },
+    "password": {
+      "title": "密码",
+      "lead": "验证当前密码后即可修改。此浏览器将保持登录状态，其他设备和浏览器将全部退出登录。"
+    }
+  },
+  "profile": {
+    "avatar": {
+      "current": "头像",
+      "preview": "新头像预览"
+    },
+    "photo": {
+      "choose": "选择照片",
+      "change": "更换照片",
+      "preparing": "正在准备照片…",
+      "save": "保存照片",
+      "remove": "删除照片",
+      "removing": "正在删除…",
+      "cropHint": "选择图片文件后，将从中心裁剪为正方形并缩小到 {side}×{side} 再上传。",
+      "previewHint": "这是预览。点击“保存照片”后才会生效。",
+      "storageOff": "照片存储（Vercel Blob）未连接，暂时无法更换照片。请联系管理员进行连接。",
+      "unreadable": "无法将此文件作为照片打开。请选择 JPG、PNG、WebP 等图片文件。"
+    },
+    "saving": "正在保存…",
+    "nickname": {
+      "label": "昵称",
+      "counter": "{length}/{max}",
+      "save": "保存昵称",
+      "help": "留空并保存即可删除昵称，届时将显示 ID。昵称可以与他人相同。"
+    },
+    "done": {
+      "photoSaved": "照片已保存。",
+      "photoRemoved": "照片已删除。顶部菜单将显示名字的第一个字。",
+      "nicknameSaved": "昵称已保存。",
+      "nicknameCleared": "昵称已删除。顶部菜单将显示您的 ID。"
+    }
+  },
+  "admin": {
+    "lead": "成员与 API 密钥分配、模型单价、全部日志。",
+    "stats": {
+      "totalSpend": "总费用",
+      "generations": "总生成次数",
+      "models": "模型数",
+      "modelsSub": "已使用的模型"
+    },
+    "tabs": {
+      "users": "成员 · API 密钥",
+      "teams": "团队",
+      "models": "模型 · 单价",
+      "logs": "日志 · 历史记录"
+    }
+  },
+  "members": {
+    "title": "{count, plural, other {# 名成员}}",
+    "notice": {
+      "added": "已添加账号 {id}。",
+      "assigned": "已将 {count, plural, other {# 名成员}}分配到“{team}”。",
+      "unassigned": "已将 {count, plural, other {# 名成员}}设为未分配团队。"
+    },
+    "filter": {
+      "label": "按团队筛选",
+      "all": "全部团队（{count, plural, other {# 人}}）",
+      "team": "{team}（{count, plural, other {# 人}}）"
+    },
+    "selected": "已选 {count, plural, other {# 人}}",
+    "selectAll": "全选当前显示的成员",
+    "select": "选择 {username}",
+    "edit": "编辑 {username}",
+    "empty": {
+      "none": "没有成员。",
+      "noTeam": "没有未分配团队的成员。",
+      "team": "此团队没有成员。请切换到“全部团队”，选择成员后点击“分配团队”。"
+    },
+    "field": {
+      "nickname": "昵称",
+      "team": "团队",
+      "role": "角色",
+      "note": "备注"
+    },
+    "table": {
+      "key": "密钥",
+      "generations": "生成次数",
+      "cost": "费用",
+      "lastUsed": "最近使用",
+      "status": "状态"
+    },
+    "key": {
+      "assigned": "已分配",
+      "none": "无"
+    },
+    "active": "已启用",
+    "inactive": "已停用",
+    "temporary": "临时密码",
+    "add": {
+      "title": "添加成员",
+      "submit": "添加",
+      "submitting": "正在添加…",
+      "password": "临时密码",
+      "passwordHint": "{min, plural, other {至少 # 个字符}} · 首次登录时需修改",
+      "apiKey": "Higgsfield API 密钥",
+      "apiKeyHint": "key-id:key-secret · 可稍后填写",
+      "optional": "选填"
+    },
+    "assign": {
+      "title": "分配团队",
+      "submit": "分配 {count, plural, other {# 人}}",
+      "submitting": "正在分配…",
+      "hint": "每人只能属于一个团队",
+      "placeholder": "请选择团队",
+      "noTeams": "还没有团队。请先在“团队”标签页中创建团队，然后重新打开此窗口。",
+      "chosenLabel": "已选成员",
+      "chosen": "已选成员 {count, plural, other {# 人}}"
+    },
+    "editor": {
+      "apiKey": "API 密钥",
+      "removeKey": "移除",
+      "temporaryNote": "此成员正在使用临时密码，下次登录时必须设置新密码才能进入。",
+      "deactivate": "停用",
+      "activate": "启用",
+      "unlock": "解除锁定（失败 {failures, plural, other {# 次}}）",
+      "unlockUntil": "解除锁定（失败 {failures, plural, other {# 次}}，锁定至 {until}）"
+    },
+    "nickname": {
+      "hint": "{max, plural, other {最多 # 个字符}} · 留空则删除",
+      "placeholder": "无昵称"
+    },
+    "password": {
+      "temporary": "临时密码（{min, plural, other {至少 # 个字符}}）",
+      "new": "新密码（{min, plural, other {至少 # 个字符}}）",
+      "change": "修改"
+    },
+    "reset": {
+      "title": "重置为初始密码",
+      "body": "将密码重置为初始密码 <mono>{password}</mono>。该成员将在所有设备上退出登录，下次登录时需设置新密码。",
+      "confirm": "重置"
+    }
+  },
+  "teams": {
+    "none": "未分配团队",
+    "title": "团队",
+    "count": "{count, plural, other {# 个团队}}",
+    "create": {
+      "title": "创建团队",
+      "submit": "创建",
+      "submitting": "正在创建…",
+      "hint": "{max, plural, other {最多 # 个字符}} · 仅大小写不同的名称视为同名"
+    },
+    "name": {
+      "label": "团队名称",
+      "hint": "{max, plural, other {最多 # 个字符}}"
+    },
+    "notice": {
+      "created": "已创建团队：{name}。请在“成员”标签页中选择团队成员，然后点击“分配团队”。",
+      "deleted": "已删除团队：{name}。{released, plural, =0 {} other {该团队的 # 名成员已变为未分配团队。}}"
+    },
+    "empty": "还没有团队。请先创建团队，然后在“成员”标签页中选择成员并点击“分配团队”。",
+    "table": {
+      "team": "团队",
+      "size": "人数",
+      "members": "成员"
+    },
+    "edit": "编辑 {name}",
+    "size": "{count, plural, other {# 人}}",
+    "noMembers": "无",
+    "members": {
+      "label": "团队成员",
+      "count": "团队成员 {count, plural, other {# 人}}",
+      "empty": "还没有团队成员。请在“成员”标签页中选择成员，然后点击“分配团队”。"
+    },
+    "delete": {
+      "title": "删除团队",
+      "confirm": "将删除此团队。{count, plural, =0 {} other {该团队的 # 名成员将变为未分配团队，}}视频和使用记录会保留。",
+      "submit": "删除",
+      "submitting": "正在删除…"
+    }
+  },
+  "import": {
+    "title": "通过 Excel 创建成员",
+    "intro": "读取第一个工作表中第一个有内容的行作为标题行。邮箱将作为成员的登录 ID，成员首次使用初始密码 <pw>{password}</pw> 登录后需设置新密码。",
+    "pick": {
+      "first": "选择 Excel 文件",
+      "another": "选择其他文件"
+    },
+    "working": "{doing, select, reading {正在读取 <name>{file}</name>…} checking {正在检查 <name>{file}</name>…} creating {正在根据 <name>{file}</name> 创建成员…} other {}}",
+    "failure": {
+      "notXlsx": "只能读取 Excel 工作簿（.xlsx）。请在 Excel 中通过“另存为”→“Excel 工作簿（.xlsx）”保存后，重新选择文件。",
+      "unreadable": "无法读取该文件。请确认它能在 Excel 中打开；如设有密码，请先取消密码并重新保存为 .xlsx，再选择该文件。",
+      "empty": "工作表为空。请在第一行写上标题 {nickname} 和 {email}（或 {nicknameAlias} 和 {emailAlias}），并在下方每行填写一名成员。",
+      "missingColumns": "已将第 {row} 行读作标题行，但其中没有 {missing, select, nickname {{nickname}（或 {nicknameAlias}）} email {{email}（或 {emailAlias}）} both {{nickname}（或 {nicknameAlias}）和 {email}（或 {emailAlias}）} other {}}列（找到的标题：{found}）。请修改标题后重新选择文件。"
+    },
+    "example": {
+      "label": "Excel 格式示例",
+      "nickname": "金敏智",
+      "caption": "也可以使用韩文标题 {nicknameAlias} 和 {emailAlias}。其他列会被忽略，每次最多创建 {max, plural, other {# 名成员}}。"
+    },
+    "rowCount": "{count, plural, other {# 行}}",
+    "done": "{count, plural, =0 {没有新建成员。} other {已创建 # 名成员。成员列表会将其标记为临时密码。}}",
+    "summary": "结果摘要",
+    "rows": "逐行结果",
+    "outcome": {
+      "invalid": "需修改",
+      "duplicate": "文件内重复",
+      "exists": "已存在",
+      "create": "待创建",
+      "created": "已创建"
+    },
+    "row": "第 {row} 行",
+    "noEmail": "无邮箱",
+    "detail": {
+      "nickname": "昵称：{nickname}",
+      "exists": "此邮箱的 ID 已存在。",
+      "duplicate": "与第 {row} 行的邮箱相同。只创建第一行。"
+    },
+    "nothingToCreate": "没有可创建的行。请修改文件后重新选择。",
+    "submit": "{count, plural, other {创建 # 名成员}}"
+  },
+  "models": {
+    "title": "模型单价",
+    "lead": "Higgsfield 的响应不含费用，因此视频在发起生成请求时，会按此单价和 Higgsfield 的计费规则（分辨率、画面比例、时长、参考视频时长）计算费用并记录。GPT Image 2 则将 OpenAI 在响应中返回的 token 数乘以此单价（每百万图片输出 token）和 OpenAI 的输入单价比例（文本 5/30，图片 8/30）后记录；如果没有返回 token 数，则记录预计费用。修改单价后从下一次请求开始生效，实际扣费金额以各服务商的发票为准。",
+    "list": "模型",
+    "unit": "{per}（USD，{basis}）",
+    "rateLabel": "{model} 单价",
+    "fill": "填入单价：{label} {rate}",
+    "example": "示例：{example}，费用 {cost}",
+    "exampleEmpty": "输入单价后显示示例费用",
+    "toggle": "{enabled, select, yes {已启用 · 停用} other {已停用 · 启用}}"
+  },
+  "logs": {
+    "title": "历史记录（{count, plural, other {# 条}}）",
+    "csv": "导出 CSV（最近 {count, plural, other {# 条}}）",
+    "filter": {
+      "allMembers": "全部成员",
+      "allModels": "全部模型",
+      "allStatuses": "全部状态"
+    },
+    "field": {
+      "time": "时间",
+      "member": "成员",
+      "status": "状态",
+      "model": "模型",
+      "prompt": "提示词",
+      "duration": "时长",
+      "cost": "费用",
+      "params": "参数",
+      "images": "参考图",
+      "videos": "参考视频",
+      "error": "错误"
+    },
+    "empty": "没有符合条件的记录。",
+    "more": "加载更多",
+    "seconds": "{seconds} 秒"
   }
 }

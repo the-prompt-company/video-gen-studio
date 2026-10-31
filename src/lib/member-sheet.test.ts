@@ -5,18 +5,18 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readSheet } from "read-excel-file/node";
 import { importEmail, writeImportFixtures } from "../../scripts/import-fixtures.mjs";
-import { membersFromSheet, type SheetMember } from "./member-sheet";
+import { membersFromSheet, type SheetMember, type SheetProblem } from "./member-sheet";
 
 function membersOf(rows: unknown[][]): SheetMember[] {
   const read = membersFromSheet(rows);
-  assert.equal(read.ok, true, read.ok ? "" : read.error);
+  assert.equal(read.ok, true, read.ok ? "" : JSON.stringify(read.problem));
   return read.ok ? read.members : [];
 }
 
-function errorOf(rows: unknown[][]): string {
+function problemOf(rows: unknown[][]): SheetProblem | null {
   const read = membersFromSheet(rows);
   assert.equal(read.ok, false);
-  return read.ok ? "" : read.error;
+  return read.ok ? null : read.problem;
 }
 
 test("English headers in the first row give one member per row, numbered as the sheet numbers rows", () => {
@@ -61,22 +61,31 @@ test("cell text is passed on as written, untrimmed, and numbers become text", ()
   ]);
 });
 
-test("a missing email column is an error that names the missing column and the headers found", () => {
-  const error = errorOf([["이름", "메일", "nickname"], ["김민지", "minji@example.com", "민지"]]);
-  assert.match(error, /email\(또는 이메일\) 열이 없습니다/);
-  assert.match(error, /찾은 제목: 이름, 메일, nickname/);
-  assert.doesNotMatch(error, /nickname\(또는 닉네임\)/);
+test("a missing email column is a problem that names the missing column and the headers found", () => {
+  assert.deepEqual(problemOf([["이름", "메일", "nickname"], ["김민지", "minji@example.com", "민지"]]), {
+    kind: "missingColumns",
+    headerRow: 1,
+    missing: "email",
+    found: ["이름", "메일", "nickname"],
+  });
+});
+
+test("a missing nickname column is named alone, and the Korean email header counts as found", () => {
+  assert.deepEqual(problemOf([[" 이름 ", null, "이메일"], ["김민지", null, "minji@example.com"]]), {
+    kind: "missingColumns",
+    headerRow: 1,
+    missing: "nickname",
+    found: ["이름", "이메일"],
+  });
 });
 
 test("a header row with neither column names both, and the row it read as the header", () => {
-  const error = errorOf([[null], ["이름", "메일"]]);
-  assert.match(error, /nickname\(또는 닉네임\)과 email\(또는 이메일\) 열이 없습니다/);
-  assert.match(error, /^2행을 제목 줄로/);
+  assert.deepEqual(problemOf([[null], ["이름", "메일"]]), { kind: "missingColumns", headerRow: 2, missing: "both", found: ["이름", "메일"] });
 });
 
-test("an empty sheet is an error that says what the first row needs", () => {
-  assert.match(errorOf([]), /nickname/);
-  assert.match(errorOf([[null, null], [" "]]), /비어/);
+test("a sheet with no filled row is the empty problem", () => {
+  assert.deepEqual(problemOf([]), { kind: "empty" });
+  assert.deepEqual(problemOf([[null, null], [" "]]), { kind: "empty" });
 });
 
 test("the generated .xlsx fixtures read back through read-excel-file as the admin wrote them", async () => {
@@ -108,7 +117,7 @@ test("the generated .xlsx fixtures read back through read-excel-file as the admi
     assert.equal(many.ok && many.members.length, 201);
 
     const missing = await read("missing-column.xlsx");
-    assert.match(missing.ok ? "" : missing.error, /이름, 메일, nickname/);
+    assert.deepEqual(missing.ok ? null : missing.problem, { kind: "missingColumns", headerRow: 1, missing: "email", found: ["이름", "메일", "nickname"] });
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
