@@ -1,7 +1,7 @@
 /**
  * Feature: threads — the playground's threads. A member starts two threads from the new-thread state, switches between
  * them and sees only each one's results, reloads and goes back on a thread, opens the earlier history (rows written
- * with no thread, as master's code writes them), deletes the thread on the stage and finds its results still in the
+ * with no thread, as master's code writes them), deletes the thread in the stream and finds its results still in the
  * gallery with the dashboard unchanged, and is refused another member's thread, as is an admin. Saves the review images
  * to .impeccable/review/threads/<surface>-<lang>-<viewport>.png. Creates and deletes two vgs-thr-* members and their
  * rows and threads, so it runs on a local database only, with VGS_FAKE_HF naming the fake the app talks to.
@@ -11,6 +11,7 @@ import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
+import { composerHandles } from "../composer-handles.mjs";
 
 const INITIAL = "oooooooo";
 const LANG = { "ko-KR": "ko", "en-US": "en", "zh-CN": "zh-CN" };
@@ -88,16 +89,17 @@ export default async function threads({ page, ev, base, env, webDir, local }) {
     await a.waitForURL("**/playground", { timeout: 30_000 });
     await a.waitForLoadState("networkidle");
 
-    const drawer = a.getByRole("complementary", { name: await ta("playground.drawer") });
-    const stage = a.getByRole("region", { name: await ta("playground.stage") });
+    const h = await composerHandles(ev, a);
+    const stage = h.stream;
     const earlierName = await ta("threads.earlier");
     const threadOf = () => new URL(a.url()).searchParams.get("thread");
-    const stageIds = () => stage.locator("article[data-id]").evaluateAll((els) => els.map((e) => e.getAttribute("data-id")));
+    const stageIds = () => h.turns.evaluateAll((els) => els.map((e) => e.getAttribute("data-id")).reverse());
+    // `ids` newest first; the stream renders oldest first.
     const expectStage = async (ids, why) => {
       try {
-        await a.waitForFunction((want) => JSON.stringify([...document.querySelectorAll("section article[data-id]")].map((e) => e.dataset.id)) === JSON.stringify(want), ids, { timeout: 20_000 });
+        await a.waitForFunction((want) => JSON.stringify([...document.querySelectorAll('[role="region"] article[data-id]')].map((e) => e.dataset.id).reverse()) === JSON.stringify(want), ids, { timeout: 20_000 });
       } catch {
-        ev.fail(`${why}: the stage should hold ${JSON.stringify(ids)}, got ${JSON.stringify(await stageIds())} at ${a.url()}`);
+        ev.fail(`${why}: the stream should hold ${JSON.stringify(ids)}, got ${JSON.stringify(await stageIds())} at ${a.url()}`);
       }
     };
     const openList = async () => {
@@ -129,13 +131,15 @@ export default async function threads({ page, ev, base, env, webDir, local }) {
       }
     };
     const generate = async (prompt) => {
-      if (prompt !== undefined) await drawer.getByLabel(await ta("playground.prompt")).fill(prompt);
-      const answer = a.waitForResponse((r) => r.request().method() === "POST" && new URL(r.url()).pathname === "/api/generations", { timeout: 30_000 });
-      await drawer.getByRole("button", { name: await ta("playground.generate"), exact: true }).click();
-      const res = await answer;
-      const body = await res.json().catch(() => null);
-      if (!body?.item || !body?.thread) ev.fail(`POST /api/generations answered ${res.status()}: ${JSON.stringify(body)}`);
+      if (prompt !== undefined) await h.prompt.fill(prompt);
+      const { status, body } = await h.submit();
+      if (!body?.item || !body?.thread) ev.fail(`POST /api/generations answered ${status}: ${JSON.stringify(body)}`);
       return body;
+    };
+    // The count is in the link's name; the link moves to the thread bar under 1024px.
+    const galleryCount = async () => {
+      const link = a.getByRole("link", { name: new RegExp(`^${(await ta("playground.galleryCount", { count: 7 })).replace("7", "\\d+")}$`) });
+      return Number(/\d+/.exec((await link.getAttribute("aria-label")) ?? "")?.[0]);
     };
 
     if (threadOf() !== null) ev.fail(`the playground opened on thread ${threadOf()} instead of a new thread`);
@@ -165,20 +169,12 @@ export default async function threads({ page, ev, base, env, webDir, local }) {
     const made = [one.item.id, oneAgain.item.id, two.item.id];
     await waitDone(made);
     ev.note("the three generations completed against the fake");
-    // Thread one finished while thread two or the new thread held the stage; the gallery glyph still counts it.
-    const galleryLabel = await ta("pages.gallery");
-    const counterNow = () => a.evaluate((label) => document.querySelector(`section a[aria-label="${label}"]`)?.nextElementSibling?.textContent?.trim(), galleryLabel);
-    const wantFinished = String(((await ev.api("/api/generations?limit=50", undefined, a)).body?.items ?? []).filter((x) => x.status === "completed").length);
-    try {
-      await a.waitForFunction(
-        ([label, want]) => document.querySelector(`section a[aria-label="${label}"]`)?.nextElementSibling?.textContent?.trim() === want,
-        [galleryLabel, wantFinished],
-        { timeout: 30_000 },
-      );
-    } catch {
-      ev.fail(`without a reload the gallery glyph reads ${await counterNow()}, the member has ${wantFinished} finished results`);
+    const wantFinished = ((await ev.api("/api/generations?limit=50", undefined, a)).body?.items ?? []).filter((x) => x.status === "completed").length;
+    for (let i = 0; (await galleryCount()) !== wantFinished; i++) {
+      if (i === 60) ev.fail(`without a reload the gallery link counts ${await galleryCount()}, the member has ${wantFinished} finished results`);
+      await a.waitForTimeout(500);
     }
-    ev.note(`gallery glyph counted results that finished on other threads: ${wantFinished}`);
+    ev.note(`the gallery link counted results that finished on other threads: ${wantFinished}`);
 
     const order = await listNames();
     const want = [two.thread.title, one.thread.title, earlierName];
@@ -195,11 +191,11 @@ export default async function threads({ page, ev, base, env, webDir, local }) {
     await pick(one.thread.title);
     await a.waitForURL((u) => new URL(u).searchParams.get("thread") === one.thread.id);
     await expectStage([oneAgain.item.id, one.item.id], "picking thread one");
-    await stage.locator("video").first().waitFor({ timeout: 20_000 });
+    await stage.getByLabel(await ta("generation.video"), { exact: true }).first().waitFor({ timeout: 20_000 });
     await review("thread-feed", a);
 
-    await stage.getByRole("button", { name: await ta("playground.rail.reuse") }).click();
-    const reusedPrompt = await drawer.getByLabel(await ta("playground.prompt")).inputValue();
+    await h.turn(oneAgain.item.id).getByRole("button", { name: await ta("playground.actions.reuse") }).click();
+    const reusedPrompt = await h.prompt.inputValue();
     if (reusedPrompt !== prompts.oneAgain) ev.fail(`reuse filled the prompt with "${reusedPrompt}"`);
     const reused = await generate();
     if (reused.thread.id !== one.thread.id || threadOf() !== one.thread.id) ev.fail(`the generation after reuse went to thread ${reused.thread.id}`);
@@ -215,13 +211,12 @@ export default async function threads({ page, ev, base, env, webDir, local }) {
     await a.reload({ waitUntil: "networkidle" });
     if (threadOf() !== two.thread.id) ev.fail(`reload left thread two for ${threadOf()}`);
     await expectStage([two.item.id], "thread two after reload");
-    const download = stage.getByRole("link", { name: await ta("generation.download") });
-    if (!(await download.getAttribute("href"))) ev.fail("the download glyph has no link for the finished result");
+    const download = h.turn(two.item.id).getByRole("link", { name: new RegExp(await ta("generation.download")) });
+    if (!(await download.getAttribute("href"))) ev.fail("the finished turn has no download link");
     const finished = ((await ev.api("/api/generations?limit=50", undefined, a)).body?.items ?? []).filter((x) => x.status === "completed").length;
-    const galleryGlyph = stage.getByRole("link", { name: await ta("pages.gallery") });
-    const counter = (await galleryGlyph.locator("xpath=following-sibling::span[1]").textContent())?.trim();
-    if (counter !== String(finished)) ev.fail(`the gallery glyph counts ${counter}, the member has ${finished} finished results`);
-    ev.note(`rail: download links the result, gallery glyph ${counter}`);
+    const counter = await galleryCount();
+    if (counter !== finished) ev.fail(`the gallery link counts ${counter}, the member has ${finished} finished results`);
+    ev.note(`turn actions: download links the result; gallery link ${counter}`);
     if (!mobile) {
       const current = await a.getByRole("navigation", { name: await ta("threads.label") }).locator('a[aria-current="page"]').innerText();
       if (current.trim() !== two.thread.title) ev.fail(`after reload the list marks "${current}" current`);
@@ -236,7 +231,7 @@ export default async function threads({ page, ev, base, env, webDir, local }) {
     await expectStage(earlierIds, "the earlier history");
     await review("earlier-history", a);
 
-    // The header's link to the playground, from inside a thread, opens a new thread: URL and stage agree.
+    // The header's link to the playground, from inside a thread, opens a new thread: URL and stream agree.
     await a.getByRole("navigation", { name: await ta("nav.label") }).getByRole("link", { name: await ta("pages.playground"), exact: true }).click();
     await a.waitForURL((u) => !new URL(u).searchParams.has("thread"));
     await stage.getByText(await ta("threads.fresh.title"), { exact: true }).waitFor({ timeout: 15_000 });
@@ -288,11 +283,11 @@ export default async function threads({ page, ev, base, env, webDir, local }) {
 
     for (const [who, p] of [["member", a], ["admin", page]]) {
       await p.goto(`${base}/playground?thread=${foreignId}`, { waitUntil: "networkidle" });
-      await p.getByRole("region", { name: await ev.t("playground.stage", undefined, p) }).getByText(await ev.t("threads.missing.title", undefined, p), { exact: true }).waitFor();
+      await p.getByRole("region", { name: await ev.t("playground.stream", undefined, p) }).getByText(await ev.t("threads.missing.title", undefined, p), { exact: true }).waitFor();
       if ((await p.content()).includes(prompts.foreign)) ev.fail(`the ${who}'s page carries the other member's prompt`);
       const feed = await ev.api(`/api/generations?thread=${foreignId}`, undefined, p);
       const del = await ev.api(`/api/threads/${foreignId}`, { method: "DELETE" }, p);
-      const post = await ev.api("/api/generations", { method: "POST", body: JSON.stringify({ family: "bytedance/seedance-2.0", mode: "t2v", prompt: "into someone else's thread", params: {}, images: [], videos: [], startFromImage: false, thread: foreignId }) }, p);
+      const post = await ev.api("/api/generations", { method: "POST", body: JSON.stringify({ family: "bytedance/seedance-2.0", mode: "t2v", prompt: "into someone else's thread", params: {}, images: [], videos: [], endImage: null, thread: foreignId }) }, p);
       for (const [route, r] of [["GET feed", feed], ["DELETE", del], ["POST", post]]) {
         if (r.status !== 404 || r.body?.error?.code !== "noSuchThread") ev.fail(`the ${who}'s ${route} of a foreign thread answered ${r.status} ${JSON.stringify(r.body)}`);
       }

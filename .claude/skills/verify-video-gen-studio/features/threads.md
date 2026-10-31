@@ -1,19 +1,19 @@
 # Threads
 
-The playground keeps a member's generations in threads, like chats. A thread is created by the first generation made from the new-thread state and is titled by that generation's prompt. Picking a thread shows only its results on the stage, and the URL (`/playground?thread=<id>`) keeps the pick across a reload and Back. Generations made before threads existed sit in one thread called `threads.earlier` (이전 기록). Deleting a thread only takes it off the list: its results stay in the gallery and every usage number. A thread is private to its owner, admins included.
+The playground keeps a member's generations in threads, like chats. A thread is created by the first generation made from the new-thread state and is titled by that generation's prompt. Picking a thread shows only its results in the stream, and the URL (`/playground?thread=<id>`) keeps the pick across a reload and Back. Generations made before threads existed sit in one thread called `threads.earlier` (이전 기록). Deleting a thread only takes it off the list: its results stay in the gallery and every usage number. A thread is private to its owner, admins included.
 
 ## Sub-features
 
-- `thr-new` `/playground` with no thread opens the new-thread state: the stage reads `threads.fresh.title` (새 스레드), or `playground.empty.title` for a member with no thread at all, and nothing is created until the first generation.
+- `thr-new` `/playground` with no thread opens the new-thread state: the stream reads `threads.fresh.title` (새 스레드), or `playground.empty.title` for a member with no thread at all, and nothing is created until the first generation.
 - `thr-create` the first generation from the new-thread state creates the thread under the id the browser chose; the URL gains `?thread=<id>` and the list gains the thread, titled by the prompt with its whitespace collapsed and cut after 30 characters with `…`. An empty first prompt reads `generation.noPrompt`.
-- `thr-stay` later generations, including one after `playground.rail.reuse`, stay in the thread on the stage.
+- `thr-stay` later generations, including one after a turn's `playground.actions.reuse`, stay in the thread in the stream.
 - `thr-switch` picking a thread in the list shows only its results, newest first; the list is ordered by each thread's newest generation.
-- `thr-url` reload keeps the thread and Back returns to the one picked before. The header's `pages.playground` link from inside a thread opens a new thread, and the URL and the stage agree.
-- `thr-rail` the rail follows the stage: `playground.rail.reuse` fills the drawer and the next generation stays in the thread, `generation.download` links the result, and the `pages.gallery` glyph counts results that finish on another thread without a reload.
+- `thr-url` reload keeps the thread and Back returns to the one picked before. The header's `pages.playground` link from inside a thread opens a new thread, and the URL and the stream agree.
+- `thr-actions` each turn carries its actions: `playground.actions.reuse` fills the composer and the next generation stays in the thread, `generation.download` links the result, and the gallery link (`playground.galleryCount`, in the stream's header from 1024 px and the thread bar under it) counts results that finish on another thread without a reload.
 - `thr-earlier` the `threads.earlier` thread holds the generations made with no thread, before the migration or by an old tab.
-- `thr-delete` each row's button `threads.delete.label` opens dialog `threads.delete.title` with `threads.delete.body` and `threads.delete.keeps`; `threads.delete.confirm` takes the thread off the list, and deleting the thread on the stage lands on the new-thread state. The results stay in the gallery, the dashboard's numbers do not move, and a live generation runs to its end.
-- `thr-private` another member's thread id, in the URL or any thread route, reads like a deleted one: the stage shows `threads.missing.title` and `GET /api/generations?thread=`, `POST /api/generations` and `DELETE /api/threads/:id` answer 404 `errors.noSuchThread`. The same holds for an admin.
-- `thr-layout` from 1280 px the list is a column left of the drawer with `threads.collapse`; from 1024 to 1279 px it starts as a strip with `threads.expand` and `threads.new`; under 1024 px a bar above the stage names the current thread and opens the list in a sheet (`threads.picker`). Nothing scrolls sideways at 390 px.
+- `thr-delete` each row's button `threads.delete.label` opens dialog `threads.delete.title` with `threads.delete.body` and `threads.delete.keeps`; `threads.delete.confirm` takes the thread off the list, and deleting the thread in the stream lands on the new-thread state. The results stay in the gallery, the dashboard's numbers do not move, and a live generation runs to its end.
+- `thr-private` another member's thread id, in the URL or any thread route, reads like a deleted one: the stream shows `threads.missing.title` and `GET /api/generations?thread=`, `POST /api/generations` and `DELETE /api/threads/:id` answer 404 `errors.noSuchThread`. The same holds for an admin.
+- `thr-layout` from 1280 px the list is a column left of the stream with `threads.collapse`; from 1024 to 1279 px it starts as a strip with `threads.expand` and `threads.new`; under 1024 px a bar above the stream names the current thread and opens the list in a sheet (`threads.picker`). Nothing scrolls sideways at 390 px.
 
 ## How to get to it (user POV)
 
@@ -29,12 +29,12 @@ Preconditions:
 - Run it as the admin, once per language and viewport: `VGS_LOCALE=zh-CN VGS_MOBILE=1 VGS_FAKE_HF=http://localhost:4800 vgs run threads`.
 
 - **Members.** Creates `vgs-thr-<stamp>-a` (a fake key and two rows with no thread) and `vgs-thr-<stamp>-b` (one thread with one row) and deletes both with their rows and threads in `finally`.
-- **New thread.** `new-thread` shows the stage's `threads.fresh.title` and a list holding only `threads.earlier`.
-- **Two threads.** Two generations make thread one (the second stays in it), `threads.new` and one more make thread two; the URL, the stage's articles and the POST answers' `thread` agree at each step, and the title matches the rule above.
-- **Gallery glyph.** After the three generations finish, the `pages.gallery` glyph's counter equals the member's finished results without a reload, though thread one finished off the stage.
-- **Order and switch.** The list reads thread two, thread one, `threads.earlier` (`thread-list` on desktop, `thread-picker` on mobile); picking each shows only its articles (`thread-feed`).
-- **Reuse.** On thread one, `playground.rail.reuse` fills the prompt, and the next generation lands in thread one.
-- **Reload and Back.** Reload stays on thread two, `generation.download` links its result, and the gallery counter matches the server; Back returns to thread one.
+- **New thread.** `new-thread` shows the stream's `threads.fresh.title` and a list holding only `threads.earlier`.
+- **Two threads.** Two generations make thread one (the second stays in it), `threads.new` and one more make thread two; the URL, the stream's turns and the POST answers' `thread` agree at each step, and the title matches the rule above.
+- **Gallery link.** After the three generations finish, the gallery link's `playground.galleryCount` equals the member's finished results without a reload, though thread one finished off the stream.
+- **Order and switch.** The list reads thread two, thread one, `threads.earlier` (`thread-list` on desktop, `thread-picker` on mobile); picking each shows only its turns (`thread-feed`).
+- **Reuse.** On thread one, the newest turn's `playground.actions.reuse` fills the prompt, and the next generation lands in thread one.
+- **Reload and Back.** Reload stays on thread two, the turn's `generation.download` links its result, and the gallery link matches the server; Back returns to thread one.
 - **Earlier history.** `threads.earlier` shows the two rows with no thread (`earlier-history`).
 - **Header link.** The header's `pages.playground` link leaves the earlier history for the new-thread state.
 - **Delete.** On thread one, its row's delete button opens the confirmation (`delete-confirm`); confirming answers 200, lands on the new-thread state, and the list drops it. Its feed answers 404, both results are still gallery tiles and in `GET /api/generations?limit=50`, and the dashboard's `dashboard.stats.generations` and `dashboard.stats.totalSpend` read the same as before.

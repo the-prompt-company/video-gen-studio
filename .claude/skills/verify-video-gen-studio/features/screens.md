@@ -8,15 +8,15 @@ The gallery, the dashboard and the playground read fully in the browser's langua
 - `scr-detail` the detail dialog (`gallery.detail.title`) shows the reference counts, a row per parameter labelled by `params.*`, `gallery.detail.on` for a true flag, and `generation.download`.
 - `scr-plurals` the dashboard's by-model rows read `dashboard.modelUsage` for 2 and 1 generations and the outcomes line reads 0 failed.
 - `scr-empty` a member with no results sees `gallery.empty` with a link to `/playground`.
-- `scr-no-key` a member without an API key sees `errors.noKey` in the drawer and Generate stays off.
+- `scr-no-key` a member without an API key sees `errors.noKey` in the composer once Seedance is picked, and 생성하기 stays off.
 - `scr-scope` the admin's `gallery.scope.everyone` and `gallery.scope.mine` links switch scope, and the admin's `users.locale` does not move.
-- `scr-blocker` reusing a row that asks for 20 s puts `errors.paramRange` with the `params.duration` label in the cost bar.
-- `scr-drawers` each model's option starts with its untranslated name, its `families.*.note` shows, and GPT Image 2's options read `paramValues.*`.
-- `scr-refs` the reference dialog shows `playground.refs.limits`, `playground.refs.attachedCount` and remove buttons named by `playground.refs.removeLabel`.
-- `scr-particles` two images and one video read `playground.modeSentence.reference` (`이미지 2장과 영상 1개를` in Korean).
+- `scr-blocker` reusing a row that asks for 20 s (its turn's `playground.actions.reuse`, in the earlier history) falls back to `playground.summary.duration` 5 s, and an empty prompt then reads `errors.promptRequired` with the model and mode in the composer's status line.
+- `scr-menus` each model's row in the model menu starts with its untranslated name, its `families.*.note` shows, and GPT Image 2's settings pills read `paramValues.*`.
+- `scr-refs` two images and a video read `playground.refs.imageCount` and `playground.refs.videoCount` in the composer, with remove buttons named by `playground.refs.removeLabel`.
+- `scr-particles` choosing text takes the three references away and reads `playground.note.removed` (`레퍼런스 3개를 뺐습니다` in Korean), with no particle that disagrees with its noun.
 - `scr-cost` the estimate line names the 3.0 s input video and the rate.
-- `scr-orientation` a square first frame reads `정사각으로` in Korean and the shape's branch in the other languages.
-- `scr-image` GPT Image 2 generates against the fake, and the stage caption reads `GPT Image 2 · ` and `mode.t2i`.
+- `scr-orientation` a square start frame reads `정사각으로` in Korean in the settings, and the shape's branch in the other languages.
+- `scr-image` GPT Image 2 generates against the fake, and its turn reads `GPT Image 2 · ` and `mode.t2i`.
 - `scr-sideways` at 390 px no surface scrolls sideways (`scrollWidth` equals `innerWidth`).
 
 ## How to get to it (user POV)
@@ -30,11 +30,12 @@ Preconditions:
 - A local database (the journey refuses any other), `npm run db:mock` rows for the admin, and the fake serving a real clip: `FAKE_HF_PORT=4500 FAKE_HF_VIDEO_FILE=public/mock/result-landscape.webm npm run fake:hf`, then `VGS_FAKE_HF=http://localhost:4500`. `.env.local` points `HIGGSFIELD_BASE_URL` and `OPENAI_BASE_URL` at the same fake.
 - Run it as the admin, once per language and viewport: `VGS_LOCALE=zh-CN VGS_MOBILE=1 vgs run screens`.
 
-- **Each surface.** Saves `gallery-tiles`, `gallery-detail`, `gallery-empty`, `no-key-banner`, `admin-scope`, `dashboard`, `blocker`, `drawer-h3`, `drawer-gpt-image-2`, `drawer-seedance`, `reference-dialog`, `particles`, `cost-bar`, `orientation-note` and `image-model` as `.impeccable/review/i18n-3/<surface>-<lang>-<viewport>.png`.
+- **Each surface.** Saves `gallery-tiles`, `gallery-detail`, `gallery-empty`, `no-key-banner`, `admin-scope`, `dashboard`, `blocker`, `model-menu-h3`, `model-menu-gpt-image-2`, `settings-gpt-image-2`, `model-menu-seedance`, `references`, `cost-bar`, `particles`, `orientation-note` and `image-model` as `.impeccable/review/i18n-3/<surface>-<lang>-<viewport>.png`.
 - **Proof.** `log.md` records the strings it read. The journey creates two `vgs-loc-i18n3-*` members with three rows, sets the Seedance rate for the run, and deletes and restores all of it in `finally`.
 
 ## Gotchas
 
-- The drawer opens on the first model the member can use. Without a Higgsfield key that is GPT Image 2, so the no-key banner shows only after picking Seedance.
+- The composer opens on the first model the member can use. Without a Higgsfield key that is GPT Image 2, so the no-key line shows only after picking Seedance.
+- The member's three rows have no thread, so the playground steps run on `/playground?thread=earlier`.
 - Without `FAKE_HF_VIDEO_FILE` the fake serves bytes that are not a video, and a gallery tile made from them never loads its metadata.
-- The review images hide next dev's corner badge, which otherwise covers the cost bar.
+- The review images hide next dev's corner badge, which otherwise covers the composer.

@@ -323,7 +323,7 @@ async function adminUser(): Promise<User> {
 
 function plan(label: string, imageUrls: string[], rate: number): ReadyPlan {
   const p = planGeneration(
-    { family: FAMILY, mode: imageUrls.length > 0 ? "r2v" : "t2v", prompt: `${TAG}${label}`, params: {}, images: imageUrls, videos: [], startFromImage: false },
+    { family: FAMILY, mode: imageUrls.length > 0 ? "r2v" : "t2v", prompt: `${TAG}${label}`, params: {}, images: imageUrls, videos: [], endImage: null },
     rate,
   );
   if (!p.ready) throw new Error(`FAIL setup: ${p.blocker}`);
@@ -1512,7 +1512,7 @@ async function imageRequests(upstream: string, prompt: string) {
 function imagePlan(label: string, rate: number, over: Partial<Draft> = {}): ReadyPlan {
   const images = over.images ?? [];
   const p = planGeneration(
-    { family: GPT, mode: images.length > 0 ? "r2i" : "t2i", prompt: `${TAG}${label}`, params: {}, images, videos: [], startFromImage: false, ...over },
+    { family: GPT, mode: images.length > 0 ? "r2i" : "t2i", prompt: `${TAG}${label}`, params: {}, images, videos: [], endImage: null, ...over },
     rate,
   );
   if (!p.ready) throw new Error(`FAIL setup: ${p.blocker}`);

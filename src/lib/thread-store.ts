@@ -1,4 +1,4 @@
-import { and, desc, eq, exists, isNull, notExists, sql } from "drizzle-orm";
+import { and, desc, eq, exists, isNull, lte, notExists, sql } from "drizzle-orm";
 import { dbNowMs, getDb, schema } from "@/db";
 import type { Generation } from "@/db/schema";
 import { HttpError } from "@/lib/auth";
@@ -24,23 +24,28 @@ export async function listThreads(userId: number): Promise<PublicThread[]> {
 }
 
 /**
- * The newest `limit` generations of a visible thread and the database's clock, or null when the member cannot see it.
+ * The newest `limit` generations of a visible thread, or the `limit` just older than the member's row `before`, with
+ * whether older ones remain and the database's clock. Null when the member cannot see the thread, or when it has no
+ * row before the cursor, which only a thread deleted since the last page can answer, because rows are never deleted.
  */
-export async function threadFeed(userId: number, ref: ThreadRef, limit: number): Promise<{ rows: Generation[]; now: number } | null> {
+export async function threadFeed(userId: number, ref: ThreadRef, limit: number, before: string | null = null): Promise<{ rows: Generation[]; more: boolean; now: number } | null> {
   const db = getDb();
   const g = schema.generations;
   const member =
     ref.kind === "earlier"
       ? and(isNull(g.threadId), notExists(db.select({ one: sql`1` }).from(t).where(earlierDeleted(userId))))
       : and(eq(g.threadId, ref.id), exists(db.select({ one: sql`1` }).from(t).where(openChat(userId, ref.id))));
+  // Read the cursor's created_at in SQL: the browser's copy has lost its microseconds.
+  const at = sql`(select c.created_at from generations c where c.id = ${before} and c.user_id = ${userId})`;
+  const older = before === null ? undefined : and(lte(g.createdAt, at), sql`(${g.createdAt}, ${g.id}) < (${at}, ${before}::uuid)`);
   const found = await db
     .select({ row: g, now: dbNowMs })
     .from(g)
-    .where(and(eq(g.userId, userId), member))
-    .orderBy(desc(g.createdAt))
-    .limit(limit);
+    .where(and(eq(g.userId, userId), member, older))
+    .orderBy(desc(g.createdAt), desc(g.id))
+    .limit(limit + 1);
   if (found.length === 0) return null;
-  return { rows: found.map((f) => f.row), now: found[0].now };
+  return { rows: found.slice(0, limit).map((f) => f.row), more: found.length > limit, now: found[0].now };
 }
 
 export type ClaimedThread = { threadId: ThreadId | null; thread: PublicThread };

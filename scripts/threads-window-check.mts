@@ -27,7 +27,7 @@ import { getDb, schema } from "./src/db";
 import { planGeneration } from "./src/lib/catalog";
 import { submitGeneration } from "./src/lib/generations";
 const [user] = await getDb().select().from(schema.users).where(eq(schema.users.id, Number(process.argv[2])));
-const plan = planGeneration({ family: "bytedance/seedance-2.0", mode: "t2v", prompt: process.argv[3], params: {}, images: [], videos: [], startFromImage: false }, 0.1);
+const plan = planGeneration({ family: "bytedance/seedance-2.0", mode: "t2v", prompt: process.argv[3], params: {}, images: [], videos: [], endImage: null }, 0.1);
 if (!plan.ready) throw new Error(JSON.stringify(plan.blocker));
 const row = await submitGeneration(user, plan, (task) => void task());
 console.log(JSON.stringify({ id: row.id, status: row.status }));

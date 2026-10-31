@@ -68,13 +68,13 @@ export type Provider = "higgsfield" | "openai";
 /** What the request makes: the element the browser shows and the key storage writes. */
 export type Output = "video" | "image";
 
-/**
- * A model's modes and which attachments pick each. Nothing attached picks `text`. Exactly one image, no video, and
- * "이 이미지로 시작" pick `firstFrame` where the model has one. Anything else picks `reference`.
- */
+/** `endFrame`: the model's image-to-video endpoint takes `end_image_url`. */
 export type ModeSet =
-  | { output: "video"; text: "t2v"; firstFrame: "i2v"; reference: "r2v" }
-  | { output: "image"; text: "t2i"; firstFrame: null; reference: "r2i" };
+  | { output: "video"; text: "t2v"; firstFrame: "i2v"; reference: "r2v"; endFrame: boolean }
+  | { output: "image"; text: "t2i"; firstFrame: null; reference: "r2i"; endFrame: false };
+
+export type ModeKind = "text" | "firstFrame" | "reference";
+export const KIND_OF: Record<Mode, ModeKind> = { t2v: "text", t2i: "text", i2v: "firstFrame", r2v: "reference", r2i: "reference" };
 
 export function isFamilyId(s: string): s is FamilyId {
   return (FAMILY_IDS as readonly string[]).includes(s);
@@ -116,9 +116,8 @@ export type CostBasis = {
   usage?: TokenUsage | null;
 };
 
-type BodyInput = { mode: Mode; params: Params; prompt: string; images: readonly string[]; videos: readonly string[] };
+type BodyInput = { mode: Mode; params: Params; prompt: string; images: readonly string[]; videos: readonly string[]; endImage: string | null };
 
-/** Its blurb and note are `families.<key>.blurb` and `.note`. */
 export type Family = {
   id: FamilyId;
   key: FamilyKey;
@@ -177,14 +176,15 @@ const H3_IMAGES_WITHOUT_SURCHARGE = 5;
 
 const DURATION_SEEDANCE: ParamSpec = { key: "duration", type: "int", min: 4, max: 15, default: 5 };
 
-const VIDEO_MODES: ModeSet = { output: "video", text: "t2v", firstFrame: "i2v", reference: "r2v" };
+const VIDEO_MODES: ModeSet = { output: "video", text: "t2v", firstFrame: "i2v", reference: "r2v", endFrame: true };
 const HIGGSFIELD_REF_IMAGES = { types: ["image/jpeg", "image/png", "image/webp", "image/gif"], maxBytes: null };
 
 /** Params, the trimmed prompt when there is one, then the mode's media fields. */
-function higgsfieldBody({ mode, params, prompt, images, videos }: BodyInput): Record<string, unknown> {
+function higgsfieldBody({ mode, params, prompt, images, videos, endImage }: BodyInput): Record<string, unknown> {
   const body: Record<string, unknown> = { ...params };
   if (prompt) body.prompt = prompt;
   if (mode === "i2v") body.image_url = images[0];
+  if (mode === "i2v" && endImage) body.end_image_url = endImage;
   if (mode === "r2v" && images.length > 0) body.image_urls = images;
   if (mode === "r2v" && videos.length > 0) body.video_urls = videos;
   return body;
@@ -209,7 +209,7 @@ const GPT_IMAGE_2_IMAGE_USD: Record<ImageQuality, Record<PricedSize, number>> = 
   high: { "1024x1024": 0.211, "1024x1536": 0.165, "1536x1024": 0.165 },
 };
 /**
- * The drawer's aspect choices and the size each sends. 16:9 and 9:16 have no published price; they have fewer pixels
+ * The aspect choices and the size each sends. 16:9 and 9:16 have no published price; they have fewer pixels
  * than the same orientation's standard size and are estimated at its price, which usage then replaces.
  */
 const GPT_IMAGE_2_SHAPES: Record<string, { size: string; label: string; priced: PricedSize }> = {
@@ -317,7 +317,7 @@ export const FAMILIES: Record<FamilyId, Family> = {
     id: "openai/gpt-image-2",
     key: "gptImage2",
     provider: "openai",
-    modes: { output: "image", text: "t2i", firstFrame: null, reference: "r2i" },
+    modes: { output: "image", text: "t2i", firstFrame: null, reference: "r2i", endFrame: false },
     name: "GPT Image 2",
     vendor: "OpenAI",
     refImages: { types: ["image/png", "image/jpeg", "image/webp"], maxBytes: 50 * 1024 * 1024 },
@@ -357,7 +357,6 @@ const RETIRED: Record<string, { name: string; mode: Mode }> = {
   "minimax/hailuo-2.3/standard/image-to-video": { name: "Hailuo 2.3 Standard", mode: "i2v" },
 };
 
-/** The model's modes in the order the drawer lists them. */
 export function modesOf(family: FamilyId): Mode[] {
   const m = FAMILIES[family].modes;
   return m.firstFrame ? [m.text, m.firstFrame, m.reference] : [m.text, m.reference];
@@ -396,17 +395,13 @@ function coerce(p: ParamSpec, v: unknown): string | number | boolean | null {
   }
 }
 
-/** Every param of the model at its default, coerced, whichever mode takes it. */
-export function defaultParams(family: FamilyId): Params {
-  return Object.fromEntries(FAMILIES[family].params.map((p) => [p.key, coerce(p, undefined) as string | number | boolean]));
+/** Every param of the model, whichever mode takes it: the given value where the model takes it, else its default. */
+export function paramsWithDefaults(family: FamilyId, given: Readonly<Record<string, unknown>> = {}): Params {
+  return Object.fromEntries(FAMILIES[family].params.map((p) => [p.key, (coerce(p, given[p.key]) ?? coerce(p, undefined)) as string | number | boolean]));
 }
 
-/** The one routing rule, over the model's modes. */
-export function routeMode(family: FamilyId, images: number, videos: number, startFromImage: boolean): Mode {
-  const m = FAMILIES[family].modes;
-  if (images + videos === 0) return m.text;
-  if (m.firstFrame && images === 1 && videos === 0 && startFromImage) return m.firstFrame;
-  return m.reference;
+export function defaultParams(family: FamilyId): Params {
+  return paramsWithDefaults(family);
 }
 
 /** Rounded to 4 decimals, the scale of cost_usd. Prices the estimate before submit and the provider's usage after. */
@@ -414,7 +409,10 @@ export function costUsd(b: CostBasis, rateUsd: number): number {
   return Math.round(rateUsd * FAMILIES[b.family].rate.units(b) * 1e4) / 1e4;
 }
 
-/** What the member composed. `mode` is the mode the screen showed; images and videos are uploaded URLs. */
+/**
+ * `images`: the start frame alone in a first-frame mode (the end frame is `endImage`), the references in order in a
+ * reference mode, none in a text mode.
+ */
 export type Draft = {
   family: FamilyId;
   mode: Mode;
@@ -423,17 +421,16 @@ export type Draft = {
   images: readonly string[];
   /** `seconds` is read from the file's metadata in the browser when it was attached. */
   videos: readonly { url: string; seconds: number }[];
-  /** "이 이미지로 시작". Counts only while exactly one image and no video is attached, for a model with a first frame. */
-  startFromImage: boolean;
+  endImage: string | null;
 };
 
 type PlanBase = {
   family: FamilyId;
   mode: Mode;
   endpoint: string;
-  offersStartFromImage: boolean;
   prompt: string;
   params: Params;
+  /** The references in order, or the start frame then the end frame: the row's image_refs, which the stream labels by position. */
   imageUrls: readonly string[];
   videoUrls: readonly string[];
   durationS: number;
@@ -449,22 +446,41 @@ type PlanBase = {
 export type Plan = PlanBase & ({ ready: true; body: WireBody } | { ready: false; blocker: AppError });
 export type ReadyPlan = Extract<Plan, { ready: true }>;
 
+function attachmentBlocker(family: Family, draft: Draft): AppError | null {
+  const images = draft.images.length;
+  const videos = draft.videos.length;
+  const mismatch = appError("modeMismatch", { mode: draft.mode });
+  if (!modesOf(family.id).includes(draft.mode)) return mismatch;
+  switch (KIND_OF[draft.mode]) {
+    case "text":
+      return images + videos > 0 || draft.endImage ? mismatch : null;
+    case "firstFrame":
+      if (images > 1 || videos > 0 || (draft.endImage && !family.modes.endFrame)) return mismatch;
+      return images === 0 ? appError("startFrameRequired") : null;
+    case "reference":
+      if (draft.endImage) return mismatch;
+      if (images > family.maxImages) return appError("tooManyImages", { model: family.name, max: family.maxImages });
+      if (videos > 0 && family.maxVideos === 0) return appError("noVideoRefs", { model: family.name });
+      if (videos > family.maxVideos) return appError("tooManyVideos", { model: family.name, max: family.maxVideos });
+      if (draft.videos.some((v) => !(Number.isFinite(v.seconds) && v.seconds > 0 && v.seconds <= 600))) return appError("videoLengthUnknown");
+      return images + videos === 0 ? appError("referenceRequired", { mode: draft.mode }) : null;
+  }
+}
+
 /**
- * Routing, param checks, the prompt rule, the request body and the cost, in one pure call: the drawer runs it on every
- * change, the route runs it on the POST, and only a ready plan is inserted. The body is the model's own (body()).
+ * Pure, so the composer runs it on every change and the route on the POST; only a ready plan is inserted. The body is
+ * the model's own (body()).
  */
 export function planGeneration(draft: Draft, baseRateUsd: number): Plan {
   const family = FAMILIES[draft.family];
-  const images = draft.images.length;
-  const videos = draft.videos.length;
-  const mode = routeMode(family.id, images, videos, draft.startFromImage);
+  const { mode, endImage } = draft;
   const prompt = draft.prompt.trim();
   const params: Record<string, string | number | boolean> = {};
-  let blocker: AppError | null = null;
+  let paramBlocker: AppError | null = null;
   for (const p of paramsFor(family.id, mode)) {
     const v = coerce(p, draft.params[p.key]);
     if (v === null) {
-      blocker ??=
+      paramBlocker ??=
         p.type === "int"
           ? appError("paramRange", { param: p.key, min: p.min, max: p.max })
           : p.type === "enum"
@@ -475,30 +491,27 @@ export function planGeneration(draft: Draft, baseRateUsd: number): Plan {
     params[p.key] = v;
   }
   const inputVideoS = draft.videos.reduce((s, v) => s + v.seconds, 0);
-  const costBasis: CostBasis = { family: family.id, mode, params, inputVideoS, promptChars: prompt.length, inputImages: images };
+  const costBasis: CostBasis = { family: family.id, mode, params, inputVideoS, promptChars: prompt.length, inputImages: draft.images.length };
   const base: PlanBase = {
     family: family.id,
     mode,
     endpoint: endpointOf(family.id, mode),
-    offersStartFromImage: family.modes.firstFrame !== null && images === 1 && videos === 0,
     prompt,
     params,
-    imageUrls: draft.images,
+    imageUrls: endImage ? [...draft.images, endImage] : draft.images,
     videoUrls: draft.videos.map((v) => v.url),
     durationS: Number(params.duration ?? 0),
     rateUsd: baseRateUsd,
     costBasis,
-    costUsd: blocker ? 0 : costUsd(costBasis, baseRateUsd),
+    costUsd: paramBlocker ? 0 : costUsd(costBasis, baseRateUsd),
     facts: family.facts(costBasis),
   };
-  const input: BodyInput = { mode, params, prompt, images: draft.images, videos: base.videoUrls };
-  if (images > family.maxImages) blocker = appError("tooManyImages", { model: family.name, max: family.maxImages });
-  else if (videos > 0 && family.maxVideos === 0) blocker = appError("noVideoRefs", { model: family.name });
-  else if (videos > family.maxVideos) blocker = appError("tooManyVideos", { model: family.name, max: family.maxVideos });
-  else if (draft.videos.some((v) => !(Number.isFinite(v.seconds) && v.seconds > 0 && v.seconds <= 600))) blocker = appError("videoLengthUnknown");
-  else if (draft.mode !== mode) blocker = appError("modeMismatch", { mode: draft.mode });
-  else if (!blocker && family.promptRequiredIn.includes(mode) && !prompt) blocker = appError("promptRequired", { model: family.name, mode });
-  else if (!blocker) blocker = family.check(input);
+  const input: BodyInput = { mode, params, prompt, images: draft.images, videos: base.videoUrls, endImage };
+  const blocker =
+    attachmentBlocker(family, draft) ??
+    paramBlocker ??
+    (family.promptRequiredIn.includes(mode) && !prompt ? appError("promptRequired", { model: family.name, mode }) : null) ??
+    family.check(input);
   if (blocker) return { ...base, ready: false, blocker };
   return { ...base, ready: true, body: JSON.stringify(family.body(input)) as WireBody };
 }

@@ -6,7 +6,7 @@ Dates and times read in Seoul time in each language's short pattern (`26. 10. 29
 
 - `fmt-dashboard` the recent table's `dashboard.table.time` column uses the language's date pattern and its `dashboard.table.cost` column `$0.2250`; `dashboard.stats.totalSpend` reads `$…`.
 - `fmt-gallery` a tile made three minutes ago reads the language's "3 minutes ago" and `$0.2250`; its `gallery.openDetail` button opens dialog `gallery.detail.title`, whose created and finished times (`gallery.detail.created`, `gallery.detail.completed`) use the date pattern.
-- `fmt-playground` in the drawer `playground.drawer`, with GPT Image 2 picked in `playground.model` and a `playground.prompt` typed, the cost bar reads a `$0.xxxx` estimate.
+- `fmt-playground` in the composer `playground.composer`, with GPT Image 2 picked in the model menu (`playground.modelMenu`) and a `playground.prompt` typed, the estimate reads `$0.xxxx`.
 - `fmt-admin` the users table's `members.table.cost` and `members.table.lastUsed`, and the `admin.tabs.logs` table's `logs.field.time` and `logs.field.cost`, use the same formats.
 - `fmt-hydration` none of these pages logs a hydration warning or a page error.
 

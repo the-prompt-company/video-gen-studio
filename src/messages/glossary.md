@@ -45,12 +45,11 @@ Each language button in the picker shows its own name (`한국어`, `English`, `
 | 레퍼런스→영상 | Reference to video | 参考生视频 | Mode |
 | 텍스트→이미지 | Text to image | 文生图 | Mode |
 | 레퍼런스→이미지 | Reference to image | 参考生图 | Mode |
-| 이 이미지로 시작 | Start from this image | 以此图作为首帧 | Checkbox |
 | 프롬프트 | prompt | 提示词 | |
 | 화면비 | aspect ratio | 画面比例 | |
 | 해상도 | resolution | 分辨率 | |
 | 길이(초) | Duration (s) | 时长（秒） | |
-| 결과 무대 | result stage | 结果展示区 | Name of the result area |
+| 생성 기록 | Generations | 生成记录 | Name of the stream of turns in the playground (was 결과 무대, result stage) |
 | 제출 대기 | Waiting to submit | 等待提交 | Status `pending` |
 | 대기 | Queued | 排队中 | Status `queued` |
 | 생성 중 | Generating | 生成中 | Status `in_progress` |
@@ -70,12 +69,19 @@ Each language button in the picker shows its own name (`한국어`, `English`, `
 | 팀원 | teammate | 团队成员 | A member of the viewer's own team. Also stands in for a teammate's name in the gallery when they have no nickname |
 | 미소속 | No team | 未分配团队 | |
 | API 키 | API key | API 密钥 | |
-| 생성 설정 | Generation settings | 生成设置 | The playground's form, called the drawer in code |
+| 생성 입력창 | Generation input | 生成输入框 | The composer docked under the stream. Running text says 입력창 / the box below / 输入框 |
+| 설정 | Settings | 设置 | Also the composer's settings chip and popover |
+| 모델과 방식 | Model and mode | 模型与生成方式 | The model menu |
+| 만들 것 | Output | 输出类型 | Label of the 영상 / 이미지 tabs |
+| 텍스트, 프레임, 레퍼런스 | Text, Frames, References | 文本, 首尾帧, 参考素材 | The three kinds of mode in the model menu |
+| 되돌리기 | Undo | 撤销 | Puts back references a mode switch took away |
 | 스레드 | thread | 会话 | A member's group of generations in the playground, like a chat; private to its owner. English writes `thread` in sentences and `Threads` only as the list heading. 会话 means a thread only, never a sign-in session |
 | 새 스레드 | New thread | 新建会话 | The button. The stage's heading for a thread not created yet is 새 스레드 / New thread / 新会话 |
 | 이전 기록 | Earlier history | 以往记录 | The thread holding the generations made before threads existed |
 | 생성 방식 | Mode | 生成方式 | Label of the mode list |
-| 첫 프레임 | first frame | 首帧 | |
+| 시작 프레임 | start frame | 首帧 | The required frame of Image to video. UI text says 시작 프레임, not 첫 프레임 |
+| 끝 프레임 | end frame | 尾帧 | The optional last frame of Image to video |
+| 첫 프레임 | first frame | 首帧 | The landing page's word for the start frame |
 | 출력 화면비 | Output aspect ratio | 输出画面比例 | |
 | 가로, 세로, 정사각 | Landscape, Portrait, Square | 横版, 竖版, 方形 | Orientation of an image or a video |
 | OpenAI 편집 | OpenAI editing | OpenAI 编辑 | The edits endpoint, used when references are attached |

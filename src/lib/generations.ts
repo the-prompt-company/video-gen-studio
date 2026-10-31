@@ -908,7 +908,7 @@ function imageFormatOf(gen: Generation): ImageFormat {
 
 /**
  * Runs once per terminal move, by the caller that made it: ref cleanup, then the copy for a completed row. An OpenAI
- * row was stored before it moved, and its references, all in Blob, stay for the drawer's next attempt with them.
+ * row was stored before it moved, and its references, all in Blob, stay for the composer's next attempt with them.
  */
 async function onTerminal(row: Generation): Promise<void> {
   if (isOpenAiRow(row)) return;

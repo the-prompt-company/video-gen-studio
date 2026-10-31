@@ -142,7 +142,7 @@
     "noVideoRefs": "{model} 不支持参考视频。请移除视频。",
     "tooManyVideos": "{model} 最多可添加 {max, plural, other {# 个视频}}。",
     "videoLengthUnknown": "有参考视频无法读取时长。请移除该视频后重新上传。",
-    "modeMismatch": "页面上的生成方式（{mode, select, t2v {文生视频} i2v {图生视频} r2v {参考生视频} t2i {文生图} other {参考生图}}）与附件不符。请刷新页面。",
+    "modeMismatch": "生成方式（{mode, select, t2v {文生视频} i2v {图生视频} r2v {参考生视频} t2i {文生图} other {参考生图}}）与模型或附件不符。请刷新页面。",
     "promptRequired": "{model} {mode, select, t2v {文生视频} i2v {图生视频} r2v {参考生视频} t2i {文生图} other {参考生图}}需要提示词。",
     "promptTooLong": "提示词最多 {max, plural, other {# 个字符}}。",
     "transparentNeedsAlpha": "透明背景只能保存为 PNG 或 WebP。请更改文件格式。",
@@ -183,7 +183,9 @@
     "openaiQuota": "OpenAI 的用量额度或余额已用完。请联系管理员。",
     "openaiModeration": "因触发 OpenAI 安全策略，未生成图片。请尝试更换提示词或参考素材。",
     "openaiKeyRejected": "OpenAI {status}：服务器的 OpenAI 密钥或所在地区被拒绝（{detail}）。请联系管理员。",
-    "noResult": "{kind, select, canceled {该生成任务已取消。} image {没有结果图片。} other {没有结果视频。}}"
+    "noResult": "{kind, select, canceled {该生成任务已取消。} image {没有结果图片。} other {没有结果视频。}}",
+    "startFrameRequired": "图生视频需要首帧图片。请在首帧位置添加图片。",
+    "referenceRequired": "{mode, select, r2v {参考生视频需要至少一个参考图或参考视频。} other {参考生图需要至少一张参考图。}}"
   },
   "generation": {
     "noPrompt": "（无提示词）",
@@ -263,60 +265,70 @@
     }
   },
   "playground": {
-    "drawer": "生成设置",
-    "stage": "结果展示区",
-    "section": {
-      "prompt": "1 · 提示词与参考素材",
-      "model": "2 · 模型与参数"
-    },
+    "stream": "生成记录",
+    "composer": "生成输入框",
     "prompt": "提示词",
-    "promptLength": "{count, plural, other {# 字}}",
     "promptPlaceholder": "请描述场景、镜头运动和氛围…",
-    "startFromImage": "以此图作为首帧",
-    "startFromImageHint": "第 1 张图片将作为首帧",
-    "modes": "生成方式",
-    "modeSentence": {
-      "text": "不使用参考素材，仅根据提示词生成。",
-      "firstFrame": "将第 1 张图片用作首帧。",
-      "edit": "将 {images, plural, other {# 张图片}}作为参考素材发送给 OpenAI 编辑。",
-      "reference": "{refs, select, both {将 {images, plural, other {# 张图片}}和 {videos, plural, other {# 个视频}}用作参考素材。} images {将 {images, plural, other {# 张图片}}用作参考素材。} other {将 {videos, plural, other {# 个视频}}用作参考素材。}}"
-    },
-    "model": "模型",
+    "modelMenu": "模型与生成方式",
+    "outputs": "输出类型",
     "output": "{output, select, video {视频} other {图片}}",
+    "modes": "生成方式",
+    "model": "模型",
+    "kind": {
+      "text": "文本",
+      "firstFrame": "首尾帧",
+      "reference": "参考素材"
+    },
+    "kindHint": {
+      "text": "仅根据提示词生成",
+      "firstFrame": "{end, select, yes {首帧必填 · 尾帧可选} other {首帧必填}}",
+      "reference": "最多 {images, plural, other {# 张图片}}{videos, plural, =0 {} other { · # 个视频}}"
+    },
     "unavailable": "不可用",
-    "offline": "<model>{name}</model> 不可用 · {reason}",
     "rateHint": "{rate}（{basis}）",
     "rateUnset": "未设置单价",
+    "settings": {
+      "title": "设置",
+      "open": "更改设置 · {summary}"
+    },
+    "summary": {
+      "duration": "{seconds} 秒",
+      "audio": "音频",
+      "watermark": "水印",
+      "firstFrameRatio": "沿用首帧比例",
+      "quality": "{value, select, low {低} medium {中} other {高}}",
+      "transparent": "透明背景"
+    },
     "aspect": {
       "label": "输出画面比例",
       "pill": "{shape} {ratio}",
       "auto": "自动",
-      "followsImage": "跟随首帧图片比例",
-      "firstFrameNote": "第 1 张图片为 <num>{size}</num> 的{shape, select, landscape {横版} portrait {竖版} other {方形}}图片，因此视频也将是<em>{shape, select, landscape {横版} portrait {竖版} other {方形}}</em>。{shape, select, landscape {} other {如需横版视频，请上传横版图片。}}",
-      "firstFrameRule": "图生视频无需单独选择画面比例，会直接沿用首帧图片的比例。"
+      "firstFrameNote": "首帧为 <num>{size}</num> 的{shape, select, landscape {横版} portrait {竖版} other {方形}}图片，因此视频也将是<em>{shape, select, landscape {横版} portrait {竖版} other {方形}}</em>。{shape, select, landscape {} other {如需横版视频，请使用横版图片。}}",
+      "firstFrameRule": "图生视频无需单独选择画面比例，会沿用首帧图片的比例。"
     },
     "refs": {
       "add": "添加参考素材",
+      "uploadImages": "上传图片",
+      "uploadVideos": "上传视频",
+      "full": "{kind, select, image {已添加全部 {max, plural, other {# 张图片}}} other {已添加全部 {max, plural, other {# 个视频}}}}",
+      "menuNote": "也可以把文件拖到输入框中。素材按添加顺序编号，并按此顺序传给模型。",
+      "dropHint": "{videos, select, yes {将图片或视频拖到此处，或点击 + 按钮添加} other {将图片拖到此处，或点击 + 按钮添加}}",
       "imageCount": "图片 {count}/{max}",
       "videoCount": "视频 {count}/{max}",
-      "optional": "可选",
       "attached": "已添加的参考素材",
-      "limits": "{model} · 最多 {images, plural, other {# 张图片}}{videos, plural, =0 {} other { · 最多 # 个视频}} · 可选",
-      "note": "{provider, select, openai {参考素材为可选项。不添加时仅根据提示词生成图片；添加图片后，将通过 OpenAI 编辑以这些图片为基础生成。图片按上传顺序编号并按此顺序发送，每张图片都会增加输入费用。} other {参考素材为可选项。不添加时仅根据提示词生成；只上传一张图片时，可在生成设置中选择是否以此图作为首帧。图片和视频按上传顺序编号，并按此顺序传给模型。参考视频的时长可能计入费用。}}",
-      "attachedCount": "已添加 · 图片 {images, plural, other {#}} · 视频 {videos, plural, other {#}}",
-      "none": "尚未添加参考素材。",
-      "done": "完成",
-      "remove": "移除",
       "removeLabel": "移除{kind, select, image {参考图} other {参考视频}} {tag} {name}",
       "seconds": "{seconds} 秒",
       "fileHint": "{types} · 不超过 {mb} MB"
     },
-    "drop": {
-      "off": "此模型不接受{kind, select, image {参考图} other {参考视频}}",
-      "full": "{kind, select, image {已添加全部 {max, plural, other {# 张图片}}} other {已添加全部 {max, plural, other {# 个视频}}}}",
-      "pick": "将{kind, select, image {图片} other {视频}}文件拖到此处，或点击选择",
-      "add": "添加{kind, select, image {参考图} other {参考视频}}"
+    "frames": {
+      "label": "首尾帧",
+      "slot": "{slot, select, start {首帧} other {尾帧}}",
+      "required": "必填",
+      "optional": "可选",
+      "add": "{slot, select, start {添加首帧} other {添加尾帧}}",
+      "remove": "移除{slot, select, start {首帧} other {尾帧}} {name}"
     },
+    "dropHere": "{kind, select, firstFrame {松开即可用作首尾帧} other {松开即可添加为参考素材}}",
     "uploading": "正在上传…",
     "upload": {
       "blobForImages": "需要连接 Blob 存储才能上传参考图",
@@ -324,8 +336,31 @@
       "tooMany": "{kind, select, image {图片最多 {max, plural, other {# 张}}} other {视频最多 {max, plural, other {# 个}}}}",
       "badType": "{file}：{model} 不支持此格式，请上传 {types} 文件",
       "tooBig": "{file}：超过 {mb} MB，请压缩后重新上传",
-      "noLength": "{file}：无法读取视频时长，请上传其他 MP4 文件"
+      "noLength": "{file}：无法读取视频时长，请上传其他 MP4 文件",
+      "framesTakeImages": "首尾帧只能使用图片",
+      "framesFull": "首帧和尾帧都已添加。如需更换，请先移除"
     },
+    "note": {
+      "switched": "已添加参考素材，生成方式已改为{mode, select, r2v {参考生视频} other {参考生图}}。",
+      "removed": "{to, select, text {文本方式只发送提示词。} other {}}已移除 {count, plural, other {# 个参考素材}}。",
+      "undo": "撤销",
+      "reused": "已填入该结果的模型、生成方式、提示词和设置。{refs, select, yes {请重新添加参考素材。} other {}}",
+      "spent": "已从输入框移除 {count, plural, other {# 个}}仅供本次生成使用的参考素材。生成结束后这些素材会被删除，如需再次使用，请重新上传。"
+    },
+    "cost": {
+      "label": "预计",
+      "unset": "待定",
+      "rate": "单价 {rate}",
+      "unpriced": "管理员设置单价后，将按 {facts} 计算"
+    },
+    "fact": {
+      "seconds": "{seconds} 秒",
+      "inputVideo": "输入视频 {seconds} 秒",
+      "refImages": "{count, plural, other {# 张参考图}}"
+    },
+    "generate": "生成",
+    "submitting": "正在提交…",
+    "shortcut": "按 Ctrl+Enter 生成",
     "feed": {
       "item": "第 {n} 个结果：{status}",
       "elapsed": "{status} · 已用时间",
@@ -334,39 +369,28 @@
       "estimated": "预计",
       "took": "用时 {elapsed}",
       "refsLabel": "参考素材：{images, plural, other {# 张图片}}，{videos, plural, other {# 个视频}}",
-      "refsCount": "参考素材 {count, plural, other {#}}",
+      "frame": "{slot, select, start {首帧} other {尾帧}}",
       "progress": "生成进行中",
       "progressUnknown": "进度未知"
     },
+    "actions": {
+      "cancel": "取消",
+      "reuse": "复用",
+      "reuseLabel": "按此结果的设置重新生成"
+    },
+    "older": {
+      "load": "查看更早的结果",
+      "loading": "正在加载更早的结果…",
+      "start": "已到达会话开头"
+    },
+    "latest": "跳到最新结果",
+    "galleryCount": "作品库 · 已完成 {count, plural, other {# 个结果}}",
     "empty": {
       "title": "生成您的第一个视频",
-      "lead": "在<wide>左侧面板</wide><narrow>下方</narrow>输入提示词并选择模型，生成后结果会显示在这里。",
-      "toSettings": "前往生成设置"
+      "lead": "在下方输入框中输入提示词，选择模型和生成方式后点击生成。提示词和结果会像对话一样在这里依次排列。"
     },
     "loading": "正在加载最近的生成任务",
-    "rail": {
-      "label": "结果操作",
-      "position": "结果位置",
-      "previous": "上一个结果",
-      "next": "下一个结果",
-      "generate": "生成",
-      "cancel": "取消",
-      "reuse": "复用"
-    },
-    "noModels": "没有可用的模型，请联系管理员。",
-    "cost": {
-      "label": "预计费用",
-      "unset": "待定",
-      "rate": "单价 {rate}",
-      "unpriced": "管理员设置单价后，将按 {facts} 计算"
-    },
-    "fact": {
-      "seconds": "{seconds} 秒",
-      "inputVideo": "输入视频 {seconds} 秒",
-      "refImages": "参考图 {count, plural, other {# 张}}"
-    },
-    "generate": "生成",
-    "submitting": "正在提交…"
+    "noModels": "没有可用的模型，请联系管理员。"
   },
   "threads": {
     "label": "会话",
@@ -377,7 +401,7 @@
     "picker": "会话列表",
     "fresh": {
       "title": "新会话",
-      "lead": "在<wide>左侧面板</wide><narrow>下方</narrow>生成后，此会话会出现在列表中，并以第一条提示词命名。"
+      "lead": "在下方输入框中生成后，此会话会出现在列表中，并以第一条提示词命名。"
     },
     "missing": {
       "title": "找不到该会话",
@@ -418,15 +442,12 @@
   },
   "families": {
     "seedance": {
-      "blurb": "可仅用文本生成，也可将一张图片作为首帧，或以最多 6 张图片和 3 个视频作为参考素材。支持 480p~4K、可选画面比例、生成音频。",
       "note": "费用与分辨率和时长成正比。试做建议用 480p，正式交付建议用 720p 及以上。"
     },
     "h3": {
-      "blurb": "可仅用文本生成，也可将一张图片作为首帧，或以最多 5 张图片和 3 个视频作为参考素材。2K，5、10 或 15 秒。",
       "note": "输出固定为 2K。所有生成方式都需要提示词。"
     },
     "gptImage2": {
-      "blurb": "仅用提示词，或以最多 16 张图片作为参考素材生成图片。5 种画面比例、3 档质量，支持 PNG、JPEG、WebP。",
       "note": "有参考素材时会使用 OpenAI 编辑。通常需要几十秒到 2 分钟，费用按 OpenAI 报告的 token 用量确定。"
     }
   },

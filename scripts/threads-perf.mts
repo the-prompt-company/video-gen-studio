@@ -101,6 +101,8 @@ try {
   await client`analyze threads`;
   const [member] = await client`select id from users order by id limit 1`;
   const [chat] = await client`select id from threads where user_id = ${member.id} and title = 'perf thread 40'`;
+  const [chatCursor] = await client`select id from generations where thread_id = ${chat.id} order by created_at desc, id desc offset 4 limit 1`;
+  const [earlierCursor] = await client`select id from generations where user_id = ${member.id} and thread_id is null order by created_at desc, id desc offset 11 limit 1`;
   await client.end();
 
   const me = member.id as number;
@@ -109,6 +111,8 @@ try {
     listThreads: () => listThreads(me),
     feedChat: () => threadFeed(me, chatRef, 12),
     feedEarlier: () => threadFeed(me, { kind: "earlier" }, 12),
+    feedChatOlder: () => threadFeed(me, chatRef, 12, chatCursor.id),
+    feedEarlierOlder: () => threadFeed(me, { kind: "earlier" }, 12, earlierCursor.id),
   };
   const check = async () => {
     const list = await calls.listThreads();
@@ -116,13 +120,16 @@ try {
     const earlierFeed = await calls.feedEarlier();
     if (list.length !== THREADS + 1 || list[list.length - 1].kind !== "earlier") throw new Error(`list has ${list.length} threads`);
     if (chatFeed?.rows.length !== PER_THREAD || earlierFeed?.rows.length !== 12) throw new Error("a feed came back short");
-    return `list ${list.length} threads, chat feed ${chatFeed.rows.length} rows, earlier feed ${earlierFeed.rows.length} rows`;
+    const chatOlder = await calls.feedChatOlder();
+    const earlierOlder = await calls.feedEarlierOlder();
+    if (chatOlder?.rows.length !== PER_THREAD - 5 || chatOlder.more || earlierOlder?.rows.length !== 12 || !earlierOlder.more) throw new Error("an older page came back wrong");
+    return `list ${list.length} threads, chat feed ${chatFeed.rows.length} rows, earlier feed ${earlierFeed.rows.length} rows, older pages ${chatOlder.rows.length} and ${earlierOlder.rows.length} rows`;
   };
 
-  const results = {
-    indexed: { listThreads: [] as number[], feedChat: [] as number[], feedEarlier: [] as number[] },
-    unindexed: { listThreads: [] as number[], feedChat: [] as number[], feedEarlier: [] as number[] },
-  };
+  const results = Object.fromEntries(["indexed", "unindexed"].map((side) => [side, Object.fromEntries(Object.keys(calls).map((name) => [name, [] as number[]]))])) as Record<
+    "indexed" | "unindexed",
+    Record<keyof typeof calls, number[]>
+  >;
   const setIndex = async (on: boolean) => {
     const c = raw();
     if (on) {

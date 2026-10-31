@@ -7,6 +7,7 @@
 import { createRequire } from "node:module";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
+import { composerHandles } from "../composer-handles.mjs";
 
 const LANG = { "ko-KR": "ko", "en-US": "en", "zh-CN": "zh-CN" };
 const USD = /^\$\d+(\.\d{2}|\.\d{4})?$/;
@@ -64,14 +65,14 @@ export default async function formats({ page, ev, base, env, webDir, local, cred
 
     await page.goto(`${base}/playground`, { waitUntil: "networkidle" });
     // GPT Image 2 has a rate before any admin sets one, so its estimate shows in dollars.
-    const drawer = page.getByRole("complementary", { name: await ev.t("playground.drawer") });
-    await drawer.getByLabel(await ev.t("playground.model")).selectOption("openai/gpt-image-2");
-    await drawer.getByLabel(await ev.t("playground.prompt")).fill("i18n2 cost bar");
-    const costBar = drawer.locator(".font-display.text-2xl");
-    const cost = (await costBar.textContent())?.trim() ?? "";
-    if (!/^\$\d+\.\d{4}$/.test(cost)) ev.fail(`the cost bar reads ${cost}`);
-    ev.note(`fmt-playground: cost bar ${cost}`);
-    await review("playground-cost", { focus: costBar });
+    const h = await composerHandles(ev, page);
+    await h.pickModel("openai/gpt-image-2", "image");
+    await h.pickMode("text", "t2i");
+    await h.prompt.fill("i18n2 cost bar");
+    const cost = await h.cost();
+    if (!/^\$\d+\.\d{4}$/.test(cost)) ev.fail(`the composer's estimate reads ${cost}`);
+    ev.note(`fmt-playground: estimate ${cost}`);
+    await review("playground-cost", { focus: h.generate });
 
     await page.goto(`${base}/admin`, { waitUntil: "networkidle" });
     const adminRow = page.getByRole("row").filter({ hasText: creds.username }).first();
