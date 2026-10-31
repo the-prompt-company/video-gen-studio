@@ -1,20 +1,24 @@
 "use client";
 
-import { useEffect, useImperativeHandle, useLayoutEffect, useReducer, useRef, useState, type ReactNode, type Ref } from "react";
+import { useEffect, useId, useImperativeHandle, useLayoutEffect, useReducer, useRef, useState, type ReactNode, type Ref } from "react";
 import { useFormatter, useTranslations } from "next-intl";
-import { describeModel, FAMILIES, KIND_OF, paramsFor, planGeneration, type Draft, type Fact, type FamilyId, type Mode, type ModeKind, type ParamSpec } from "@/lib/catalog";
+import { FAMILIES, paramsFor, type Draft, type Fact, type FamilyId, type ParamSpec } from "@/lib/catalog";
 import {
-  attachmentsOf,
   composerReducer,
-  draftOf,
   fit,
-  modeOfComposer,
+  modeOf,
   newComposer,
+  pastedFiles,
+  planOf,
+  reuseOf,
+  rolesFor,
+  rolesOf,
   takes,
+  unsent,
   uploading as isUploading,
   type Attachment,
   type Refusal,
-  type Slot,
+  type Role,
 } from "@/lib/composer";
 import { ApiError, appError, caught, parseAppError, type Reason } from "@/lib/errors";
 import type { PublicGeneration, Unavailable } from "@/lib/generations";
@@ -32,13 +36,13 @@ export type Offer = { family: FamilyId; rateUsd: number; unavailable: Unavailabl
 
 /** A 503 means the server cannot run the model at all; a 403 (no key for this member) can still be picked and says why. */
 const pickable = (o: Offer) => o.unavailable?.status !== 503;
-/** `reuse` puts back a result's model, mode, prompt and settings. `attachResult` attaches the result itself. */
+/** `reuse` puts back a result's model, prompt, settings and frames. `attachResult` attaches the result itself. */
 export type ComposerHandle = { reuse: (g: PublicGeneration) => void; attachResult: (g: PublicGeneration) => void };
 
 const SMALL = 4 * 1024 * 1024;
 const ONE_DECIMAL = { minimumFractionDigits: 1, maximumFractionDigits: 1 };
-const SLOTS: readonly Slot[] = ["start", "end"];
-const KINDS: readonly ModeKind[] = ["text", "firstFrame", "reference"];
+
+type Open = "model" | "settings" | "add" | { frameOf: string };
 
 function imageSize(src: string): Promise<{ w: number; h: number } | null> {
   return new Promise((resolve) => {
@@ -114,13 +118,17 @@ const PILL =
 const REMOVE =
   "absolute right-1 top-1 grid size-7 place-items-center rounded-full bg-background/80 text-foreground transition hover:bg-foreground hover:text-background focus:outline-none focus-visible:ring-2 focus-visible:ring-accent after:absolute after:-inset-2 after:content-['']";
 
-function Option({ pressed, disabled, onClick, title, hint, children }: { pressed: boolean; disabled?: boolean; onClick: () => void; title: string; hint: string; children?: ReactNode }) {
+function Option({ pressed, disabled, onClick, title, hints, children }: { pressed: boolean; disabled?: boolean; onClick: () => void; title: string; hints: readonly string[]; children?: ReactNode }) {
   return (
     <button type="button" aria-pressed={pressed} disabled={disabled} onClick={onClick} className={OPTION}>
       {children}
       <span className="grid min-w-0 flex-1 gap-0.5">
         <span className="text-sm font-medium">{title}</span>
-        <span className="text-xs text-subtle">{hint}</span>
+        {hints.map((h) => (
+          <span key={h} className="text-xs text-subtle">
+            {h}
+          </span>
+        ))}
       </span>
       <span className={pressed ? "text-foreground" : "invisible"}>
         <Icon name="check" className="h-5 w-5" />
@@ -175,27 +183,86 @@ function ParamControl({ spec, value, onChange }: { spec: ParamSpec; value: unkno
   }
 }
 
-function Thumb({ a, tag, caption, removeLabel, onRemove, className }: { a: Attachment; tag?: string; caption: string; removeLabel: string; onRemove: () => void; className: string }) {
+function Thumb({
+  a,
+  tag,
+  caption,
+  roles,
+  left,
+  frame,
+  removeLabel,
+  onRemove,
+}: {
+  a: Attachment;
+  tag: string;
+  caption: string;
+  /** The frames this image holds: a white ring and a badge say so. */
+  roles: readonly Role[];
+  /** Marked frames leave it out of the request: dimmed, with the blocker's amber dot. */
+  left: boolean;
+  /** Opens the frame menu. Absent for a video, and on a model that takes no frames. */
+  frame?: { label: string; expanded: boolean; open: (el: HTMLElement) => void };
+  removeLabel: string;
+  onRemove: () => void;
+}) {
   const t = useTranslations("playground");
-  return (
-    <div className={`relative shrink-0 ${className}`}>
-      <div className="absolute inset-0 overflow-hidden rounded-md bg-surface-2">
-        {a.kind === "image" ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={a.preview} alt={a.name} className="h-full w-full object-cover" />
-        ) : (
-          <video src={a.preview} muted playsInline preload="metadata" aria-label={a.name} className="h-full w-full object-cover" />
-        )}
-        {tag && <span aria-hidden className="font-display absolute left-1.5 top-1 text-sm text-foreground drop-shadow">{tag}</span>}
+  const leftId = useId();
+  const busyId = useId();
+  const described = [left && leftId, a.url === null && busyId].filter(Boolean).join(" ") || undefined;
+  const marked = roles.length > 0;
+  const face = (
+    <>
+      {a.kind === "image" ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={a.preview} alt={frame ? "" : a.name} className={`h-full w-full object-cover transition-opacity ${left ? "opacity-35" : ""}`} />
+      ) : (
+        <video src={a.preview} muted playsInline preload="metadata" aria-label={a.name} className={`h-full w-full object-cover transition-opacity ${left ? "opacity-35" : ""}`} />
+      )}
+      {frame && <span aria-hidden className="absolute inset-0 transition-colors group-hover:bg-white/10" />}
+      <span aria-hidden className="font-display absolute left-1.5 top-1 text-sm text-foreground drop-shadow">{tag}</span>
+      {marked ? (
+        <span aria-hidden className="absolute bottom-1 left-1 rounded-full bg-foreground px-1.5 text-[11px] font-semibold leading-4 text-background">
+          {t("frames.badge", { role: roles.length > 1 ? "both" : roles[0] })}
+        </span>
+      ) : left ? (
+        <span aria-hidden className="absolute bottom-1.5 left-1.5 h-1.5 w-1.5 rounded-full bg-amber-400" />
+      ) : (
         <span aria-hidden className="absolute bottom-1 left-1.5 text-[11px] text-foreground drop-shadow">{caption}</span>
-        {a.url === null && (
-          <span className="absolute inset-0 grid place-items-center bg-background/60">
-            <span aria-hidden className="h-5 w-5 animate-spin rounded-full border-2 border-foreground border-t-transparent" />
-            <span className="sr-only">{t("uploading")}</span>
+      )}
+      {a.url === null && (
+        <span className="absolute inset-0 grid place-items-center bg-background/60">
+          <span aria-hidden className="h-5 w-5 animate-spin rounded-full border-2 border-foreground border-t-transparent" />
+          <span id={busyId} className="sr-only">
+            {t("uploading")}
           </span>
-        )}
-      </div>
-      <button type="button" aria-label={removeLabel} onClick={onRemove} className={REMOVE}>
+        </span>
+      )}
+    </>
+  );
+  const surface = "absolute inset-0 overflow-hidden rounded-md bg-surface-2";
+  return (
+    <div className={`relative h-[54px] w-[96px] shrink-0 rounded-md transition-shadow ${marked ? "ring-2 ring-foreground ring-offset-2 ring-offset-surface" : ""}`}>
+      {left && (
+        <span id={leftId} className="sr-only">
+          {t("frames.left")}
+        </span>
+      )}
+      {frame ? (
+        <button
+          type="button"
+          aria-label={frame.label}
+          aria-describedby={described}
+          aria-haspopup="dialog"
+          aria-expanded={frame.expanded}
+          onClick={(e) => frame.open(e.currentTarget)}
+          className={`group ${surface} cursor-pointer focus:outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-foreground`}
+        >
+          {face}
+        </button>
+      ) : (
+        <div className={surface}>{face}</div>
+      )}
+      <button type="button" aria-label={removeLabel} aria-describedby={left ? leftId : undefined} onClick={onRemove} className={REMOVE}>
         <Icon name="x" className="h-3.5 w-3.5" />
       </button>
     </div>
@@ -242,25 +309,26 @@ export function Composer({
     setErrorThread(threadKey);
     setError(null);
   }
-  const [open, setOpen] = useState<"model" | "settings" | "add" | null>(null);
+  const [open, setOpen] = useState<Open | null>(null);
   const [dragging, setDragging] = useState(false);
   const promptRef = useRef<HTMLTextAreaElement>(null);
   const modelChip = useRef<HTMLButtonElement>(null);
   const settingsChip = useRef<HTMLButtonElement>(null);
   const addChip = useRef<HTMLButtonElement>(null);
+  const frameAnchor = useRef<HTMLElement | null>(null);
   const imageInput = useRef<HTMLInputElement>(null);
   const videoInput = useRef<HTMLInputElement>(null);
-  const pickSlot = useRef<Slot | undefined>(undefined);
 
   const family = FAMILIES[state.family];
   const offer = offers.find((o) => o.family === state.family) ?? offers[0];
-  const mode = modeOfComposer(state);
-  const kind = state.attach.kind;
-  const all = attachmentsOf(state.attach);
-  const images = all.filter((a) => a.kind === "image").length;
-  const videos = all.filter((a) => a.kind === "video").length;
-  const draft = draftOf(state, prompt);
-  const plan = planGeneration(draft, offer.rateUsd);
+  const mode = modeOf(state);
+  const all = state.items;
+  const roles = rolesFor(family.id);
+  const left = new Set(unsent(state).map((a) => a.id));
+  const images = all.filter((a) => a.kind === "image");
+  const videos = all.filter((a) => a.kind === "video");
+  const tagOf = (a: Attachment) => (a.kind === "image" ? String(images.indexOf(a) + 1) : `V${videos.indexOf(a) + 1}`);
+  const { draft, plan } = planOf(state, prompt, offer.rateUsd);
   const upload = isUploading(state);
   const canGenerate = !offer.unavailable && plan.ready && !submitting && !upload;
   const blockers = [offer.unavailable?.error, plan.ready ? null : plan.blocker].filter((b) => b != null);
@@ -306,10 +374,6 @@ export function Composer({
         return t("upload.tooMany", { kind: r.kind, max: r.max });
       case "noVideos":
         return errorText(appError("noVideoRefs", { model: family.name }));
-      case "framesTakeImages":
-        return t("upload.framesTakeImages");
-      case "framesFull":
-        return t("upload.framesFull");
       case "attached":
         return t("upload.attached");
     }
@@ -327,25 +391,24 @@ export function Composer({
     if (fitted.placed.length > 0) dispatch({ type: "add", items: fitted.placed });
   }
 
-  useImperativeHandle(
-    ref,
-    () => ({
-      reuse(g) {
-        const m = describeModel(g.modelId);
-        const next = m.family && offers.some((o) => o.family === m.family) ? m.family : latest.current.family;
-        dispatch({ type: "reuse", family: next, kind: m.mode ? KIND_OF[m.mode] : "text", params: m.family === next ? (g.params as Record<string, unknown>) : {} });
-        setPrompt(g.prompt ?? "");
-        setError(null);
-        setOpen(null);
-        promptRef.current?.focus();
-      },
-      attachResult: (g) => void attachResult(g),
-    }),
-  );
+  /** The turn's model, prompt, settings and frames at once; Generate waits until each frame is known to still load. */
+  function reuse(g: PublicGeneration) {
+    // A frame uploaded under refs/ is deleted when its row ends, so it does not come back.
+    const temporary = (url: string) => largeUploadPrefix !== null && URL.canParse(url) && new URL(url).pathname.includes(`/${largeUploadPrefix}`);
+    const action = reuseOf(g, offers.map((o) => o.family), latest.current.family, temporary);
+    dispatch(action);
+    setPrompt(g.prompt ?? "");
+    setError(null);
+    setOpen(null);
+    promptRef.current?.focus();
+    for (const frame of new Set([action.start, action.end])) if (frame) void imageSize(frame.preview).then((size) => dispatch({ type: "loaded", id: frame.id, size }));
+  }
+
+  useImperativeHandle(ref, () => ({ reuse, attachResult: (g) => void attachResult(g) }));
 
   const picker = useResultPicker({ prompt, setPrompt, input: promptRef, threadRows, takes: takes(state), onPick: (g) => void attachResult(g) });
 
-  async function attach(files: File[], slot?: Slot) {
+  async function attach(files: File[]) {
     const current = FAMILIES[latest.current.family];
     setError(null);
     const problems: string[] = [];
@@ -379,14 +442,14 @@ export function Composer({
         items.push({ a: { ...base, kind: "image", w: size?.w ?? null, h: size?.h ?? null }, file, viaBlob });
       }
     }
-    const fitted = fit(latest.current, items.map((x) => x.a), slot);
+    const fitted = fit(latest.current, items.map((x) => x.a));
     const { placed, refused } = fitted;
     // A second attach may start before React renders this one; it must see these files already placed.
     latest.current = fitted.composer;
     problems.push(...refused.map(refusalText));
     if (problems.length > 0) setError({ text: [...new Set(problems)].join(" · ") });
     if (placed.length === 0) return;
-    dispatch({ type: "add", items: placed, slot });
+    dispatch({ type: "add", items: placed });
     await Promise.all(
       items
         .filter((x) => placed.includes(x.a))
@@ -406,10 +469,11 @@ export function Composer({
     picker.close();
     setSubmitting(true);
     setError(null);
+    const ids = state.items.map((a) => a.id);
     const reason = await onSubmit(draft);
     setSubmitting(false);
     if (reason) setError(reason);
-    else dispatch({ type: "sent" });
+    else dispatch({ type: "sent", ids });
   }
 
   function pickFamily(next: FamilyId) {
@@ -417,18 +481,20 @@ export function Composer({
     setError(null);
   }
 
-  function pickFiles(input: HTMLInputElement | null, slot?: Slot) {
-    pickSlot.current = slot;
-    input?.click();
-  }
-
   const outputs = (["video", "image"] as const).filter((o) => offers.some((x) => FAMILIES[x.family].modes.output === o));
-  const kindHint = (k: ModeKind) =>
-    k === "text" ? t("kindHint.text") : k === "firstFrame" ? t("kindHint.firstFrame", { end: family.modes.endFrame ? "yes" : "no" }) : t("kindHint.reference", { images: family.maxImages, videos: family.maxVideos });
+  const takesText = (f: FamilyId) => {
+    const r = rolesFor(f);
+    return t("takes", { images: FAMILIES[f].maxImages, videos: FAMILIES[f].maxVideos, frames: r.length === 2 ? "both" : r.length === 1 ? "start" : "none" });
+  };
   const offerHint = (o: Offer) => (o.unavailable ? `${t("unavailable")} · ${errorText(o.unavailable.error)}` : o.rateUsd > 0 ? t("rateHint", { basis: tPrices(`basis.${FAMILIES[o.family].key}`), rate: rate(o) }) : t("rateUnset"));
-  const firstShape = state.attach.kind === "firstFrame" && state.attach.start?.kind === "image" ? state.attach.start : null;
+  const start = all.find((a) => a.id === state.frames.start);
+  const firstShape = mode === family.modes.firstFrame && start?.kind === "image" ? start : null;
   const shape = firstShape && shapeOf(firstShape.w, firstShape.h);
   const modeLabel = `${family.name} · ${tMode(mode)}`;
+  const framing = open !== null && typeof open === "object" ? images.find((a) => a.id === open.frameOf) : undefined;
+  // The image whose frame menu is open went away (its upload failed): the menu closes with it.
+  if (open !== null && typeof open === "object" && !framing) setOpen(null);
+  const hintFrames = roles.length > 0 && images.length > 0 && state.frames.start === null && state.frames.end === null;
 
   return (
     <section aria-label={t("composer")} className="shrink-0 px-2 pb-2 pt-1 sm:px-4 sm:pb-4">
@@ -452,71 +518,59 @@ export function Composer({
         }}
         className={`relative mx-auto grid w-full max-w-[820px] grid-cols-[minmax(0,1fr)] gap-2 rounded-xl border bg-surface p-3 pb-2.5 transition-colors ${dragging ? "border-foreground" : "border-border"}`}
       >
-        {kind === "firstFrame" && (
-          <div role="group" aria-label={t("frames.label")} className="flex flex-wrap items-center gap-2.5">
-            {SLOTS.filter((s) => s === "start" || family.modes.endFrame).map((s, i) => {
-              const a = state.attach.kind === "firstFrame" ? state.attach[s] : null;
-              const label = t("frames.slot", { slot: s });
-              return (
-                <div key={s} className="flex items-center gap-2.5">
-                  {i > 0 && <Icon name="arrow" className="h-4 w-4 text-subtle" />}
-                  {a ? (
-                    <Thumb a={a} caption={label} removeLabel={t("frames.remove", { slot: s, name: a.name })} onRemove={() => dispatch({ type: "remove", id: a.id })} className="h-[58px] w-[104px] sm:h-[68px] sm:w-[120px]" />
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => pickFiles(imageInput.current, s)}
-                      className="grid h-[58px] w-[104px] place-content-center gap-0.5 rounded-md border border-dashed border-border text-center text-xs text-subtle transition hover:border-foreground/60 hover:text-foreground-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:h-[68px] sm:w-[120px]"
-                    >
-                      <span className="font-medium text-foreground-2">+ {label}</span>
-                      <span>{s === "start" ? t("frames.required") : t("frames.optional")}</span>
-                      <span className="sr-only">{t("frames.add", { slot: s })}</span>
-                    </button>
-                  )}
-                </div>
-              );
-            })}
+        {all.length > 0 && (
+          <div className="grid gap-2.5">
+            <ul aria-label={t("refs.attached")} className="-m-1 flex min-w-0 gap-3 overflow-x-auto p-1 [scrollbar-width:thin]">
+              {all.map((a) => {
+                const tag = tagOf(a);
+                const held = rolesOf(state, a.id);
+                const imageShape = a.kind === "image" ? shapeOf(a.w, a.h) : null;
+                const canFrame = a.kind === "image" && roles.length > 0;
+                return (
+                  <li key={a.id}>
+                    <Thumb
+                      a={a}
+                      tag={tag}
+                      caption={a.kind === "video" ? t("refs.seconds", { seconds: format.number(a.seconds, ONE_DECIMAL) }) : imageShape ? tGeneration("shape", { shape: imageShape }) : ""}
+                      roles={held}
+                      left={left.has(a.id)}
+                      frame={
+                        canFrame
+                          ? {
+                              label: t("frames.open", { tag, name: a.name, role: held.length > 1 ? "both" : (held[0] ?? "none") }),
+                              expanded: framing?.id === a.id,
+                              open: (el) => {
+                                frameAnchor.current = el;
+                                setOpen(framing?.id === a.id ? null : { frameOf: a.id });
+                              },
+                            }
+                          : undefined
+                      }
+                      removeLabel={t("refs.removeLabel", { kind: a.kind, tag, name: a.name })}
+                      onRemove={() => dispatch({ type: "remove", id: a.id })}
+                    />
+                  </li>
+                );
+              })}
+            </ul>
+            <p className="flex flex-wrap items-baseline gap-x-1.5 px-0.5 text-xs tabular-nums text-muted">
+              <span className="font-medium text-foreground-2">{tMode(mode)}</span>
+              <span aria-hidden className="text-subtle">·</span>
+              <span>{t("refs.imageCount", { count: String(images.length), max: String(family.maxImages) })}</span>
+              {family.maxVideos > 0 && (
+                <>
+                  <span aria-hidden className="text-subtle">·</span>
+                  <span>{t("refs.videoCount", { count: String(videos.length), max: String(family.maxVideos) })}</span>
+                </>
+              )}
+              {hintFrames && (
+                <>
+                  <span aria-hidden className="text-subtle">·</span>
+                  <span className="text-subtle">{t("frames.hint")}</span>
+                </>
+              )}
+            </p>
           </div>
-        )}
-        {kind === "reference" &&
-          (all.length === 0 ? (
-            <div className="flex min-h-11 items-center gap-2.5 rounded-md border border-dashed border-border px-3 py-2 text-xs text-subtle">
-              <Icon name="image" />
-              <span className="min-w-0 flex-1">{t("refs.dropHint", { videos: family.maxVideos > 0 ? "yes" : "no" })}</span>
-            </div>
-          ) : (
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-              <ul aria-label={t("refs.attached")} className="flex min-w-0 gap-2 overflow-x-auto p-0.5 [scrollbar-width:thin]">
-                {all.map((a) => {
-                  const n = all.filter((x) => x.kind === a.kind).indexOf(a) + 1;
-                  const tag = a.kind === "image" ? String(n) : `V${n}`;
-                  const imageShape = a.kind === "image" ? shapeOf(a.w, a.h) : null;
-                  return (
-                    <li key={a.id}>
-                      <Thumb
-                        a={a}
-                        tag={tag}
-                        caption={a.kind === "video" ? t("refs.seconds", { seconds: format.number(a.seconds, ONE_DECIMAL) }) : imageShape ? tGeneration("shape", { shape: imageShape }) : ""}
-                        removeLabel={t("refs.removeLabel", { kind: a.kind, tag, name: a.name })}
-                        onRemove={() => dispatch({ type: "remove", id: a.id })}
-                        className="h-[54px] w-[96px]"
-                      />
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))}
-        {kind === "reference" && (
-          <p className="text-xs tabular-nums text-muted">
-            {t("refs.imageCount", { count: String(images), max: String(family.maxImages) })}
-            {family.maxVideos > 0 && (
-              <>
-                <span className="mx-1.5 text-subtle">·</span>
-                {t("refs.videoCount", { count: String(videos), max: String(family.maxVideos) })}
-              </>
-            )}
-          </p>
         )}
 
         <label htmlFor="prompt" className="sr-only">{t("prompt")}</label>
@@ -541,25 +595,22 @@ export function Composer({
               void generate();
             }
           }}
+          onPaste={(e) => {
+            const files = pastedFiles([...e.clipboardData.files], e.clipboardData.getData("text/plain"));
+            if (files.length === 0) return;
+            e.preventDefault();
+            void attach(files);
+          }}
           className="max-h-[7.5rem] min-h-11 w-full resize-none bg-transparent px-1 py-0.5 text-[15px] leading-relaxed text-foreground placeholder:text-subtle focus:outline-none sm:max-h-40 sm:min-h-[52px]"
         />
 
         {state.note && (
-          <p className="flex flex-wrap items-center gap-x-2 px-1 text-xs text-muted">
-            <span>
-              {state.note.kind === "switched"
-                ? t("note.switched", { mode: state.note.mode })
-                : state.note.kind === "removed"
-                  ? t("note.removed", { to: kind, count: state.note.count })
-                  : state.note.kind === "spent"
-                    ? t("note.spent", { count: state.note.count })
-                    : t("note.reused", { refs: state.note.needsAttachments ? "yes" : "no" })}
-            </span>
-            {state.note.kind === "removed" && (
-              <button type="button" onClick={() => dispatch({ type: "undo" })} className="min-h-11 text-foreground underline underline-offset-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:min-h-7">
-                {t("note.undo")}
-              </button>
-            )}
+          <p className="px-1 text-xs text-muted">
+            {state.note.kind === "unmarked"
+              ? t("note.unmarked", { model: FAMILIES[state.note.family].name })
+              : state.note.kind === "spent"
+                ? t("note.spent", { count: state.note.count })
+                : t("note.reused", { refs: state.note.refs })}
           </p>
         )}
         {error && <ErrorText>{errorText(error)}</ErrorText>}
@@ -574,14 +625,12 @@ export function Composer({
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <div className="flex min-w-0 flex-1 items-center gap-1.5">
-            {kind !== "firstFrame" && (
-              <button ref={addChip} type="button" aria-label={t("refs.add")} aria-haspopup="dialog" aria-expanded={open === "add"} onClick={() => setOpen(open === "add" ? null : "add")} className={`${CHIP} w-11 justify-center px-0 sm:w-9 sm:px-0`}>
-                <Icon name="plus" className="h-5 w-5" />
-              </button>
-            )}
-            <button ref={modelChip} type="button" aria-label={`${t("modelMenu")} · ${modeLabel}`} aria-haspopup="dialog" aria-expanded={open === "model"} onClick={() => setOpen(open === "model" ? null : "model")} className={`${CHIP} text-foreground max-sm:shrink`}>
+            <button ref={addChip} type="button" aria-label={t("refs.add")} aria-haspopup="dialog" aria-expanded={open === "add"} onClick={() => setOpen(open === "add" ? null : "add")} className={`${CHIP} w-11 justify-center px-0 sm:w-9 sm:px-0`}>
+              <Icon name="plus" className="h-5 w-5" />
+            </button>
+            <button ref={modelChip} type="button" aria-label={`${t("modelMenu")} · ${family.name}`} aria-haspopup="dialog" aria-expanded={open === "model"} onClick={() => setOpen(open === "model" ? null : "model")} className={`${CHIP} text-foreground max-sm:shrink`}>
               <Icon name={family.modes.output === "video" ? "film" : "image"} />
-              <span className="truncate">{modeLabel}</span>
+              <span className="truncate">{family.name}</span>
               <Icon name="chevron" />
             </button>
             <button ref={settingsChip} type="button" aria-label={t("settings.open", { summary: settingsLine })} aria-haspopup="dialog" aria-expanded={open === "settings"} onClick={() => setOpen(open === "settings" ? null : "settings")} className={`${CHIP} max-sm:w-11 max-sm:justify-center max-sm:px-0 sm:min-w-32 sm:shrink`}>
@@ -609,28 +658,25 @@ export function Composer({
           </div>
         </div>
 
-        {picker.list && (
-          <ResultList
-            {...picker.list}
-            attached={new Set(all.flatMap((a) => (a.url ? [a.url] : [])))}
-            note={picker.videosHidden ? t("picker.hidden", { reason: kind === "firstFrame" ? "frames" : "model", model: family.name }) : null}
-          />
-        )}
+        {picker.list && <ResultList {...picker.list} attached={new Set(all.flatMap((a) => (a.url ? [a.url] : [])))} note={picker.videosHidden ? t("picker.hidden", { model: family.name }) : null} />}
         {dragging && (
-          <div aria-hidden className="pointer-events-none absolute inset-0 grid place-items-center rounded-xl bg-background/85 text-sm text-foreground">
-            {t("dropHere", { kind: kind === "firstFrame" ? "firstFrame" : "reference" })}
+          <div aria-hidden className="pointer-events-none absolute inset-0 rounded-xl bg-surface p-1.5">
+            <div className="grid h-full place-content-center justify-items-center gap-1 rounded-lg border border-dashed border-foreground/60 px-4 text-center">
+              <Icon name="plus" className="h-5 w-5 text-foreground" />
+              <span className="text-sm font-medium text-foreground">{t("dropHere")}</span>
+              <span className="text-xs text-muted">{takesText(family.id)}</span>
+            </div>
           </div>
         )}
         <input
           ref={imageInput}
           type="file"
           hidden
-          multiple={kind !== "firstFrame"}
+          multiple
           accept={family.refImages.types.join(",")}
           aria-label={t("refs.uploadImages")}
           onChange={(e) => {
-            void attach([...(e.target.files ?? [])], pickSlot.current);
-            pickSlot.current = undefined;
+            void attach([...(e.target.files ?? [])]);
             e.target.value = "";
           }}
         />
@@ -648,7 +694,7 @@ export function Composer({
       </div>
 
       {open === "model" && (
-        <Popover anchor={modelChip} title={t("modelMenu")} width={600} onClose={() => setOpen(null)}>
+        <Popover anchor={modelChip} title={t("modelMenu")} width={400} onClose={() => setOpen(null)}>
           {outputs.length > 1 && (
             <div role="group" aria-label={t("outputs")} className="inline-flex justify-self-start rounded-full border border-border p-[3px]">
               {outputs.map((o) => {
@@ -663,43 +709,25 @@ export function Composer({
               })}
             </div>
           )}
-          <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
-            <div className="grid content-start gap-1">
-              <Heading>{t("modes")}</Heading>
-              {KINDS.filter((k) => family.modes[k] !== null).map((k) => {
-                const m = family.modes[k] as Mode;
-                return (
-                  <Option
-                    key={k}
-                    pressed={kind === k}
-                    title={`${t(`kind.${k}`)} · ${tMode(m)}`}
-                    hint={kindHint(k)}
-                    onClick={() => {
-                      dispatch({ type: "mode", kind: k });
-                      setOpen(null);
-                    }}
-                  />
-                );
-              })}
-            </div>
-            <div className="grid content-start gap-1">
+          <div className="grid content-start gap-1">
+            <div className="max-sm:hidden">
               <Heading>{t("model")}</Heading>
-              {offers
-                .filter((o) => FAMILIES[o.family].modes.output === family.modes.output)
-                .map((o) => (
-                  <Option
-                    key={o.family}
-                    pressed={o.family === family.id}
-                    disabled={!pickable(o)}
-                    title={`${FAMILIES[o.family].name} · ${FAMILIES[o.family].vendor}`}
-                    hint={offerHint(o)}
-                    onClick={() => {
-                      pickFamily(o.family);
-                      setOpen(null);
-                    }}
-                  />
-                ))}
             </div>
+            {offers
+              .filter((o) => FAMILIES[o.family].modes.output === family.modes.output)
+              .map((o) => (
+                <Option
+                  key={o.family}
+                  pressed={o.family === family.id}
+                  disabled={!pickable(o)}
+                  title={`${FAMILIES[o.family].name} · ${FAMILIES[o.family].vendor}`}
+                  hints={[takesText(o.family), offerHint(o)]}
+                  onClick={() => {
+                    pickFamily(o.family);
+                    setOpen(null);
+                  }}
+                />
+              ))}
           </div>
           <p className="text-xs leading-relaxed text-subtle">{tFamilies(`${family.key}.note`)}</p>
         </Popover>
@@ -747,12 +775,43 @@ export function Composer({
         <Popover anchor={addChip} title={t("refs.add")} width={340} onClose={() => setOpen(null)}>
           <Heading>{t("refs.add")}</Heading>
           <div className="grid gap-1">
-            <AddRow icon="image" title={t("refs.uploadImages")} count={images} max={family.maxImages} hint={t("refs.fileHint", { types: typeList(family.refImages.types), mb: String((family.refImages.maxBytes ?? SMALL) / 1024 / 1024) })} full={t("refs.full", { kind: "image", max: family.maxImages })} onClick={() => pickFiles(imageInput.current)} />
+            <AddRow icon="image" title={t("refs.uploadImages")} count={images.length} max={family.maxImages} hint={t("refs.fileHint", { types: typeList(family.refImages.types), mb: String((family.refImages.maxBytes ?? SMALL) / 1024 / 1024) })} full={t("refs.full", { kind: "image", max: family.maxImages })} onClick={() => imageInput.current?.click()} />
             {family.maxVideos > 0 && (
-              <AddRow icon="film" title={t("refs.uploadVideos")} count={videos} max={family.maxVideos} hint={t("refs.fileHint", { types: "mp4", mb: largeUploadPrefix !== null ? "200" : "4" })} full={t("refs.full", { kind: "video", max: family.maxVideos })} onClick={() => pickFiles(videoInput.current)} />
+              <AddRow icon="film" title={t("refs.uploadVideos")} count={videos.length} max={family.maxVideos} hint={t("refs.fileHint", { types: "mp4", mb: largeUploadPrefix !== null ? "200" : "4" })} full={t("refs.full", { kind: "video", max: family.maxVideos })} onClick={() => videoInput.current?.click()} />
             )}
           </div>
-          <p className="text-xs leading-relaxed text-subtle">{t("refs.menuNote")}</p>
+          <p className="text-xs leading-relaxed text-subtle">{t("refs.menuNote", { frames: roles.length > 0 ? "yes" : "no" })}</p>
+        </Popover>
+      )}
+
+      {framing && (
+        <Popover anchor={frameAnchor} title={t("frames.title", { tag: tagOf(framing) })} width={320} onClose={() => setOpen(null)}>
+          <div className="max-sm:hidden">
+            <Heading>{t("frames.title", { tag: tagOf(framing) })}</Heading>
+          </div>
+          <div className="grid gap-1">
+            {roles.map((r) => {
+              const on = state.frames[r] === framing.id;
+              const holder = images.find((a) => a.id === state.frames[r]);
+              return (
+                <Option
+                  key={r}
+                  pressed={on}
+                  title={t("frames.role", { role: r })}
+                  hints={[on ? t("frames.off") : holder ? t("frames.moves", { tag: tagOf(holder) }) : t("frames.does", { role: r })]}
+                  onClick={() => {
+                    dispatch({ type: "frame", role: r, id: on ? null : framing.id });
+                    setOpen(null);
+                  }}
+                >
+                  <span aria-hidden className={`grid h-6 min-w-11 shrink-0 place-items-center rounded-full px-2 text-[11px] font-semibold ${on ? "bg-foreground text-background" : "border border-border text-muted"}`}>
+                    {t("frames.badge", { role: r })}
+                  </span>
+                </Option>
+              );
+            })}
+          </div>
+          <p className="text-xs leading-relaxed text-subtle">{t("frames.note")}</p>
         </Popover>
       )}
     </section>

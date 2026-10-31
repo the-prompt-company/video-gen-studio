@@ -73,8 +73,8 @@ export type ModeSet =
   | { output: "video"; text: "t2v"; firstFrame: "i2v"; reference: "r2v"; endFrame: boolean }
   | { output: "image"; text: "t2i"; firstFrame: null; reference: "r2i"; endFrame: false };
 
-export type ModeKind = "text" | "firstFrame" | "reference";
-export const KIND_OF: Record<Mode, ModeKind> = { t2v: "text", t2i: "text", i2v: "firstFrame", r2v: "reference", r2i: "reference" };
+type ModeKind = "text" | "firstFrame" | "reference";
+const KIND_OF: Record<Mode, ModeKind> = { t2v: "text", t2i: "text", i2v: "firstFrame", r2v: "reference", r2i: "reference" };
 
 export function isFamilyId(s: string): s is FamilyId {
   return (FAMILY_IDS as readonly string[]).includes(s);

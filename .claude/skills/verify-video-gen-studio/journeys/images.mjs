@@ -37,15 +37,15 @@ export default async function images({ page, ev, env }) {
   if ((await gpt.getAttribute("aria-pressed")) !== "true") await gpt.click();
   else await page.keyboard.press("Escape");
   await menu.waitFor({ state: "detached" });
-  await h.pickMode("text", "t2i");
 
   // img-composer
   const modesMenu = await h.openMenu();
   const [t2iName, r2iName] = await Promise.all(["t2i", "r2i"].map((m) => t(`mode.${m}`)));
-  const modeRows = (await modesMenu.getByRole("button", { name: new RegExp(`· (${t2iName}|${r2iName})`) }).allInnerTexts()).length;
-  if (modeRows !== 2 || (await modesMenu.getByRole("button", { name: new RegExp(`· ${await t("mode.i2v")}`) }).count())) ev.fail("GPT Image 2 should offer text and references only");
+  if (await modesMenu.getByRole("button", { name: new RegExp(`${t2iName}|${r2iName}`) }).count()) ev.fail("the model menu should offer no mode to pick");
+  const gptTakes = await t("playground.takes", { images: 16, videos: 0, frames: "none" });
+  if (!(await modesMenu.getByText(gptTakes, { exact: true }).isVisible())) ev.fail(`the GPT Image 2 row should say it takes images only and no frames: "${gptTakes}"`);
   await page.keyboard.press("Escape");
-  if ((await h.chipText()) !== `GPT Image 2 · ${t2iName}`) ev.fail(`with nothing attached the chip should read GPT Image 2 · ${t2iName}, got ${await h.chipText()}`);
+  if ((await h.chipText()) !== "GPT Image 2" || (await h.mode()) !== null) ev.fail(`with nothing attached the chip should read GPT Image 2 and the prompt go alone, got "${await h.chipText()}" and ${await h.mode()}`);
   const pill = async (shape, ratio) => t("playground.aspect.pill", { shape: await t("generation.shape", { shape }), ratio });
   const settings = await h.openSettings();
   const aspect = settings.getByRole("group", { name: await t("playground.aspect.label") });
@@ -120,8 +120,8 @@ export default async function images({ page, ev, env }) {
   const added = (await refKeys()).filter((k) => !before.has(k));
   if (added.length !== 2 || serverUploads.length !== 0) ev.fail(`both references should go browser → Blob refs/, saw ${JSON.stringify(added)} and ${serverUploads.length} server uploads`);
   ev.note(`img-refs: uploaded straight to Blob as ${added.join(", ")}; /api/uploads (the Higgsfield path) was not called`);
-  if ((await h.chipText()) !== `GPT Image 2 · ${r2iName}`) ev.fail(`with two images the chip should read GPT Image 2 · ${r2iName}, got ${await h.chipText()}`);
-  if (!(await h.box.getByText(await t("playground.note.switched", { mode: "r2i" })).isVisible())) ev.fail("the switch to OpenAI editing should be said (playground.note.switched)");
+  if ((await h.mode()) !== "r2i") ev.fail(`two images should go as ${r2iName}, the composer says ${await h.mode()}`);
+  if ((await (await h.frameButton("1", "ref-landscape-1.jpg")).count()) !== 0) ev.fail("GPT Image 2 takes no frames, so an image should offer no frame menu");
   await ev.shot("image-refs");
   const editSettings = await h.openSettings();
   await editSettings.getByRole("group", { name: await t("playground.aspect.label") }).getByRole("button", { name: await pill("landscape", "16:9"), exact: true }).click();

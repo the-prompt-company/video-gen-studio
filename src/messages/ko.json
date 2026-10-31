@@ -187,7 +187,8 @@
     "openaiModeration": "OpenAI 안전 정책에 걸려 이미지를 만들지 않았습니다. 프롬프트나 레퍼런스를 바꿔 보세요",
     "openaiKeyRejected": "OpenAI {status}: 서버의 OpenAI 키나 지역이 거부됐습니다({detail}). 관리자에게 문의하세요",
     "noResult": "{kind, select, canceled {취소된 생성입니다.} image {결과 이미지가 없습니다.} other {결과 영상이 없습니다.}}",
-    "startFrameRequired": "이미지→영상에는 시작 프레임 이미지가 필요합니다. 시작 프레임 칸에 이미지를 넣으세요",
+    "startFrameRequired": "이미지→영상에는 시작 프레임이 필요합니다. 첨부한 이미지를 눌러 시작 프레임으로 정하세요",
+    "framesWithOthers": "이미지→영상은 시작·끝 프레임만 보냅니다. 흐리게 표시된 첨부 {count, plural, other {#개}}를 빼거나, 프레임 표시를 풀어 모두 레퍼런스로 보내세요",
     "referenceRequired": "{mode, select, r2v {레퍼런스→영상에는 이미지나 영상 레퍼런스가 하나 이상 필요합니다} other {레퍼런스→이미지에는 이미지 레퍼런스가 한 장 이상 필요합니다}}"
   },
   "generation": {
@@ -271,22 +272,12 @@
     "stream": "생성 기록",
     "composer": "생성 입력창",
     "prompt": "프롬프트",
-    "promptPlaceholder": "장면, 카메라 움직임, 분위기를 적어 주세요. @로 내 결과를 넣습니다",
-    "modelMenu": "모델과 방식",
+    "promptPlaceholder": "장면, 카메라 움직임, 분위기를 적어 주세요. 파일은 여기에 끌어다 놓고, 내 결과는 @로 넣습니다",
+    "modelMenu": "모델",
     "outputs": "만들 것",
     "output": "{output, select, video {영상} other {이미지}}",
-    "modes": "생성 방식",
     "model": "모델",
-    "kind": {
-      "text": "텍스트",
-      "firstFrame": "프레임",
-      "reference": "레퍼런스"
-    },
-    "kindHint": {
-      "text": "프롬프트만으로 만듭니다",
-      "firstFrame": "{end, select, yes {시작 프레임 필수 · 끝 프레임 선택} other {시작 프레임 필수}}",
-      "reference": "이미지 최대 {images, plural, other {#장}}{videos, plural, =0 {} other { · 영상 최대 #개}}"
-    },
+    "takes": "이미지 최대 {images, plural, other {#장}}{videos, plural, =0 {} other { · 영상 최대 #개}}{frames, select, both { · 시작·끝 프레임} start { · 시작 프레임} other {}}",
     "unavailable": "사용 불가",
     "rateHint": "{basis} 기준 {rate}",
     "rateUnset": "단가 미설정",
@@ -314,22 +305,25 @@
       "uploadImages": "이미지 올리기",
       "uploadVideos": "영상 올리기",
       "full": "{kind, select, image {이미지 {max, plural, other {#장}}} other {영상 {max, plural, other {#개}}}} 모두 추가됨",
-      "menuNote": "파일을 입력창에 끌어다 놓아도 됩니다. 넣은 순서대로 번호가 붙고 그 순서로 모델에 전달됩니다. 프롬프트에 @를 입력하면 내 결과를 골라 넣을 수 있습니다.",
-      "dropHint": "{videos, select, yes {이미지나 영상을 끌어다 놓거나 + 버튼으로 넣으세요} other {이미지를 끌어다 놓거나 + 버튼으로 넣으세요}}",
+      "menuNote": "파일을 입력창에 끌어다 놓거나 붙여 넣어도 됩니다. 넣은 순서대로 번호가 붙고 그 순서로 모델에 전달됩니다.{frames, select, yes { 이미지를 누르면 시작·끝 프레임으로 정할 수 있습니다.} other {}} 프롬프트에 @를 입력하면 내 결과를 골라 넣을 수 있습니다.",
       "imageCount": "이미지 {count}/{max}",
       "videoCount": "영상 {count}/{max}",
-      "attached": "첨부한 레퍼런스",
-      "removeLabel": "{kind, select, image {이미지} other {영상}} 레퍼런스 {tag} {name} 제거",
+      "attached": "첨부",
+      "removeLabel": "{kind, select, image {이미지} other {영상}} {tag} {name} 제거",
       "seconds": "{seconds}s",
       "fileHint": "{types} · {mb} MB 이하"
     },
     "frames": {
-      "label": "프레임",
-      "slot": "{slot, select, start {시작 프레임} other {끝 프레임}}",
-      "required": "필수",
-      "optional": "선택",
-      "add": "{slot, select, start {시작 프레임 넣기} other {끝 프레임 넣기}}",
-      "remove": "{slot, select, start {시작 프레임} other {끝 프레임}} {name} 제거"
+      "hint": "이미지를 눌러 시작·끝 프레임으로 정할 수 있습니다",
+      "open": "이미지 {tag} {name}: {role, select, start {시작 프레임} end {끝 프레임} both {시작·끝 프레임} other {레퍼런스}}. 프레임 지정",
+      "title": "이미지 {tag} · 프레임 지정",
+      "role": "{role, select, start {시작 프레임} other {끝 프레임}}",
+      "badge": "{role, select, start {시작} end {끝} other {시작·끝}}",
+      "does": "{role, select, start {영상이 이 이미지에서 시작합니다} other {영상이 이 이미지로 끝납니다}}",
+      "moves": "지금은 이미지 {tag}에 있습니다. 고르면 이 이미지로 옮깁니다",
+      "off": "다시 누르면 표시를 풉니다",
+      "note": "프레임을 정하면 이미지→영상으로 만들고, 프레임으로 정한 이미지만 보냅니다.",
+      "left": "프레임과 함께 보낼 수 없음"
     },
     "picker": {
       "label": "내 결과에서 레퍼런스 고르기",
@@ -342,9 +336,9 @@
       "noMatch": "맞는 결과가 없습니다: “{query}”",
       "kind": "{kind, select, image {이미지} other {영상 {seconds}초}}",
       "attached": "넣음",
-      "hidden": "{reason, select, frames {프레임에는 이미지만 넣을 수 있어 영상 결과는 뺐습니다} other {{model} 모델은 영상을 받지 않아 영상 결과는 뺐습니다}}"
+      "hidden": "{model} 모델은 영상을 받지 않아 영상 결과는 뺐습니다"
     },
-    "dropHere": "{kind, select, firstFrame {여기에 놓으면 프레임으로 들어갑니다} other {여기에 놓으면 레퍼런스로 들어갑니다}}",
+    "dropHere": "여기에 놓으면 레퍼런스로 들어갑니다",
     "uploading": "업로드 중…",
     "upload": {
       "blobForImages": "이미지 레퍼런스는 Blob 스토어가 연결돼야 올릴 수 있습니다",
@@ -353,16 +347,12 @@
       "badType": "{file}: {model} 모델은 이 형식을 받지 않습니다. {types} 파일로 올려 주세요",
       "tooBig": "{file}: {mb} MB를 넘습니다. 줄여서 다시 올려 주세요",
       "noLength": "{file}: 영상 길이를 읽지 못했습니다. 다른 mp4로 올려 주세요",
-      "framesTakeImages": "프레임에는 이미지만 넣을 수 있습니다",
-      "framesFull": "시작·끝 프레임이 모두 찼습니다. 바꾸려면 먼저 빼세요",
       "attached": "이미 넣은 결과입니다"
     },
     "note": {
-      "switched": "레퍼런스를 넣어 {mode, select, r2v {레퍼런스→영상으로} other {레퍼런스→이미지로}} 바꿨습니다.",
-      "removed": "{to, select, text {텍스트 방식은 프롬프트만 보냅니다. } other {}}레퍼런스 {count, plural, other {#개}}를 뺐습니다.",
-      "undo": "되돌리기",
-      "reused": "이 결과의 모델·방식·프롬프트·설정을 다시 넣었습니다.{refs, select, yes { 레퍼런스는 다시 넣으세요.} other {}}",
-      "spent": "이번 생성에만 쓰이는 레퍼런스 {count, plural, other {#개}}를 입력창에서 뺐습니다. 생성이 끝나면 지워지니 다시 쓰려면 다시 올리세요."
+      "unmarked": "{model} 모델은 시작·끝 프레임을 받지 않아 프레임 표시를 풀었습니다. 이미지는 레퍼런스로 보냅니다.",
+      "reused": "이 결과의 모델·프롬프트·설정을 다시 넣었습니다.{refs, select, frames { 프레임도 다시 넣었습니다.} missing { 첨부는 다시 넣으세요.} other {}}",
+      "spent": "이번 생성에만 쓰이는 첨부 {count, plural, other {#개}}를 입력창에서 뺐습니다. 생성이 끝나면 지워지니 다시 쓰려면 다시 올리세요."
     },
     "cost": {
       "label": "예상",
@@ -395,7 +385,7 @@
       "reuse": "다시",
       "reuseLabel": "이 결과의 설정으로 다시 만들기",
       "attach": "레퍼런스로",
-      "attachLabel": "이 결과를 입력창에 레퍼런스로 넣기 (프레임 방식이면 프레임으로)"
+      "attachLabel": "이 결과를 입력창에 레퍼런스로 넣기"
     },
     "older": {
       "load": "이전 결과 더 보기",
@@ -406,7 +396,7 @@
     "galleryCount": "갤러리 · 완료된 결과 {count, plural, other {#건}}",
     "empty": {
       "title": "첫 영상을 만들어 보세요",
-      "lead": "아래 입력창에 프롬프트를 적고 모델과 방식을 고른 뒤 생성하세요. 프롬프트와 결과가 대화처럼 여기에 쌓입니다."
+      "lead": "아래 입력창에 프롬프트를 적고 생성하세요. 이미지나 영상을 끌어다 놓으면 레퍼런스로 함께 씁니다. 프롬프트와 결과가 대화처럼 여기에 쌓입니다."
     },
     "loading": "최근 생성을 불러오는 중",
     "noModels": "사용할 수 있는 모델이 없습니다. 관리자에게 문의하세요."
@@ -464,7 +454,7 @@
       "note": "비용은 해상도·길이에 비례합니다. 연습은 480p, 납품은 720p 이상을 권합니다."
     },
     "h3": {
-      "note": "출력은 2K로 고정입니다. 어떤 방식이든 프롬프트가 필요합니다."
+      "note": "출력은 2K로 고정이고, 첨부가 있어도 프롬프트가 필요합니다."
     },
     "gptImage2": {
       "note": "레퍼런스가 있으면 OpenAI 편집으로 갑니다. 보통 수십 초에서 2분 걸리고, 비용은 OpenAI가 알려 준 토큰 사용량으로 확정됩니다."

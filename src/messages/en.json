@@ -187,7 +187,8 @@
     "openaiModeration": "OpenAI's safety policy blocked this image. Try a different prompt or references.",
     "openaiKeyRejected": "OpenAI {status}: the server's OpenAI key or region was rejected ({detail}). Contact an admin.",
     "noResult": "{kind, select, canceled {This generation was canceled.} image {There's no result image.} other {There's no result video.}}",
-    "startFrameRequired": "Image to video needs a start frame. Add an image to the start frame slot.",
+    "startFrameRequired": "Image to video needs a start frame. Select an attached image and set it as the start frame.",
+    "framesWithOthers": "Image to video sends the frames only. Remove the {count, plural, one {dimmed attachment} other {# dimmed attachments}}, or take the frame marks off to send everything as references.",
     "referenceRequired": "{mode, select, r2v {Reference to video needs at least one image or video reference.} other {Reference to image needs at least one image reference.}}"
   },
   "generation": {
@@ -271,22 +272,12 @@
     "stream": "Generations",
     "composer": "Generation input",
     "prompt": "Prompt",
-    "promptPlaceholder": "Describe the scene, camera movement and mood. Type @ to add a result",
-    "modelMenu": "Model and mode",
+    "promptPlaceholder": "Describe the scene, camera movement and mood. Drop files here, or type @ to add a result",
+    "modelMenu": "Model",
     "outputs": "Output",
     "output": "{output, select, video {Video} other {Image}}",
-    "modes": "Mode",
     "model": "Model",
-    "kind": {
-      "text": "Text",
-      "firstFrame": "Frames",
-      "reference": "References"
-    },
-    "kindHint": {
-      "text": "Generates from the prompt alone",
-      "firstFrame": "{end, select, yes {Start frame required · end frame optional} other {Start frame required}}",
-      "reference": "Up to {images, plural, one {# image} other {# images}}{videos, plural, =0 {} one { · # video} other { · # videos}}"
-    },
+    "takes": "Up to {images, plural, one {# image} other {# images}}{videos, plural, =0 {} one { · # video} other { · # videos}}{frames, select, both { · start and end frames} start { · start frame} other {}}",
     "unavailable": "Unavailable",
     "rateHint": "{rate} ({basis})",
     "rateUnset": "No rate set",
@@ -314,22 +305,25 @@
       "uploadImages": "Upload images",
       "uploadVideos": "Upload videos",
       "full": "{kind, select, image {All {max, plural, one {# image} other {# images}} added} other {All {max, plural, one {# video} other {# videos}} added}}",
-      "menuNote": "You can also drop files onto the input. They're numbered in the order you add them and sent to the model in that order. Type @ in the prompt to pick one of your results.",
-      "dropHint": "{videos, select, yes {Drop images or videos here, or add them with the + button} other {Drop images here, or add them with the + button}}",
+      "menuNote": "You can also drop or paste files into the input. They're numbered in the order you add them and sent to the model in that order.{frames, select, yes { Select an image to set it as the start or end frame.} other {}} Type @ in the prompt to pick one of your results.",
       "imageCount": "Images {count}/{max}",
       "videoCount": "Videos {count}/{max}",
-      "attached": "Attached references",
-      "removeLabel": "Remove {kind, select, image {image} other {video}} reference {tag} {name}",
+      "attached": "Attachments",
+      "removeLabel": "Remove {kind, select, image {image} other {video}} {tag} {name}",
       "seconds": "{seconds}s",
       "fileHint": "{types} · up to {mb} MB"
     },
     "frames": {
-      "label": "Frames",
-      "slot": "{slot, select, start {Start frame} other {End frame}}",
-      "required": "Required",
-      "optional": "Optional",
-      "add": "{slot, select, start {Add a start frame} other {Add an end frame}}",
-      "remove": "Remove the {slot, select, start {start frame} other {end frame}} {name}"
+      "hint": "Select an image to set it as the start or end frame",
+      "open": "Image {tag} {name}: {role, select, start {start frame} end {end frame} both {start and end frame} other {reference}}. Set as frame",
+      "title": "Image {tag} · Set as frame",
+      "role": "{role, select, start {Start frame} other {End frame}}",
+      "badge": "{role, select, start {Start} end {End} other {Start · End}}",
+      "does": "{role, select, start {The video starts on this image} other {The video ends on this image}}",
+      "moves": "Image {tag} has it now. Choose to move it to this image",
+      "off": "Select again to take it off",
+      "note": "With a frame set, the generation becomes Image to video and sends only the frame images.",
+      "left": "Can't be sent with frames"
     },
     "picker": {
       "label": "Pick a reference from your results",
@@ -342,9 +336,9 @@
       "noMatch": "No results match “{query}”",
       "kind": "{kind, select, image {Image} other {Video, {seconds}s}}",
       "attached": "Added",
-      "hidden": "{reason, select, frames {Frames take images only, so video results are hidden} other {{model} doesn't take videos, so video results are hidden}}"
+      "hidden": "{model} doesn't take videos, so video results are hidden"
     },
-    "dropHere": "{kind, select, firstFrame {Drop to use as frames} other {Drop to add as references}}",
+    "dropHere": "Drop to add as references",
     "uploading": "Uploading…",
     "upload": {
       "blobForImages": "Uploading image references needs a connected Blob store",
@@ -353,16 +347,12 @@
       "badType": "{file}: {model} doesn't take this format. Upload a {types} file",
       "tooBig": "{file} is over {mb} MB. Make it smaller and upload it again",
       "noLength": "{file}: couldn't read the video's length. Upload a different MP4",
-      "framesTakeImages": "Frames take images only",
-      "framesFull": "Both frames are filled. Remove one to replace it",
       "attached": "That result is already added"
     },
     "note": {
-      "switched": "Switched to {mode, select, r2v {Reference to video} other {Reference to image}} for the reference.",
-      "removed": "{to, select, text {Text mode sends the prompt only. } other {}}Removed {count, plural, one {# reference} other {# references}}.",
-      "undo": "Undo",
-      "reused": "Filled in this result's model, mode, prompt and settings.{refs, select, yes { Add the references again.} other {}}",
-      "spent": "Removed {count, plural, one {# reference} other {# references}} kept only for this generation. {count, plural, one {It's} other {They're}} deleted when it finishes, so upload {count, plural, one {it} other {them}} again to reuse."
+      "unmarked": "{model} doesn't take start or end frames, so the frame marks were taken off. The images will go as references.",
+      "reused": "Filled in this result's model, prompt and settings.{refs, select, frames { Its frames are back too.} missing { Add the attachments again.} other {}}",
+      "spent": "Removed {count, plural, one {# attachment} other {# attachments}} kept only for this generation. {count, plural, one {It's} other {They're}} deleted when it finishes, so upload {count, plural, one {it} other {them}} again to reuse."
     },
     "cost": {
       "label": "Est.",
@@ -395,7 +385,7 @@
       "reuse": "Reuse",
       "reuseLabel": "Generate again with this result's settings",
       "attach": "Use as reference",
-      "attachLabel": "Add this result to the box below as a reference, or as a frame in Frames mode"
+      "attachLabel": "Add this result to the box below as a reference"
     },
     "older": {
       "load": "Show earlier results",
@@ -406,7 +396,7 @@
     "galleryCount": "Gallery · {count, plural, one {# finished result} other {# finished results}}",
     "empty": {
       "title": "Make your first video",
-      "lead": "Write a prompt in the box below, pick a model and a mode, and generate. Prompts and results stack up here like a chat."
+      "lead": "Write a prompt in the box below and generate. Drop images or videos on it to use them as references. Prompts and results stack up here like a chat."
     },
     "loading": "Loading recent generations",
     "noModels": "No models are available. Contact an admin."
@@ -464,7 +454,7 @@
       "note": "Cost scales with resolution and duration. Use 480p for drafts and 720p or higher for delivery."
     },
     "h3": {
-      "note": "Output is fixed at 2K. Every mode needs a prompt."
+      "note": "Output is fixed at 2K, and a prompt is required even with attachments."
     },
     "gptImage2": {
       "note": "With references, the request goes to OpenAI editing. It usually takes about 30 seconds to 2 minutes, and the cost is set by the token usage OpenAI reports."

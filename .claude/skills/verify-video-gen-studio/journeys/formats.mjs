@@ -67,7 +67,6 @@ export default async function formats({ page, ev, base, env, webDir, local, cred
     // GPT Image 2 has a rate before any admin sets one, so its estimate shows in dollars.
     const h = await composerHandles(ev, page);
     await h.pickModel("openai/gpt-image-2", "image");
-    await h.pickMode("text", "t2i");
     await h.prompt.fill("i18n2 cost bar");
     const cost = await h.cost();
     if (!/^\$\d+\.\d{4}$/.test(cost)) ev.fail(`the composer's estimate reads ${cost}`);

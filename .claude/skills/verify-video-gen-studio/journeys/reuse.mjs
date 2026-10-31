@@ -121,7 +121,9 @@ export default async function reuse({ page, ev, base, env, webDir, local }) {
       if (i === 50) ev.fail(`two results should be attached, found ${await h.refs.count()}`);
       await a.waitForTimeout(100);
     }
-    if ((await h.chipText()) !== (await h.modeLabel(SEEDANCE, "r2v"))) ev.fail(`attaching in text mode should switch to references, chip reads ${await h.chipText()}`);
+    if ((await h.mode()) !== "r2v") ev.fail(`two attached results should go as reference to video, the composer says ${await h.mode()}`);
+    // A result's attachment is named by its prompt, which is short enough here to stay whole.
+    if ((await h.frameOf("1", A)) !== "none") ev.fail(`a result attached by ${await ta("playground.actions.attach")} should land as a reference with no frame mark`);
     if (!(await box.getByText(await ta("playground.fact.inputVideo", { seconds: "5.0" })).isVisible())) ev.fail("the estimate should count the reused video's stored 5 s");
     await review("attached", a);
     await (await attachButton(imgA.id)).click();
@@ -151,14 +153,16 @@ export default async function reuse({ page, ev, base, env, webDir, local }) {
     await a.waitForFunction((el) => el.complete && el.naturalWidth > 0, await thumb.elementHandle(), { timeout: 10_000 }).catch(() => ev.fail("the finished turn's reference thumbnail should still load"));
     ev.note(`cleanup: the reference→video row ended ${r2vRow.status}; the store deleted ${JSON.stringify(deleted)}, both results still serve 200`);
 
-    await h.pickMode("text", "t2v");
-    await h.pickMode("firstFrame", "i2v");
+    for (let i = 0; (await h.refs.count()) > 0; i++) {
+      if (i === 10) ev.fail("the attachments would not all come off");
+      await h.refs.first().getByRole("button").last().click();
+    }
     await prompt.fill("");
     await typeMention("@");
-    const hidden = await ta("playground.picker.hidden", { reason: "frames", model: "Seedance 2.0" });
-    if (!(await panel.getByText(hidden).isVisible())) ev.fail("frames should say video results are hidden");
+    if (await panel.getByText(await ta("playground.picker.hidden", { model: "Seedance 2.0" })).count()) ev.fail("Seedance takes videos, so the picker should hide none");
     const offered = await optionNames();
-    if (offered.some((s) => s.includes(V)) || !offered[0]?.includes(B) || !offered[1]?.includes(A)) ev.fail(`frames should offer this thread's images newest first and no video, offered ${JSON.stringify(offered)}`);
+    const at = (text) => offered.findIndex((s) => s.includes(text));
+    if (at(V) < 0 || !(at(B) >= 0 && at(B) < at(A) && at(A) < at(V))) ev.fail(`the picker should offer this thread's results newest first, videos included, offered ${JSON.stringify(offered)}`);
     const groupName = await ta("playground.picker.thread");
     if (!(await listbox.getByRole("group", { name: groupName }).isVisible())) ev.fail(`this thread's results should come under ${groupName}`);
     await review("picker", a);
@@ -173,15 +177,22 @@ export default async function reuse({ page, ev, base, env, webDir, local }) {
     if ((await prompt.inputValue()) !== "") ev.fail(`the picked @ word should leave the prompt, it reads "${await prompt.inputValue()}"`);
     if (!(await prompt.evaluate((el) => el === document.activeElement))) ev.fail("a pointer pick should leave focus in the prompt");
     await typeMention(" @");
-    if (!(await listbox.getByRole("option").first().getByText(await ta("playground.picker.attached")).isVisible())) ev.fail("the picked image should be marked as added");
-    await a.keyboard.press("ArrowDown");
-    const active = await prompt.getAttribute("aria-activedescendant");
-    if (!active || !(await a.locator(`[id="${active}"]`).innerText()).includes(A)) ev.fail(`ArrowDown should make image A the active option, active is ${active}`);
+    if (!(await listbox.getByRole("option").filter({ hasText: B }).getByText(await ta("playground.picker.attached")).isVisible())) ev.fail("the picked image should be marked as added");
+    const activeText = async () => {
+      const active = await prompt.getAttribute("aria-activedescendant");
+      return active ? a.locator(`[id="${active}"]`).innerText() : "";
+    };
+    for (let i = 0; !(await activeText()).includes(A); i++) {
+      if (i === 6) ev.fail(`ArrowDown never made image A the active option, active reads "${await activeText()}"`);
+      await a.keyboard.press("ArrowDown");
+    }
     await a.keyboard.press("Enter");
     await listbox.waitFor({ state: "detached" });
-    for (const [slot, name] of [["start", B], ["end", A]]) {
-      if (!(await box.getByRole("button", { name: await ta("playground.frames.remove", { slot, name }), exact: true }).isVisible())) ev.fail(`the ${slot} frame should hold ${name}`);
-    }
+    for (const [tag, name] of [["1", B], ["2", A]]) if ((await h.frameOf(tag, name)) !== "none") ev.fail(`a result picked with @ should land as a reference: image ${tag} holds ${await h.frameOf(tag, name)}`);
+    if ((await h.mode()) !== "r2v") ev.fail(`two picked images should go as reference to video, the composer says ${await h.mode()}`);
+    await h.markFrame("1", B, "start");
+    await h.markFrame("2", A, "end");
+    if ((await h.mode()) !== "i2v") ev.fail(`B marked 시작 and A marked 끝 should go as image to video, the composer says ${await h.mode()}`);
     await prompt.fill(`[reuse] ${stamp} 등대 사이를 지나가는 카메라`);
     await review("frames", a);
     const i2v = (await submit("frames")).item;
@@ -190,7 +201,15 @@ export default async function reuse({ page, ev, base, env, webDir, local }) {
     ev.note(`i2v by @: image_url ${sentI2v.body.image_url}, end_image_url ${sentI2v.body.end_image_url}`);
 
     await h.pickModel(GPT, "image");
-    if ((await h.chipText()) !== (await h.modeLabel(GPT, "r2i"))) ev.fail(`frames should become GPT Image 2 references, chip reads ${await h.chipText()}`);
+    if ((await h.mode()) !== "r2i") ev.fail(`the frames should become GPT Image 2 references, the composer says ${await h.mode()}`);
+    if (!(await box.getByText(await ta("playground.note.unmarked", { model: "GPT Image 2" })).isVisible())) ev.fail("taking the frame marks off on GPT Image 2 should be said (playground.note.unmarked)");
+    await prompt.fill("");
+    await typeMention("@");
+    if (!(await panel.getByText(await ta("playground.picker.hidden", { model: "GPT Image 2" })).isVisible())) ev.fail("GPT Image 2 takes no videos, so the picker should say it hid them");
+    if ((await optionNames()).some((s) => s.includes(V))) ev.fail("GPT Image 2's picker should not offer the video result");
+    await review("picker-gpt", a);
+    await a.keyboard.press("Escape");
+    await listbox.waitFor({ state: "detached" });
     const editPrompt = `[reuse] ${stamp} 두 등대를 한 장면으로`;
     await prompt.fill(editPrompt);
     await submit("reference→image");
