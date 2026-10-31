@@ -6,6 +6,7 @@ import { requireUser, errorResponse, HttpError } from "@/lib/auth";
 import { FAMILIES, isFamilyId, MODES, planGeneration, type Draft, type Mode } from "@/lib/catalog";
 import { isGenerationId, publicGeneration, settle, submitGeneration, unavailableFor } from "@/lib/generations";
 import { loadModelSetting } from "@/lib/model-settings";
+import { checkRefs } from "@/lib/references";
 import { claimThread, threadFeed } from "@/lib/thread-store";
 import { EARLIER, parseThreadRef, type ThreadRef } from "@/lib/threads";
 import { scopeCondition, settleScope } from "@/lib/scope";
@@ -87,7 +88,7 @@ type RefKind = "image" | "video";
 
 function publicUrl(v: unknown, kind: RefKind): string {
   const u = String(v ?? "");
-  if (!/^https?:\/\//.test(u)) throw new HttpError(400, "refNotPublicUrl", { kind });
+  if (!/^https?:\/\/[^\u0000-\u001f\u007f]*$/.test(u)) throw new HttpError(400, "refNotPublicUrl", { kind });
   return u;
 }
 
@@ -123,7 +124,9 @@ function parseDraft(raw: unknown): Draft {
  * videos: [{ url, seconds }], endImage } and `thread`, the id of the thread it goes into: an existing one, a new
  * uuid the browser chose (the first generation creates that thread), or `earlier`, which is also where a body with no
  * thread goes. 201 when Higgsfield accepted it, 202 when it waits as 제출 대기 and submits itself again, 502 when
- * Higgsfield refused it, 400 when the plan is not ready, 404 when the thread is not the caller's to add to. Every answer
+ * Higgsfield refused it, 400 when the plan is not ready or a reference is refused (lib/references.ts: not the caller's
+ * own upload or result, a result whose media is gone, or a result sent as another kind or length), 404 when the thread
+ * is not the caller's to add to. Every answer
  * after insert carries the row as `item` and its thread as `thread`; the row's own reason says why a refused one
  * failed, and estimatedCostUsd is the row's cost, decided now.
  */
@@ -141,6 +144,7 @@ export async function POST(req: Request) {
     // Refuse before the claim, so a submit that cannot run never creates and titles a thread.
     const blocked = unavailableFor(plan.family, user);
     if (blocked) throw HttpError.of(blocked.status, blocked.error);
+    await checkRefs(user.id, draft);
     const { threadId, thread } = await claimThread(user.id, ref, plan.prompt);
     const row = await submitGeneration(user, plan, after, threadId);
     return Response.json(

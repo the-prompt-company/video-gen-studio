@@ -20,6 +20,9 @@ export function isLive(s: GenerationStatus): s is LiveStatus {
 
 export const LIVE_STATUSES: LiveStatus[] = GENERATION_STATUSES.filter(isLive);
 
+/** The operator's call: a pending row older than this fails instead of starting a paid generation nobody expects now. */
+export const SUBMIT_DEADLINE_MIN = 30;
+
 /** Statuses a row may hold for a write that moves it to `to`. */
 export function predecessorsOf(to: GenerationStatus): GenerationStatus[] {
   return GENERATION_STATUSES.filter((s) => RANK[s] < RANK[to]);

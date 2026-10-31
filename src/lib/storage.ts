@@ -313,6 +313,36 @@ export async function deleteRefs(urls: string[], ownerId: number): Promise<strin
   return doomed;
 }
 
+export type StoredObject = { kind: "ref"; ownerId: number } | { kind: "result"; generationId: string; key: ObjectKey } | { kind: "other" };
+
+const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+const RESULT_KEY = new RegExp(`^(?:${VIDEO_PREFIX}(${UUID})\\.mp4|${IMAGE_PREFIX}(${UUID})\\.(?:${Object.values(IMAGE_EXT).join("|")}))$`);
+
+/**
+ * What `url` names in this store, or null for a URL outside it or with storage off. The store's host counts with any
+ * scheme, port or trailing dot, so a respelled URL is not mistaken for one outside. Any key that is not exactly a ref
+ * upload's or a result's is `other`.
+ */
+export function storedObjectOf(url: string): StoredObject | null {
+  const c = config();
+  if (!c) return null;
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return null;
+  }
+  const base = new URL(`${c.publicBase}/`);
+  const host = (h: string) => h.replace(/\.$/, "");
+  if (!/^https?:$/.test(u.protocol) || host(u.hostname) !== host(base.hostname) || !u.pathname.startsWith(base.pathname)) return null;
+  const key = u.pathname.slice(base.pathname.length);
+  const owner = /^refs\/([1-9]\d*)\//.exec(key)?.[1];
+  if (owner && isRefPathname(key, Number(owner))) return { kind: "ref", ownerId: Number(owner) };
+  const result = RESULT_KEY.exec(key);
+  if (result) return { kind: "result", generationId: result[1] ?? result[2], key: key as ObjectKey };
+  return { kind: "other" };
+}
+
 /** A random file name newAvatarKey generates. Nothing else under avatars/<id>/ is ever deleted. */
 const AVATAR_NAME = /^[0-9a-f]{32}\.(?:webp|jpg|png)$/;
 

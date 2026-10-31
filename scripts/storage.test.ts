@@ -17,7 +17,7 @@ import type { AddressInfo } from "node:net";
 import { createInterface } from "node:readline";
 import { put } from "@vercel/blob";
 import { configFromEnv, createFakeHiggsfield } from "./fake-higgsfield";
-import { avatarUrl, byteLimit, copyVideo, deleteAvatar, deleteRefs, isRefPathname, newAvatarKey, putAvatar, putVideo, refPrefix, storageEnabled, videoKey, objectUrls } from "../src/lib/storage";
+import { avatarUrl, byteLimit, copyVideo, deleteAvatar, deleteRefs, imageKey, isRefPathname, newAvatarKey, putAvatar, putImage, putVideo, refPrefix, storageEnabled, storedObjectOf, videoKey, objectUrls } from "../src/lib/storage";
 import { refUploadName } from "../src/lib/ref-name";
 
 const MB = 1024 * 1024;
@@ -314,6 +314,43 @@ test("deleteRefs deletes the row owner's refs/<id>/ upload and never another mem
   } finally {
     fake.close();
   }
+});
+
+test("a row that reused its owner's results keeps them through ref cleanup: only its upload is deleted", async () => {
+  const fake = await blobFake();
+  try {
+    const clip = videoKey(ID);
+    const still = imageKey(OTHER, "png");
+    await putVideo(clip, streamOf("video bytes"), { contentType: "video/mp4" });
+    await putImage(still, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), "png", { abortSignal: AbortSignal.timeout(10_000) });
+    const upload = await put(`refs/${OWNER}/1-start.jpg`, Buffer.from("ref"), { access: "public", addRandomSuffix: true, token: TOKEN });
+    const results = [objectUrls(clip)?.url ?? "", objectUrls(still)?.url ?? ""];
+    const deleted = await deleteRefs([upload.url, ...results], OWNER);
+    assert.deepEqual(deleted, [upload.url]);
+    assert.deepEqual((await fake.stats()).deleted, [upload.pathname], "del() was never asked for a result");
+    for (const url of results) assert.equal((await fetch(url)).status, 200, `${url} is still served`);
+  } finally {
+    fake.close();
+  }
+});
+
+test("storedObjectOf names a ref upload with its owner, a stored result with its row id, and anything else as other", () => {
+  pointBlobAt("http://127.0.0.1:9");
+  const base = "http://127.0.0.1:9/blob";
+  assert.deepEqual(storedObjectOf(`${base}/refs/${OWNER}/1-clip-AbC123.mp4`), { kind: "ref", ownerId: OWNER });
+  assert.deepEqual(storedObjectOf(`${base}/videos/${ID}.mp4`), { kind: "result", generationId: ID, key: `videos/${ID}.mp4` });
+  assert.deepEqual(storedObjectOf(`${base}/images/${ID}.webp`), { kind: "result", generationId: ID, key: `images/${ID}.webp` });
+  assert.deepEqual(storedObjectOf(`${base}/refs/${OWNER}/%2e%2e/${MEMBER}/1-a.jpg`), { kind: "ref", ownerId: MEMBER }, "dot segments resolve to the object the store serves");
+  for (const pathname of [`refs/${OWNER}/%252e%252e/${MEMBER}/1-a.jpg`, `refs/${OWNER}/x/1-a.jpg`, "refs/0/1-a.jpg", `videos/${ID}.webm`, `images/${ID}.gif`, `videos/${ID.toUpperCase()}.mp4`, `avatars/${OWNER}/a.webp`, ""]) {
+    assert.deepEqual(storedObjectOf(`${base}/${pathname}`), { kind: "other" }, pathname);
+  }
+  for (const respelled of [`https://127.0.0.1:9/blob/videos/${ID}.mp4`, `http://127.0.0.1:8080/blob/videos/${ID}.mp4`, `http://127.0.0.1./blob/videos/${ID}.mp4`, `${base}/videos/${ID}.mp4?x=1#y`]) {
+    assert.deepEqual(storedObjectOf(respelled), { kind: "result", generationId: ID, key: `videos/${ID}.mp4` }, `${respelled} is still the store`);
+  }
+  assert.equal(storedObjectOf(`https://cdn.higgsfield.ai/videos/${ID}.mp4`), null, "a URL outside the store");
+  assert.equal(storedObjectOf("not a url"), null);
+  delete process.env.BLOB_READ_WRITE_TOKEN;
+  assert.equal(storedObjectOf(`${base}/videos/${ID}.mp4`), null, "with storage off nothing is in the store");
 });
 
 test("isRefPathname admits one plain file name under the uploader's refs/<id>/ and nothing else", () => {
