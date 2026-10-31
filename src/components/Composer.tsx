@@ -233,7 +233,7 @@ export function Composer({ ref, offers, largeUploadPrefix, onSubmit }: { ref?: R
   const plan = planGeneration(draft, offer.rateUsd);
   const upload = isUploading(state);
   const canGenerate = !offer.unavailable && plan.ready && !submitting && !upload;
-  const blocker = offer.unavailable?.error ?? (plan.ready ? null : plan.blocker);
+  const blockers = [offer.unavailable?.error, plan.ready ? null : plan.blocker].filter((b) => b != null);
   const priced = offer.rateUsd > 0;
   const rate = (o: Offer) => tPrices("rate", { usd: usd(format, o.rateUsd), unit: FAMILIES[o.family].rate.unit });
   const facts = plan.facts.map((f: Fact) => {
@@ -490,12 +490,12 @@ export function Composer({ ref, offers, largeUploadPrefix, onSubmit }: { ref?: R
           </p>
         )}
         {error && <ErrorText>{errorText(error)}</ErrorText>}
-        {blocker && (
-          <p role="status" className="flex items-start gap-2 px-1 text-xs leading-relaxed text-foreground-2">
+        {blockers.map((b) => (
+          <p key={b.code} role="status" className="flex items-start gap-2 px-1 text-xs leading-relaxed text-foreground-2">
             <span aria-hidden className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" />
-            {errorText(blocker)}
+            {errorText(b)}
           </p>
-        )}
+        ))}
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <div className="-mx-1 flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto px-1 py-0.5 [scrollbar-width:none] sm:overflow-visible">
