@@ -140,7 +140,7 @@
     "noVideoRefs": "{model} 모델은 영상 레퍼런스를 받지 않습니다. 영상을 빼 주세요",
     "tooManyVideos": "{model}에는 영상을 최대 {max, plural, other {#개}}까지 넣을 수 있습니다",
     "videoLengthUnknown": "영상 길이를 읽지 못한 레퍼런스가 있습니다. 그 영상을 빼고 다시 올려 주세요",
-    "modeMismatch": "화면의 생성 방식({mode, select, t2v {텍스트→영상} i2v {이미지→영상} r2v {레퍼런스→영상} t2i {텍스트→이미지} other {레퍼런스→이미지}})이 첨부와 맞지 않습니다. 페이지를 새로고침하세요",
+    "modeMismatch": "생성 방식({mode, select, t2v {텍스트→영상} i2v {이미지→영상} r2v {레퍼런스→영상} t2i {텍스트→이미지} other {레퍼런스→이미지}})이 모델이나 첨부와 맞지 않습니다. 페이지를 새로고침하세요",
     "promptRequired": "{model} {mode, select, t2v {텍스트→영상} i2v {이미지→영상} r2v {레퍼런스→영상} t2i {텍스트→이미지} other {레퍼런스→이미지}}에는 프롬프트가 필요합니다",
     "promptTooLong": "프롬프트는 {max, plural, other {#자}}까지입니다",
     "transparentNeedsAlpha": "투명 배경은 PNG나 WebP로만 저장됩니다. 파일 형식을 바꾸세요",
@@ -181,7 +181,9 @@
     "openaiQuota": "OpenAI 사용 한도나 크레딧이 바닥났습니다. 관리자에게 문의하세요",
     "openaiModeration": "OpenAI 안전 정책에 걸려 이미지를 만들지 않았습니다. 프롬프트나 레퍼런스를 바꿔 보세요",
     "openaiKeyRejected": "OpenAI {status}: 서버의 OpenAI 키나 지역이 거부됐습니다({detail}). 관리자에게 문의하세요",
-    "noResult": "{kind, select, canceled {취소된 생성입니다.} image {결과 이미지가 없습니다.} other {결과 영상이 없습니다.}}"
+    "noResult": "{kind, select, canceled {취소된 생성입니다.} image {결과 이미지가 없습니다.} other {결과 영상이 없습니다.}}",
+    "startFrameRequired": "이미지→영상에는 시작 프레임 이미지가 필요합니다. 시작 프레임 칸에 이미지를 넣으세요",
+    "referenceRequired": "{mode, select, r2v {레퍼런스→영상에는 이미지나 영상 레퍼런스가 하나 이상 필요합니다} other {레퍼런스→이미지에는 이미지 레퍼런스가 한 장 이상 필요합니다}}"
   },
   "generation": {
     "noPrompt": "(프롬프트 없음)",

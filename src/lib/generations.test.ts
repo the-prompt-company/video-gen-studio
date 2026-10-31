@@ -47,7 +47,7 @@ test("video models keep their rule: the member's own Higgsfield key, whatever th
 
 test("submitting an image without OPENAI_API_KEY answers 503 before anything is written", () =>
   withEnv({ BLOB_READ_WRITE_TOKEN: BLOB }, async () => {
-    const plan = planGeneration({ family: "openai/gpt-image-2", mode: "t2i", prompt: "등대", params: {}, images: [], videos: [], startFromImage: false }, 30);
+    const plan = planGeneration({ family: "openai/gpt-image-2", mode: "t2i", prompt: "등대", params: {}, images: [], videos: [], endImage: null }, 30);
     assert.ok(plan.ready);
     let scheduled = 0;
     await assert.rejects(

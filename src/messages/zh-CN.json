@@ -140,7 +140,7 @@
     "noVideoRefs": "{model} 不支持参考视频。请移除视频。",
     "tooManyVideos": "{model} 最多可添加 {max, plural, other {# 个视频}}。",
     "videoLengthUnknown": "有参考视频无法读取时长。请移除该视频后重新上传。",
-    "modeMismatch": "页面上的生成方式（{mode, select, t2v {文生视频} i2v {图生视频} r2v {参考生视频} t2i {文生图} other {参考生图}}）与附件不符。请刷新页面。",
+    "modeMismatch": "生成方式（{mode, select, t2v {文生视频} i2v {图生视频} r2v {参考生视频} t2i {文生图} other {参考生图}}）与模型或附件不符。请刷新页面。",
     "promptRequired": "{model} {mode, select, t2v {文生视频} i2v {图生视频} r2v {参考生视频} t2i {文生图} other {参考生图}}需要提示词。",
     "promptTooLong": "提示词最多 {max, plural, other {# 个字符}}。",
     "transparentNeedsAlpha": "透明背景只能保存为 PNG 或 WebP。请更改文件格式。",
@@ -181,7 +181,9 @@
     "openaiQuota": "OpenAI 的用量额度或余额已用完。请联系管理员。",
     "openaiModeration": "因触发 OpenAI 安全策略，未生成图片。请尝试更换提示词或参考素材。",
     "openaiKeyRejected": "OpenAI {status}：服务器的 OpenAI 密钥或所在地区被拒绝（{detail}）。请联系管理员。",
-    "noResult": "{kind, select, canceled {该生成任务已取消。} image {没有结果图片。} other {没有结果视频。}}"
+    "noResult": "{kind, select, canceled {该生成任务已取消。} image {没有结果图片。} other {没有结果视频。}}",
+    "startFrameRequired": "图生视频需要首帧图片。请在首帧位置添加图片。",
+    "referenceRequired": "{mode, select, r2v {参考生视频需要至少一个参考图或参考视频。} other {参考生图需要至少一张参考图。}}"
   },
   "generation": {
     "noPrompt": "（无提示词）",

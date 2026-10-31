@@ -110,13 +110,13 @@ function parseDraft(raw: unknown): Draft {
       const o = (v && typeof v === "object" ? v : {}) as Record<string, unknown>;
       return { url: publicUrl(o.url, "video"), seconds: Number(o.seconds) };
     }),
-    startFromImage: b.startFromImage === true,
+    endImage: b.endImage == null ? null : publicUrl(b.endImage, "image"),
   };
 }
 
 /**
  * POST /api/generations — submit one generation. The body is a Draft: { family, mode, prompt, params, images,
- * videos: [{ url, seconds }], startFromImage } and `thread`, the id of the thread it goes into: an existing one, a new
+ * videos: [{ url, seconds }], endImage } and `thread`, the id of the thread it goes into: an existing one, a new
  * uuid the browser chose (the first generation creates that thread), or `earlier`, which is also where a body with no
  * thread goes. 201 when Higgsfield accepted it, 202 when it waits as 제출 대기 and submits itself again, 502 when
  * Higgsfield refused it, 400 when the plan is not ready, 404 when the thread is not the caller's to add to. Every answer

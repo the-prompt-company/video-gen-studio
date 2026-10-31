@@ -19,7 +19,6 @@ import {
   modesOf,
   planGeneration,
   resendRequest,
-  routeMode,
   type Draft,
   type FamilyId,
   type Mode,
@@ -37,7 +36,7 @@ const GPT: FamilyId = "openai/gpt-image-2";
 const VIDEO_FAMILIES = FAMILY_IDS.filter((f) => FAMILIES[f].provider === "higgsfield");
 
 function draft(over: Partial<Draft> = {}): Draft {
-  return { family: SEEDANCE, mode: "t2v", prompt: "비 오는 밤거리", params: {}, images: [], videos: [], startFromImage: false, ...over };
+  return { family: SEEDANCE, mode: "t2v", prompt: "비 오는 밤거리", params: {}, images: [], videos: [], endImage: null, ...over };
 }
 
 function ready(plan: Plan) {
@@ -50,18 +49,46 @@ function blocked(plan: Plan): AppError | undefined {
   return plan.ready ? undefined : plan.blocker;
 }
 
-test("routeMode: nothing attached is text, one image the member starts from is image, anything else is reference", () => {
-  const cases: [number, number, boolean, Mode][] = [
-    [0, 0, false, "t2v"],
-    [0, 0, true, "t2v"],
-    [1, 0, false, "r2v"],
-    [1, 0, true, "i2v"],
-    [2, 0, true, "r2v"],
-    [1, 1, true, "r2v"],
-    [0, 1, true, "r2v"],
-    [0, 3, false, "r2v"],
+test("the member's mode decides the endpoint; the attachments only have to fit it", () => {
+  const fits: [Mode, Partial<Draft>][] = [
+    ["t2v", {}],
+    ["i2v", { images: [IMG] }],
+    ["i2v", { images: [IMG], endImage: IMG2 }],
+    ["r2v", { images: [IMG] }],
+    ["r2v", { videos: [{ url: VID, seconds: 3 }] }],
+    ["r2v", { images: [IMG, IMG2], videos: [{ url: VID, seconds: 3 }] }],
   ];
-  for (const [images, videos, start, mode] of cases) assert.equal(routeMode(SEEDANCE, images, videos, start), mode, `${images} images, ${videos} videos, start ${start}`);
+  for (const [mode, over] of fits) assert.equal(ready(planGeneration(draft({ mode, ...over }), 0)).mode, mode, JSON.stringify(over));
+  const misfits: [Mode, Partial<Draft>][] = [
+    ["t2v", { images: [IMG] }],
+    ["t2v", { endImage: IMG }],
+    ["i2v", { images: [IMG, IMG2] }],
+    ["i2v", { images: [IMG], videos: [{ url: VID, seconds: 3 }] }],
+    ["r2v", { images: [IMG], endImage: IMG2 }],
+  ];
+  for (const [mode, over] of misfits) assert.deepEqual(blocked(planGeneration(draft({ mode, ...over }), 0)), { code: "modeMismatch", params: { mode } }, JSON.stringify(over));
+});
+
+test("a mode that needs attachments says which, until the member adds them", () => {
+  assert.deepEqual(blocked(planGeneration(draft({ mode: "i2v", endImage: IMG2 }), 0)), { code: "startFrameRequired" });
+  assert.deepEqual(blocked(planGeneration(draft({ mode: "r2v" }), 0)), { code: "referenceRequired", params: { mode: "r2v" } });
+  assert.deepEqual(blocked(planGeneration(draft({ family: GPT, mode: "r2i" }), 0)), { code: "referenceRequired", params: { mode: "r2i" } });
+});
+
+test("an end frame goes to image-to-video as end_image_url after image_url, and the row keeps both frames in order", () => {
+  for (const family of VIDEO_FAMILIES) {
+    assert.equal(FAMILIES[family].modes.endFrame, true, `${family} takes end_image_url`);
+    const plan = ready(planGeneration(draft({ family, mode: "i2v", images: [IMG], endImage: IMG2 }), 0));
+    const keys = Object.keys(plan.body);
+    assert.deepEqual([plan.body.image_url, plan.body.end_image_url], [IMG, IMG2]);
+    assert.equal(keys.indexOf("end_image_url"), keys.indexOf("image_url") + 1);
+    assert.deepEqual(plan.imageUrls, [IMG, IMG2]);
+    assert.equal(invalidBody(ENDPOINTS[plan.endpoint], plan.body), null, `the fake's ${plan.endpoint} schema takes it`);
+    const single = ready(planGeneration(draft({ family, mode: "i2v", images: [IMG] }), 0));
+    assert.equal("end_image_url" in single.body, false);
+    assert.deepEqual(single.imageUrls, [IMG]);
+  }
+  assert.equal(FAMILIES[GPT].modes.endFrame, false, "an image model has no first-frame mode, so no end frame");
 });
 
 test("each model reaches its three Higgsfield endpoints by what is attached", () => {
@@ -77,7 +104,7 @@ test("each model reaches its three Higgsfield endpoints by what is attached", ()
   assert.deepEqual(VIDEO_FAMILIES, [SEEDANCE, H3]);
   const attach: Partial<Record<Mode, Partial<Draft>>> = {
     t2v: {},
-    i2v: { mode: "i2v", images: [IMG], startFromImage: true },
+    i2v: { mode: "i2v", images: [IMG] },
     r2v: { mode: "r2v", images: [IMG, IMG2], videos: [{ url: VID, seconds: 3 }] },
   };
   for (const family of VIDEO_FAMILIES) {
@@ -97,21 +124,8 @@ test("a prompt alone is enough: no reference is ever required", () => {
   }
 });
 
-test("the default for one image is reference; the first-frame choice is offered only for exactly one image and no video", () => {
-  assert.equal(ready(planGeneration(draft({ mode: "r2v", images: [IMG] }), 0)).endpoint, "bytedance/seedance-2.0/reference-to-video");
-  assert.equal(planGeneration(draft({ mode: "r2v", images: [IMG] }), 0).offersStartFromImage, true);
-  assert.equal(planGeneration(draft({ mode: "r2v", images: [IMG, IMG2], startFromImage: true }), 0).offersStartFromImage, false);
-  assert.equal(planGeneration(draft({ mode: "r2v", images: [IMG], videos: [{ url: VID, seconds: 2 }], startFromImage: true }), 0).offersStartFromImage, false);
-  assert.equal(planGeneration(draft(), 0).offersStartFromImage, false);
-});
-
-test("a mode the screen showed but the attachments do not route to is refused, never rerouted", () => {
-  assert.deepEqual(blocked(planGeneration(draft({ mode: "r2v" }), 0)), { code: "modeMismatch", params: { mode: "r2v" } });
-  assert.deepEqual(blocked(planGeneration(draft({ mode: "i2v", images: [IMG, IMG2], startFromImage: true }), 0)), { code: "modeMismatch", params: { mode: "i2v" } });
-});
-
 test("bodies carry the media fields of their mode and only keys the endpoint's published schema lists", () => {
-  const i2v = ready(planGeneration(draft({ mode: "i2v", images: [IMG], startFromImage: true, params: { aspect_ratio: "9:16", resolution: "720p", duration: 6 } }), 0));
+  const i2v = ready(planGeneration(draft({ mode: "i2v", images: [IMG], params: { aspect_ratio: "9:16", resolution: "720p", duration: 6 } }), 0));
   assert.equal(i2v.body.image_url, IMG);
   assert.equal("aspect_ratio" in i2v.body, false, "Seedance image-to-video takes no aspect_ratio");
   assert.deepEqual([i2v.body.resolution, i2v.body.duration], ["720p", 6]);
@@ -121,7 +135,7 @@ test("bodies carry the media fields of their mode and only keys the endpoint's p
 
   const media: Partial<Record<Mode, Partial<Draft>>> = {
     t2v: {},
-    i2v: { mode: "i2v", images: [IMG], startFromImage: true },
+    i2v: { mode: "i2v", images: [IMG], endImage: IMG2 },
     r2v: { mode: "r2v", images: [IMG], videos: [{ url: VID, seconds: 5 }] },
   };
   for (const family of VIDEO_FAMILIES) {
@@ -155,7 +169,7 @@ test("caps and prompts: H3 takes five images and always a prompt, Seedance six i
   const fourVideos = Array.from({ length: 4 }, (_, i) => ({ url: `https://cdn.test/${i}.mp4`, seconds: 1 }));
   assert.deepEqual(blocked(planGeneration(draft({ mode: "r2v", videos: fourVideos }), 0)), { code: "tooManyVideos", params: { model: "Seedance 2.0", max: 3 } });
   assert.deepEqual(blocked(planGeneration(draft({ family: H3, prompt: "  " }), 0)), { code: "promptRequired", params: { model: "MiniMax H3", mode: "t2v" } });
-  assert.deepEqual(blocked(planGeneration(draft({ family: H3, mode: "i2v", prompt: "", images: [IMG], startFromImage: true }), 0)), { code: "promptRequired", params: { model: "MiniMax H3", mode: "i2v" } });
+  assert.deepEqual(blocked(planGeneration(draft({ family: H3, mode: "i2v", prompt: "", images: [IMG] }), 0)), { code: "promptRequired", params: { model: "MiniMax H3", mode: "i2v" } });
   assert.deepEqual(blocked(planGeneration(draft({ prompt: "" }), 0)), { code: "promptRequired", params: { model: "Seedance 2.0", mode: "t2v" } });
   const noPrompt = ready(planGeneration(draft({ mode: "r2v", prompt: "", images: [IMG] }), 0));
   assert.equal("prompt" in noPrompt.body, false, "Seedance reference-to-video goes without a prompt");
@@ -226,14 +240,13 @@ test("a row from before request_body resends the exact body the old code sent", 
 });
 
 test("a resend goes to the row's stored endpoint with its stored bytes, whatever the catalog would plan today", () => {
-  const plan = planGeneration(draft({ family: H3, mode: "i2v", images: [IMG], startFromImage: true, params: { duration: 10 } }), 0.065);
+  const plan = planGeneration(draft({ family: H3, mode: "i2v", images: [IMG], endImage: IMG2, params: { duration: 10 } }), 0.065);
   assert.ok(plan.ready);
-  const stored = { modelId: plan.endpoint, requestBody: plan.body, prompt: plan.prompt, params: { ...plan.params }, imageRefs: [IMG], videoRefs: [] };
+  const stored = { modelId: plan.endpoint, requestBody: plan.body, prompt: plan.prompt, params: { ...plan.params }, imageRefs: [...plan.imageUrls], videoRefs: [] };
   assert.deepEqual(resendRequest(stored), {
     endpoint: "minimax/h3/image-to-video",
-    body: `{"duration":10,"aspect_ratio":"auto","aigc_watermark":false,"prompt":"비 오는 밤거리","image_url":"${IMG}"}`,
+    body: `{"duration":10,"aspect_ratio":"auto","aigc_watermark":false,"prompt":"비 오는 밤거리","image_url":"${IMG}","end_image_url":"${IMG2}"}`,
   });
-  assert.equal(routeMode(H3, stored.imageRefs.length, stored.videoRefs.length, false), "r2v", "without the member's choice, which the row does not keep, one image routes to reference today");
 
   const fromAnotherDeploy = `{"duration":7,"prompt":"옛 규칙","image_url":"${IMG}","seed":42}` as WireBody;
   assert.deepEqual(resendRequest({ ...stored, modelId: "minimax/h3/image-to-video", requestBody: fromAnotherDeploy }), { endpoint: "minimax/h3/image-to-video", body: fromAnotherDeploy });
@@ -260,25 +273,17 @@ test("a stored row's line is its model and the page's name for its mode, or the 
   assert.equal(modelLine("alibaba/wan-3.0/reference-to-video", modeName), "alibaba/wan-3.0");
 });
 
-test("GPT Image 2: nothing attached goes to generations, any image reference to edits, and a video reference is refused", () => {
+test("GPT Image 2: text goes to generations, references to edits, and a video reference or a frame is refused", () => {
   assert.deepEqual(modesOf(GPT), ["t2i", "r2i"]);
   assert.deepEqual(endpointsOf(GPT), ["openai/gpt-image-2/generations", "openai/gpt-image-2/edits"]);
-  const cases: [number, number, boolean, Mode][] = [
-    [0, 0, false, "t2i"],
-    [0, 0, true, "t2i"],
-    [1, 0, false, "r2i"],
-    [1, 0, true, "r2i"],
-    [16, 0, false, "r2i"],
-    [0, 1, false, "r2i"],
-  ];
-  for (const [images, videos, start, mode] of cases) assert.equal(routeMode(GPT, images, videos, start), mode, `${images} images, ${videos} videos, start ${start}`);
-
   const t2i = ready(planGeneration(draft({ family: GPT, mode: "t2i" }), 0));
-  assert.deepEqual([t2i.endpoint, t2i.mode, t2i.durationS, t2i.offersStartFromImage], ["openai/gpt-image-2/generations", "t2i", 0, false]);
-  const r2i = ready(planGeneration(draft({ family: GPT, mode: "r2i", images: [IMG], startFromImage: true }), 0));
-  assert.deepEqual([r2i.endpoint, r2i.mode, r2i.offersStartFromImage], ["openai/gpt-image-2/edits", "r2i", false], "an image model has no first-frame mode");
+  assert.deepEqual([t2i.endpoint, t2i.mode, t2i.durationS], ["openai/gpt-image-2/generations", "t2i", 0]);
+  const r2i = ready(planGeneration(draft({ family: GPT, mode: "r2i", images: [IMG] }), 0));
+  assert.deepEqual([r2i.endpoint, r2i.mode], ["openai/gpt-image-2/edits", "r2i"]);
   assert.deepEqual(blocked(planGeneration(draft({ family: GPT, mode: "r2i", videos: [{ url: VID, seconds: 3 }] }), 0)), { code: "noVideoRefs", params: { model: "GPT Image 2" } });
-  assert.deepEqual(blocked(planGeneration(draft({ family: GPT, mode: "t2v" }), 0)), { code: "modeMismatch", params: { mode: "t2v" } }, "a video mode shown for an image model is refused");
+  assert.deepEqual(blocked(planGeneration(draft({ family: GPT, mode: "t2v" }), 0)), { code: "modeMismatch", params: { mode: "t2v" } }, "a video mode for an image model is refused");
+  assert.deepEqual(blocked(planGeneration(draft({ family: GPT, mode: "i2v", images: [IMG] }), 0)), { code: "modeMismatch", params: { mode: "i2v" } }, "an image model has no first-frame mode");
+  assert.deepEqual(blocked(planGeneration(draft({ family: GPT, mode: "r2i", images: [IMG], endImage: IMG2 }), 0)), { code: "modeMismatch", params: { mode: "r2i" } });
 });
 
 test("GPT Image 2 bodies carry the documented parameters in a fixed order, and edits add the references as image_url", () => {

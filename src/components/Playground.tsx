@@ -13,7 +13,6 @@ import {
   modesOf,
   paramsFor,
   planGeneration,
-  routeMode,
   type Draft,
   type Fact,
   type FamilyId,
@@ -640,7 +639,8 @@ export function Playground({
   const family = offer ? FAMILIES[offer.family] : null;
   const imageMax = family?.maxImages ?? 0;
   const videoMax = family?.maxVideos ?? 0;
-  const mode = family ? routeMode(family.id, images.length, videos.length, startFromImage) : "t2v";
+  const offersStartFromImage = Boolean(family?.modes.firstFrame) && images.length === 1 && videos.length === 0;
+  const mode = !family ? "t2v" : images.length + videos.length === 0 ? family.modes.text : offersStartFromImage && startFromImage && family.modes.firstFrame ? family.modes.firstFrame : family.modes.reference;
   const draft: Draft | null = offer
     ? {
         family: offer.family,
@@ -649,7 +649,7 @@ export function Playground({
         params,
         images: images.map((r) => r.url),
         videos: videos.map((r) => ({ url: r.url, seconds: r.seconds ?? 0 })),
-        startFromImage,
+        endImage: null,
       }
     : null;
   const plan = draft && offer ? planGeneration(draft, offer.rateUsd) : null;
@@ -901,7 +901,7 @@ export function Playground({
               </span>
             </div>
             {refs.length > 0 && <RefThumbs refs={refs} images={images} videos={videos} onRemove={(id) => setRefs((list) => list.filter((x) => x.id !== id))} />}
-            {plan.offersStartFromImage && (
+            {offersStartFromImage && (
               <label className="flex min-h-11 items-center gap-2 text-sm text-foreground-2 lg:min-h-10">
                 <input type="checkbox" checked={startFromImage} onChange={(e) => setStartFromImage(e.target.checked)} className="h-4 w-4" />
                 {t("startFromImage")}

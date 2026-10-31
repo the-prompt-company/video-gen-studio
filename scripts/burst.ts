@@ -212,7 +212,7 @@ async function person(u: BurstUser, n: number, stopAt: number, postCodes: number
     const res = await fetch(`${base}/api/generations`, {
       method: "POST",
       headers,
-      body: JSON.stringify({ family: MODEL, mode: "r2v", prompt: `GP-6 burst ${u.username} ${i}/${n}`, params: {}, images: ["https://example.com/gp6-burst.jpg"], videos: [], startFromImage: false }),
+      body: JSON.stringify({ family: MODEL, mode: "r2v", prompt: `GP-6 burst ${u.username} ${i}/${n}`, params: {}, images: ["https://example.com/gp6-burst.jpg"], videos: [], endImage: null }),
     });
     const body = (await res.json().catch(() => ({}))) as { item?: Item };
     postCodes.push(res.status);

@@ -140,7 +140,7 @@
     "noVideoRefs": "{model} doesn't take video references. Remove the videos.",
     "tooManyVideos": "{model} takes at most {max, plural, one {# video} other {# videos}}.",
     "videoLengthUnknown": "Couldn't read the length of a video reference. Remove that video and upload it again.",
-    "modeMismatch": "The generation mode on screen ({mode, select, t2v {Text to video} i2v {Image to video} r2v {Reference to video} t2i {Text to image} other {Reference to image}}) doesn't match the attachments. Reload the page.",
+    "modeMismatch": "The mode ({mode, select, t2v {Text to video} i2v {Image to video} r2v {Reference to video} t2i {Text to image} other {Reference to image}}) doesn't fit the model or the attachments. Reload the page.",
     "promptRequired": "{model} ({mode, select, t2v {Text to video} i2v {Image to video} r2v {Reference to video} t2i {Text to image} other {Reference to image}}) needs a prompt.",
     "promptTooLong": "A prompt can be at most {max, plural, one {# character} other {# characters}} long.",
     "transparentNeedsAlpha": "A transparent background can only be saved as PNG or WebP. Change the file format.",
@@ -181,7 +181,9 @@
     "openaiQuota": "The OpenAI usage limit or credits have run out. Contact an admin.",
     "openaiModeration": "OpenAI's safety policy blocked this image. Try a different prompt or references.",
     "openaiKeyRejected": "OpenAI {status}: the server's OpenAI key or region was rejected ({detail}). Contact an admin.",
-    "noResult": "{kind, select, canceled {This generation was canceled.} image {There's no result image.} other {There's no result video.}}"
+    "noResult": "{kind, select, canceled {This generation was canceled.} image {There's no result image.} other {There's no result video.}}",
+    "startFrameRequired": "Image to video needs a start frame. Add an image to the start frame slot.",
+    "referenceRequired": "{mode, select, r2v {Reference to video needs at least one image or video reference.} other {Reference to image needs at least one image reference.}}"
   },
   "generation": {
     "noPrompt": "(No prompt)",
