@@ -448,7 +448,7 @@
     "background": "{value, select, auto {자동} opaque {불투명} transparent {투명 (PNG·WebP)} other {{value}}}"
   },
   "families": {
-    "note": "{family, select, h3 {출력은 2K로 고정이고, 첨부가 있어도 프롬프트가 필요합니다.} gptImage2 {레퍼런스가 있으면 OpenAI 편집으로 갑니다. 보통 수십 초에서 2분 걸리고, 비용은 OpenAI가 알려 준 토큰 사용량으로 확정됩니다.} other {}}"
+    "note": "{family, select, h3 {출력은 2K로 고정이고, 첨부가 있어도 프롬프트가 필요합니다.} other {}}"
   },
   "prices": {
     "basis": {

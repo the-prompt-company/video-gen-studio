@@ -448,7 +448,7 @@
     "background": "{value, select, auto {自动} opaque {不透明} transparent {透明（PNG 或 WebP）} other {{value}}}"
   },
   "families": {
-    "note": "{family, select, h3 {输出固定为 2K，即使添加了附件也需要提示词。} gptImage2 {有参考素材时会使用 OpenAI 编辑。通常需要几十秒到 2 分钟，费用按 OpenAI 报告的 token 用量确定。} other {}}"
+    "note": "{family, select, h3 {输出固定为 2K，即使添加了附件也需要提示词。} other {}}"
   },
   "prices": {
     "basis": {

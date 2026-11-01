@@ -448,7 +448,7 @@
     "background": "{value, select, auto {Auto} opaque {Opaque} transparent {Transparent (PNG or WebP)} other {{value}}}"
   },
   "families": {
-    "note": "{family, select, h3 {Output is fixed at 2K, and a prompt is required even with attachments.} gptImage2 {With references, the request goes to OpenAI editing. It usually takes about 30 seconds to 2 minutes, and the cost is set by the token usage OpenAI reports.} other {}}"
+    "note": "{family, select, h3 {Output is fixed at 2K, and a prompt is required even with attachments.} other {}}"
   },
   "prices": {
     "basis": {
