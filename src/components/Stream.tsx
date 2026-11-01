@@ -281,7 +281,7 @@ export function Stream({
         }}
         className="h-full overflow-y-auto overscroll-contain [overflow-anchor:none] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
       >
-        <div ref={content} className={`mx-auto grid min-h-full w-full max-w-[820px] grid-cols-[minmax(0,1fr)] gap-7 px-3 py-6 sm:px-4 ${rows.length === 0 ? "place-content-center" : "content-end"}`}>
+        <div ref={content} className={`mx-auto grid min-h-full w-full max-w-[820px] grid-cols-[minmax(0,1fr)] gap-7 px-3 py-6 sm:px-4 ${rows.length === 0 ? "place-content-center justify-items-center" : "content-end"}`}>
           {rows.length === 0 ? (
             empty
           ) : (
