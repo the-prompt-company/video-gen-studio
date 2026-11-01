@@ -272,7 +272,7 @@
     "stream": "생성 기록",
     "composer": "생성 입력창",
     "prompt": "프롬프트",
-    "promptPlaceholder": "장면, 카메라 움직임, 분위기를 적어 주세요. 파일은 여기에 끌어다 놓고, 내 결과는 @로 넣습니다",
+    "promptPlaceholder": "{output, select, image {피사체, 구도, 스타일을 적어 주세요.} other {장면, 카메라 움직임, 분위기를 적어 주세요.}} 레퍼런스 파일은 끌어다 놓고, 내 결과는 @로 불러옵니다",
     "modelMenu": "모델",
     "outputs": "만들 것",
     "output": "{output, select, video {영상} other {이미지}}",
@@ -356,9 +356,7 @@
     },
     "cost": {
       "label": "예상",
-      "unset": "미정",
-      "rate": "단가 {rate}",
-      "unpriced": "관리자가 단가를 넣으면 {facts} 기준으로 계산"
+      "unset": "미정"
     },
     "fact": {
       "seconds": "{seconds}s",
@@ -450,15 +448,7 @@
     "background": "{value, select, auto {자동} opaque {불투명} transparent {투명 (PNG·WebP)} other {{value}}}"
   },
   "families": {
-    "seedance": {
-      "note": "비용은 해상도·길이에 비례합니다. 연습은 480p, 납품은 720p 이상을 권합니다."
-    },
-    "h3": {
-      "note": "출력은 2K로 고정이고, 첨부가 있어도 프롬프트가 필요합니다."
-    },
-    "gptImage2": {
-      "note": "레퍼런스가 있으면 OpenAI 편집으로 갑니다. 보통 수십 초에서 2분 걸리고, 비용은 OpenAI가 알려 준 토큰 사용량으로 확정됩니다."
-    }
+    "note": "{family, select, h3 {출력은 2K로 고정이고, 첨부가 있어도 프롬프트가 필요합니다.} other {}}"
   },
   "prices": {
     "basis": {

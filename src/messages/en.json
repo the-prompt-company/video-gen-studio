@@ -272,7 +272,7 @@
     "stream": "Generations",
     "composer": "Generation input",
     "prompt": "Prompt",
-    "promptPlaceholder": "Describe the scene, camera movement and mood. Drop files here, or type @ to add a result",
+    "promptPlaceholder": "{output, select, image {Describe the subject, composition and style.} other {Describe the scene, camera movement and mood.}} Drop reference files here, and type @ to bring in your results",
     "modelMenu": "Model",
     "outputs": "Output",
     "output": "{output, select, video {Video} other {Image}}",
@@ -356,9 +356,7 @@
     },
     "cost": {
       "label": "Est.",
-      "unset": "Not set",
-      "rate": "Rate {rate}",
-      "unpriced": "Calculated from {facts} once an admin sets a rate"
+      "unset": "Not set"
     },
     "fact": {
       "seconds": "{seconds}s",
@@ -450,15 +448,7 @@
     "background": "{value, select, auto {Auto} opaque {Opaque} transparent {Transparent (PNG or WebP)} other {{value}}}"
   },
   "families": {
-    "seedance": {
-      "note": "Cost scales with resolution and duration. Use 480p for drafts and 720p or higher for delivery."
-    },
-    "h3": {
-      "note": "Output is fixed at 2K, and a prompt is required even with attachments."
-    },
-    "gptImage2": {
-      "note": "With references, the request goes to OpenAI editing. It usually takes about 30 seconds to 2 minutes, and the cost is set by the token usage OpenAI reports."
-    }
+    "note": "{family, select, h3 {Output is fixed at 2K, and a prompt is required even with attachments.} other {}}"
   },
   "prices": {
     "basis": {
