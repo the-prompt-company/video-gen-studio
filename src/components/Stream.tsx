@@ -8,6 +8,7 @@ import type { PublicGeneration } from "@/lib/generations";
 import { isLive } from "@/lib/generation-status";
 import { FEED_LIMIT } from "@/lib/thread-feeds";
 import { StatusBadge } from "@/components/StatusBadge";
+import { useContact } from "@/components/Contact";
 import { Icon } from "@/components/icons";
 import { ratioOf, useSettingsSummary } from "@/components/settings-summary";
 import { useErrorText } from "@/i18n/errors";
@@ -66,6 +67,8 @@ type TurnProps = {
 
 const Turn = memo(function Turn({ g, n, offset, onCancel, onReuse, onAttach }: TurnProps) {
   const t = useTranslations("playground");
+  const tContact = useTranslations("contact");
+  const openContact = useContact();
   const tGeneration = useTranslations("generation");
   const tStatus = useTranslations("status");
   const tMode = useTranslations("mode");
@@ -163,6 +166,12 @@ const Turn = memo(function Turn({ g, n, offset, onCancel, onReuse, onAttach }: T
               <Icon name="redo" />
               {t("actions.reuse")}
             </button>
+            {(g.status === "failed" || g.status === "nsfw") && (
+              <button type="button" title={tContact("reportLabel")} onClick={() => openContact({ kind: "bug", generationId: g.id })} className={ACTION}>
+                <Icon name="flag" />
+                {tContact("report")}
+              </button>
+            )}
           </div>
         </div>
       </div>

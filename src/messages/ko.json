@@ -189,7 +189,12 @@
     "noResult": "{kind, select, canceled {취소된 생성입니다.} image {결과 이미지가 없습니다.} other {결과 영상이 없습니다.}}",
     "startFrameRequired": "이미지→영상에는 시작 프레임이 필요합니다. 첨부한 이미지를 눌러 시작 프레임으로 정하세요",
     "framesWithOthers": "이미지→영상은 시작·끝 프레임만 보냅니다. 흐리게 표시된 첨부 {count, plural, other {#개}}를 빼거나, 프레임 표시를 풀어 모두 레퍼런스로 보내세요",
-    "referenceRequired": "{mode, select, r2v {레퍼런스→영상에는 이미지나 영상 레퍼런스가 하나 이상 필요합니다} other {레퍼런스→이미지에는 이미지 레퍼런스가 한 장 이상 필요합니다}}"
+    "referenceRequired": "{mode, select, r2v {레퍼런스→영상에는 이미지나 영상 레퍼런스가 하나 이상 필요합니다} other {레퍼런스→이미지에는 이미지 레퍼런스가 한 장 이상 필요합니다}}",
+    "contactKind": "문의 종류를 고르세요",
+    "contactEmpty": "내용을 적어 주세요",
+    "contactTooLong": "내용은 {max}자까지 보낼 수 있습니다",
+    "contactUnavailable": "문의 메일이 아직 설정되지 않았습니다. 관리자에게 직접 연락하세요",
+    "contactNotSent": "메일을 보내지 못했습니다. 잠시 뒤 다시 보내세요"
   },
   "generation": {
     "noPrompt": "(프롬프트 없음)",
@@ -725,5 +730,21 @@
     "empty": "조건에 맞는 기록이 없습니다.",
     "more": "더 보기",
     "seconds": "{seconds}s"
+  },
+  "contact": {
+    "open": "문의",
+    "title": "문의하기",
+    "kindLabel": "종류",
+    "kind": "{kind, select, bug {버그 신고} question {질문} other {기타}}",
+    "messageLabel": "내용",
+    "placeholder": "{kind, select, bug {무엇을 하다가 어떤 문제가 생겼는지 적어 주세요. 기대한 결과와 실제로 일어난 일을 함께 적으면 더 빨리 고칠 수 있습니다} question {궁금한 점을 적어 주세요} other {하고 싶은 말을 적어 주세요}}",
+    "attached": "{generation, select, yes {이름, 지금 보고 있는 페이지, 브라우저와 화면 크기, 이 생성 기록(모델·상태·오류)이 함께 갑니다} other {이름, 지금 보고 있는 페이지, 브라우저와 화면 크기가 함께 갑니다}}",
+    "cancel": "취소",
+    "send": "보내기",
+    "sending": "보내는 중…",
+    "sent": "보냈습니다. 운영자에게 메일로 전달됐습니다",
+    "close": "닫기",
+    "report": "문제 신고",
+    "reportLabel": "이 생성 기록으로 문제 신고하기"
   }
 }

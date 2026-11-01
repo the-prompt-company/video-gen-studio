@@ -189,7 +189,12 @@
     "noResult": "{kind, select, canceled {This generation was canceled.} image {There's no result image.} other {There's no result video.}}",
     "startFrameRequired": "Image to video needs a start frame. Select an attached image and set it as the start frame.",
     "framesWithOthers": "Image to video sends the frames only. Remove the {count, plural, one {dimmed attachment} other {# dimmed attachments}}, or take the frame marks off to send everything as references.",
-    "referenceRequired": "{mode, select, r2v {Reference to video needs at least one image or video reference.} other {Reference to image needs at least one image reference.}}"
+    "referenceRequired": "{mode, select, r2v {Reference to video needs at least one image or video reference.} other {Reference to image needs at least one image reference.}}",
+    "contactKind": "Choose a type.",
+    "contactEmpty": "Write a message first.",
+    "contactTooLong": "Messages can be up to {max} characters.",
+    "contactUnavailable": "Contact email isn't set up yet. Contact an admin directly.",
+    "contactNotSent": "The email couldn't be sent. Try again in a moment."
   },
   "generation": {
     "noPrompt": "(No prompt)",
@@ -725,5 +730,21 @@
     "empty": "No generations match these filters.",
     "more": "Show more",
     "seconds": "{seconds}s"
+  },
+  "contact": {
+    "open": "Contact",
+    "title": "Contact us",
+    "kindLabel": "Type",
+    "kind": "{kind, select, bug {Bug report} question {Question} other {Other}}",
+    "messageLabel": "Message",
+    "placeholder": "{kind, select, bug {What were you doing, and what went wrong? Saying what you expected and what actually happened helps us fix it faster} question {What would you like to know?} other {What would you like to tell us?}}",
+    "attached": "{generation, select, yes {Your name, this page, your browser and screen size, and this generation (model, status, error) are sent along} other {Your name, this page, and your browser and screen size are sent along}}",
+    "cancel": "Cancel",
+    "send": "Send",
+    "sending": "Sending…",
+    "sent": "Sent. It's on its way to the operator by email.",
+    "close": "Close",
+    "report": "Report a problem",
+    "reportLabel": "Report a problem with this generation"
   }
 }

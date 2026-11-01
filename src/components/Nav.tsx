@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Avatar } from "@/components/Avatar";
+import { ContactButton } from "@/components/Contact";
 
 const LINKS = [
   { href: "/playground", page: "playground" },
@@ -51,6 +52,7 @@ export function Nav({ username, nickname, avatarUrl, role }: { username: string;
           ))}
         </nav>
         <div className="ml-auto flex min-w-0 items-center gap-2 text-sm sm:gap-3">
+          <ContactButton />
           <Link
             href="/settings"
             aria-current={isActive("/settings") ? "page" : undefined}
