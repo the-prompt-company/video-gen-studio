@@ -272,7 +272,7 @@
     "stream": "생성 기록",
     "composer": "생성 입력창",
     "prompt": "프롬프트",
-    "promptPlaceholder": "장면, 카메라 움직임, 분위기를 적어 주세요. 파일은 여기에 끌어다 놓고, 내 결과는 @로 넣습니다",
+    "promptPlaceholder": "{output, select, image {피사체, 구도, 스타일을 적어 주세요.} other {장면, 카메라 움직임, 분위기를 적어 주세요.}} 레퍼런스 파일은 끌어다 놓고, 내 결과는 @로 불러옵니다",
     "modelMenu": "모델",
     "outputs": "만들 것",
     "output": "{output, select, video {영상} other {이미지}}",

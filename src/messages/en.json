@@ -272,7 +272,7 @@
     "stream": "Generations",
     "composer": "Generation input",
     "prompt": "Prompt",
-    "promptPlaceholder": "Describe the scene, camera movement and mood. Drop files here, or type @ to add a result",
+    "promptPlaceholder": "{output, select, image {Describe the subject, composition and style.} other {Describe the scene, camera movement and mood.}} Drop reference files here, and type @ to bring in your results",
     "modelMenu": "Model",
     "outputs": "Output",
     "output": "{output, select, video {Video} other {Image}}",

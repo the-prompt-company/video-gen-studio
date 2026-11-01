@@ -272,7 +272,7 @@
     "stream": "生成记录",
     "composer": "生成输入框",
     "prompt": "提示词",
-    "promptPlaceholder": "请描述场景、镜头运动和氛围。可将文件拖到这里，或输入 @ 添加结果",
+    "promptPlaceholder": "{output, select, image {请描述主体、构图和风格。} other {请描述场景、镜头运动和氛围。}}将参考文件拖到这里，输入 @ 可调入你的结果",
     "modelMenu": "模型",
     "outputs": "输出类型",
     "output": "{output, select, video {视频} other {图片}}",

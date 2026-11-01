@@ -581,7 +581,7 @@ export function Composer({
           aria-keyshortcuts="Control+Enter Meta+Enter"
           {...picker.inputProps}
           value={prompt}
-          placeholder={t("promptPlaceholder")}
+          placeholder={t("promptPlaceholder", { output: family.modes.output })}
           onChange={(e) => {
             picker.edited(e.target.value, e.target.selectionStart);
             setPrompt(e.target.value);
