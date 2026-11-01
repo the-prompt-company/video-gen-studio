@@ -426,16 +426,6 @@ test("every model has a price basis and an example, and every published price a 
   }
 });
 
-test("the model note is one select on the model that names only real models, so a model can go without one", () => {
-  const keys = new Set<string>(FAMILY_IDS.map((id) => FAMILIES[id].key));
-  for (const { locale, tree } of MESSAGES) {
-    const [select, ...rest] = parse(message(tree, "families.note") ?? "");
-    assert.ok(select?.type === TYPE.select && select.value === "family" && rest.length === 0, `${locale} families.note is one select on family`);
-    for (const option of Object.keys(select.options)) assert.ok(option === "other" || keys.has(option), `${locale} families.note names ${option}`);
-    for (const quiet of ["seedance", "gptImage2"]) assert.ok(!(quiet in select.options), `${locale} families.note says nothing for ${quiet}`);
-  }
-});
-
 test("every format an image result is stored in is one each model takes as an image reference, so reusing a result needs no type check", () => {
   const spec = FAMILIES["openai/gpt-image-2"].params.find((p) => p.key === "output_format");
   assert.ok(spec?.type === "enum");

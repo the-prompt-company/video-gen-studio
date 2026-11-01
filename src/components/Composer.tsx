@@ -288,8 +288,6 @@ export function Composer({
 }) {
   const t = useTranslations("playground");
   const tMode = useTranslations("mode");
-  const tFamilies = useTranslations("families");
-  const tPrices = useTranslations("prices");
   const tGeneration = useTranslations("generation");
   const format = useFormatter();
   const errorText = useErrorText();
@@ -333,7 +331,6 @@ export function Composer({
   const canGenerate = !offer.unavailable && plan.ready && !submitting && !upload;
   const blockers = [offer.unavailable?.error, plan.ready ? null : plan.blocker].filter((b) => b != null);
   const priced = offer.rateUsd > 0;
-  const rate = (o: Offer) => tPrices("rate", { usd: usd(format, o.rateUsd), unit: FAMILIES[o.family].rate.unit });
   const facts = plan.facts.map((f: Fact) => {
     switch (f.kind) {
       case "seconds":
@@ -482,16 +479,11 @@ export function Composer({
   }
 
   const outputs = (["video", "image"] as const).filter((o) => offers.some((x) => FAMILIES[x.family].modes.output === o));
-  const takesText = (f: FamilyId) => {
-    const r = rolesFor(f);
-    return t("takes", { images: FAMILIES[f].maxImages, videos: FAMILIES[f].maxVideos, frames: r.length === 2 ? "both" : r.length === 1 ? "start" : "none" });
-  };
-  const offerHint = (o: Offer) => (o.unavailable ? `${t("unavailable")} · ${errorText(o.unavailable.error)}` : o.rateUsd > 0 ? t("rateHint", { basis: tPrices(`basis.${FAMILIES[o.family].key}`), rate: rate(o) }) : t("rateUnset"));
+  const takesText = (f: FamilyId) => t("takes", { images: FAMILIES[f].maxImages, videos: FAMILIES[f].maxVideos });
   const start = all.find((a) => a.id === state.frames.start);
   const firstShape = mode === family.modes.firstFrame && start?.kind === "image" ? start : null;
   const shape = firstShape && shapeOf(firstShape.w, firstShape.h);
   const modeLabel = `${family.name} · ${tMode(mode)}`;
-  const familyNote = tFamilies("note", { family: family.key });
   const framing = open !== null && typeof open === "object" ? images.find((a) => a.id === open.frameOf) : undefined;
   // The image whose frame menu is open went away (its upload failed): the menu closes with it.
   if (open !== null && typeof open === "object" && !framing) setOpen(null);
@@ -723,7 +715,7 @@ export function Composer({
                   pressed={o.family === family.id}
                   disabled={!pickable(o)}
                   title={`${FAMILIES[o.family].name} · ${FAMILIES[o.family].vendor}`}
-                  hints={[takesText(o.family), offerHint(o)]}
+                  hints={o.unavailable ? [takesText(o.family), `${t("unavailable")} · ${errorText(o.unavailable.error)}`] : [takesText(o.family)]}
                   onClick={() => {
                     pickFamily(o.family);
                     setOpen(null);
@@ -731,7 +723,6 @@ export function Composer({
                 />
               ))}
           </div>
-          {familyNote && <p className="text-xs leading-relaxed text-subtle">{familyNote}</p>}
         </Popover>
       )}
 
@@ -769,7 +760,6 @@ export function Composer({
               <ParamControl key={p.key} spec={p} value={state.params[p.key]} onChange={(value) => dispatch({ type: "param", key: p.key, value })} />
             ),
           )}
-          {familyNote && <p className="text-xs leading-relaxed text-subtle">{familyNote}</p>}
         </Popover>
       )}
 

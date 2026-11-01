@@ -1,7 +1,7 @@
 import { parse, TYPE, type MessageFormatElement } from "@formatjs/icu-messageformat-parser";
 import { DEFAULT_LOCALE, LOCALES, type Locale } from "./locale";
 
-export type Rule = "missing" | "extra" | "syntax" | "arguments" | "particle" | "hangul";
+export type Rule = "missing" | "extra" | "syntax" | "arguments" | "particle" | "hangul" | "empty";
 export type Problem = { locale: Locale; key: string; rule: Rule; detail: string };
 
 const HANGUL = /[가-힣ㄱ-ㆎ]/;
@@ -43,6 +43,13 @@ function argumentsOf(elements: MessageFormatElement[]): string[] {
   return [...found].sort();
 }
 
+/** Precompiled messages format a message that comes out as nothing to an empty array, and next-intl then shows the key. */
+function canBeEmpty(elements: MessageFormatElement[]): boolean {
+  return elements.every((el) =>
+    el.type === TYPE.literal ? el.value === "" : (el.type === TYPE.select || el.type === TYPE.plural) && Object.values(el.options).some((o) => canBeEmpty(o.value)),
+  );
+}
+
 function particleAfterValue(elements: MessageFormatElement[]): string | null {
   let hit: string | null = null;
   walk(elements, (el, next) => {
@@ -64,7 +71,9 @@ export function checkCatalogs(catalogs: Record<Locale, unknown>): Problem[] {
         continue;
       }
       try {
-        parsed[locale].set(key, parse(value));
+        const elements = parse(value);
+        parsed[locale].set(key, elements);
+        if (canBeEmpty(elements)) problems.push({ locale, key, rule: "empty", detail: "can render as nothing, which shows the key on screen; give every branch text or leave the message out" });
       } catch (e) {
         problems.push({ locale, key, rule: "syntax", detail: e instanceof Error ? e.message : String(e) });
         continue;

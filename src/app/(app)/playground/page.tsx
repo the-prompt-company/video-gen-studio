@@ -23,7 +23,7 @@ export default async function PlaygroundPage({ searchParams }: { searchParams: P
       ? db.select({ completed: count() }).from(schema.generations).where(and(eq(schema.generations.userId, user.id), eq(schema.generations.status, "completed")))
       : Promise.resolve([{ completed: 0 }]),
     user ? listThreads(user.id) : Promise.resolve([]),
-    pageMessages(["generation", "playground", "threads", "mode", "paramValues", "families", "prices"]),
+    pageMessages(["generation", "playground", "threads", "mode", "paramValues"]),
   ]);
   const offers = FAMILY_IDS.filter((f) => settings[f].enabled).map((family) => ({
     family,

@@ -277,10 +277,8 @@
     "outputs": "输出类型",
     "output": "{output, select, video {视频} other {图片}}",
     "model": "模型",
-    "takes": "图片最多 {images, plural, other {# 张}}{videos, plural, =0 {} other { · 视频最多 # 个}}{frames, select, both { · 首尾帧} start { · 首帧} other {}}",
+    "takes": "图片最多 {images, plural, other {# 张}}{videos, plural, =0 {} other { · 视频最多 # 个}}",
     "unavailable": "不可用",
-    "rateHint": "{rate}（{basis}）",
-    "rateUnset": "未设置单价",
     "settings": {
       "title": "设置",
       "open": "更改设置 · {summary}"
@@ -446,9 +444,6 @@
     "quality": "{value, select, low {低 · low} medium {中 · medium} high {高 · high} other {{value}}}",
     "output_format": "{value, select, png {PNG} jpeg {JPEG} webp {WebP} other {{value}}}",
     "background": "{value, select, auto {自动} opaque {不透明} transparent {透明（PNG 或 WebP）} other {{value}}}"
-  },
-  "families": {
-    "note": "{family, select, h3 {输出固定为 2K，即使添加了附件也需要提示词。} other {}}"
   },
   "prices": {
     "basis": {
@@ -662,7 +657,7 @@
       "first": "选择 Excel 文件",
       "another": "选择其他文件"
     },
-    "working": "{doing, select, reading {正在读取 <name>{file}</name>…} checking {正在检查 <name>{file}</name>…} creating {正在根据 <name>{file}</name> 创建成员…} other {}}",
+    "working": "{doing, select, reading {正在读取 <name>{file}</name>…} checking {正在检查 <name>{file}</name>…} creating {正在根据 <name>{file}</name> 创建成员…} other {正在处理 <name>{file}</name>…}}",
     "failure": {
       "notXlsx": "只能读取 Excel 工作簿（.xlsx）。请在 Excel 中通过“另存为”→“Excel 工作簿（.xlsx）”保存后，重新选择文件。",
       "unreadable": "无法读取该文件。请确认它能在 Excel 中打开；如设有密码，请先取消密码并重新保存为 .xlsx，再选择该文件。",

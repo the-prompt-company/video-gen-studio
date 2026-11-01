@@ -68,6 +68,11 @@ test("Hangul left in English or Chinese fails", () => {
   assert.deepEqual(rulesFor(checkCatalogs(withMessage("zh-CN", ["nav", "logout"], "退出 로그아웃")), "nav.logout"), ["zh-CN hangul"]);
 });
 
+test("a message that can render as nothing fails, since the page would show its key; an empty branch beside text passes", () => {
+  assert.deepEqual(rulesFor(checkCatalogs(withMessage("en", ["auth", "hint"], "{min, plural, =0 {} one {At least # character} other {At least # characters}}")), "auth.hint"), ["en empty"]);
+  assert.deepEqual(rulesFor(checkCatalogs(withMessage("en", ["auth", "hint"], "At least {min, plural, =0 {} one {# character} other {# characters}}")), "auth.hint"), []);
+});
+
 test("a message that does not parse as ICU fails", () => {
   assert.deepEqual(rulesFor(checkCatalogs(withMessage("en", ["auth", "title"], "Sign {in")), "auth.title"), ["en syntax"]);
 });
