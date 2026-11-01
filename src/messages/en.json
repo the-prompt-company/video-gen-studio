@@ -128,6 +128,7 @@
     "unknownModel": "Unknown model. Reload the page.",
     "noMode": "No generation mode was sent. Reload the page.",
     "modelDisabled": "An admin turned off {model}.",
+    "unpriced": "{model} can't be used until an admin sets its rate. Contact an admin.",
     "noSuchGeneration": "That generation doesn't exist.",
     "notYourGeneration": "You can only cancel your own generations.",
     "noSuchThread": "That thread doesn't exist or was deleted. Pick another thread from the list or start a new one.",
@@ -698,7 +699,7 @@
     "rateLabel": "{model} rate",
     "fill": "Use {label} {rate} as the rate",
     "example": "Example: {example} costs {cost}",
-    "exampleEmpty": "Enter a rate to see an example cost",
+    "exampleEmpty": "Members can't use this model until it has a rate. Enter one to see an example cost",
     "toggle": "{enabled, select, yes {On · Turn off} other {Off · Turn on}}"
   },
   "logs": {

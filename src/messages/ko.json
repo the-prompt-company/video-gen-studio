@@ -128,6 +128,7 @@
     "unknownModel": "알 수 없는 모델입니다. 페이지를 새로고침하세요",
     "noMode": "생성 방식이 없습니다. 페이지를 새로고침하세요",
     "modelDisabled": "관리자가 {model} 모델을 껐습니다",
+    "unpriced": "관리자가 {model} 단가를 넣기 전까지 쓸 수 없습니다. 관리자에게 문의하세요",
     "noSuchGeneration": "없는 생성 건입니다",
     "notYourGeneration": "본인 생성 건만 취소할 수 있습니다",
     "noSuchThread": "없거나 삭제된 스레드입니다. 목록에서 다른 스레드를 고르거나 새 스레드를 시작하세요",
@@ -698,7 +699,7 @@
     "rateLabel": "{model} 단가",
     "fill": "단가 칸에 {label} {rate} 넣기",
     "example": "예: {example} {cost}",
-    "exampleEmpty": "단가를 넣으면 예시 비용이 보입니다",
+    "exampleEmpty": "단가가 없으면 멤버가 이 모델을 쓸 수 없습니다. 단가를 넣으면 예시 비용이 보입니다",
     "toggle": "{enabled, select, yes {사용 중 · 끄기} other {꺼짐 · 켜기}}"
   },
   "logs": {

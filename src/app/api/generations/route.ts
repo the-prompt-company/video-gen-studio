@@ -126,7 +126,8 @@ function parseDraft(raw: unknown): Draft {
  * thread goes. 201 when Higgsfield accepted it, 202 when it waits as 제출 대기 and submits itself again, 502 when
  * Higgsfield refused it, 400 when the plan is not ready or a reference is refused (lib/references.ts: not the caller's
  * own upload or result, a result whose media is gone, or a result sent as another kind or length), 404 when the thread
- * is not the caller's to add to. Every answer
+ * is not the caller's to add to, 403 or 503 when the model is unavailable to the caller (unavailableFor: no rate, no
+ * key, no server key or store). Every answer
  * after insert carries the row as `item` and its thread as `thread`; the row's own reason says why a refused one
  * failed, and estimatedCostUsd is the row's cost, decided now.
  */
@@ -142,7 +143,7 @@ export async function POST(req: Request) {
     if (!plan.ready) throw HttpError.of(400, plan.blocker);
 
     // Refuse before the claim, so a submit that cannot run never creates and titles a thread.
-    const blocked = unavailableFor(plan.family, user);
+    const blocked = unavailableFor(plan.family, user, setting.rateUsd);
     if (blocked) throw HttpError.of(blocked.status, blocked.error);
     await checkRefs(user.id, draft);
     const { threadId, thread } = await claimThread(user.id, ref, plan.prompt);

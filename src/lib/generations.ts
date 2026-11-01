@@ -88,11 +88,13 @@ export function apiKeyFor(user: User): hf.ApiKey {
 export type Unavailable = { status: 403 | 503; error: AppError };
 
 /**
- * Why `user` cannot generate with `family` now, or null. A Higgsfield model needs the member's own key (403). The
- * OpenAI model needs the server's OPENAI_API_KEY and Blob, since its image exists only in the runner's memory until it
- * is stored (503); the member's Higgsfield key is never consulted for it.
+ * Why `user` cannot generate with `family` at `rateUsd` now, or null. A model without a rate is refused first (503),
+ * since its rows would record a cost of 0 and usage would never count them. A Higgsfield model needs the member's own
+ * key (403). The OpenAI model needs the server's OPENAI_API_KEY and Blob, since its image exists only in the runner's
+ * memory until it is stored (503); the member's Higgsfield key is never consulted for it.
  */
-export function unavailableFor(family: FamilyId, user: Pick<User, "apiKeyEnc">): Unavailable | null {
+export function unavailableFor(family: FamilyId, user: Pick<User, "apiKeyEnc">, rateUsd: number): Unavailable | null {
+  if (!(rateUsd > 0)) return { status: 503, error: appError("unpriced", { model: FAMILIES[family].name }) };
   if (FAMILIES[family].provider === "higgsfield") return user.apiKeyEnc ? null : { status: 403, error: appError("noKey") };
   if (!openai.serverKey()) return { status: 503, error: appError("noOpenAiKey") };
   if (!storage.storageEnabled()) return { status: 503, error: appError("noImageStore") };
@@ -709,7 +711,7 @@ async function claimCopy(id: string): Promise<Generation | null> {
  */
 async function startImage(user: User, plan: ReadyPlan, schedule: Scheduler, threadId: ThreadId | null): Promise<Generation> {
   const deadline = Date.now() + IMAGE_TIMING.runBudgetMs;
-  const blocked = unavailableFor(plan.family, user);
+  const blocked = unavailableFor(plan.family, user, plan.rateUsd);
   const key = openai.serverKey();
   if (blocked) throw HttpError.of(blocked.status, blocked.error);
   if (!key) throw new HttpError(503, "noOpenAiKey");

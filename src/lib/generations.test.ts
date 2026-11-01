@@ -29,20 +29,30 @@ const BLOB = "vercel_blob_rw_store_secret";
 
 test("the image model needs the server's OPENAI_API_KEY and Blob, never the member's Higgsfield key", () =>
   withEnv({ BLOB_READ_WRITE_TOKEN: BLOB }, () => {
-    const noKey = unavailableFor("openai/gpt-image-2", keyed);
+    const noKey = unavailableFor("openai/gpt-image-2", keyed, 30);
     assert.deepEqual(noKey, { status: 503, error: { code: "noOpenAiKey" } });
     process.env.OPENAI_API_KEY = "sk-test";
-    assert.equal(unavailableFor("openai/gpt-image-2", member), null, "a member without a Higgsfield key can make images");
+    assert.equal(unavailableFor("openai/gpt-image-2", member, 30), null, "a member without a Higgsfield key can make images");
     delete process.env.BLOB_READ_WRITE_TOKEN;
-    const noBlob = unavailableFor("openai/gpt-image-2", member);
+    const noBlob = unavailableFor("openai/gpt-image-2", member, 30);
     assert.deepEqual(noBlob, { status: 503, error: { code: "noImageStore" } });
   }));
 
 test("video models keep their rule: the member's own Higgsfield key, whatever the server holds", () =>
   withEnv({ OPENAI_API_KEY: "sk-test", BLOB_READ_WRITE_TOKEN: BLOB }, () => {
-    const noKey = unavailableFor("bytedance/seedance-2.0", member);
+    const noKey = unavailableFor("bytedance/seedance-2.0", member, 0.0985);
     assert.deepEqual(noKey, { status: 403, error: { code: "noKey" } });
-    assert.equal(unavailableFor("minimax/h3", keyed), null);
+    assert.equal(unavailableFor("minimax/h3", keyed, 0.065), null);
+  }));
+
+test("a model without a rate is unavailable to everyone, so no generation is recorded at a cost of 0", () =>
+  withEnv({ OPENAI_API_KEY: "sk-test", BLOB_READ_WRITE_TOKEN: BLOB }, () => {
+    for (const rate of [0, -1, Number.NaN]) {
+      assert.deepEqual(unavailableFor("bytedance/seedance-2.0", keyed, rate), { status: 503, error: { code: "unpriced", params: { model: "Seedance 2.0" } } }, `Seedance at ${rate}`);
+      assert.deepEqual(unavailableFor("openai/gpt-image-2", keyed, rate), { status: 503, error: { code: "unpriced", params: { model: "GPT Image 2" } } }, `GPT Image 2 at ${rate}`);
+    }
+    assert.equal(unavailableFor("minimax/h3", member, 0)?.error.code, "unpriced", "no rate is named before the missing key, since a key alone would not unlock it");
+    assert.equal(unavailableFor("bytedance/seedance-2.0", keyed, 0.0001), null);
   }));
 
 test("submitting an image without OPENAI_API_KEY answers 503 before anything is written", () =>

@@ -28,7 +28,7 @@ export default async function PlaygroundPage({ searchParams }: { searchParams: P
   const offers = FAMILY_IDS.filter((f) => settings[f].enabled).map((family) => ({
     family,
     rateUsd: settings[family].rateUsd,
-    unavailable: unavailableFor(family, { apiKeyEnc: user?.apiKeyEnc ?? null }),
+    unavailable: unavailableFor(family, { apiKeyEnc: user?.apiKeyEnc ?? null }, settings[family].rateUsd),
   }));
 
   return (

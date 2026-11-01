@@ -238,6 +238,7 @@ async function main() {
   if (!login.ok) throw new Error(`FAIL ${base}/login answered ${login.status}`);
   const [model] = await getDb().select().from(schema.models).where(eq(schema.models.modelId, MODEL)).limit(1);
   if (model && !model.enabled) throw new Error(`FAIL ${MODEL} is disabled in 어드민`);
+  if (!(Number(model?.pricePerSecUsd ?? 0) > 0)) throw new Error(`FAIL ${MODEL} has no rate in 어드민 → 모델, so every submit would answer 503 unpriced`);
   const leftovers = await removeBurstUsers();
   if (leftovers.removedUsers) console.log(`removed ${leftovers.removedUsers} leftover ${PREFIX} users and ${leftovers.removedRows} rows`);
   console.log(`burst ${USERS} users × ${PER_USER} submits against ${base}, fake ${fake} ${JSON.stringify(knobs)}`);
