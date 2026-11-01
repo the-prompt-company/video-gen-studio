@@ -3,8 +3,8 @@ import { getMessages } from "next-intl/server";
 
 type Namespace = keyof Messages;
 
-/** What client components on any page read: the shell, sign-in, errors, and the parameter names errors quote. */
-const SHARED: readonly Namespace[] = ["pages", "common", "nav", "status", "language", "auth", "errors", "params"];
+/** What client components on any page read: the shell, sign-in, errors, the parameter names errors quote, and contact. */
+const SHARED: readonly Namespace[] = ["pages", "common", "nav", "status", "language", "auth", "errors", "params", "contact"];
 
 /**
  * Each namespace is the object getMessages() returned, not a copy, so React's server payload can send a namespace that

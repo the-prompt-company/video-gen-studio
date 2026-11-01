@@ -189,7 +189,12 @@
     "noResult": "{kind, select, canceled {该生成任务已取消。} image {没有结果图片。} other {没有结果视频。}}",
     "startFrameRequired": "图生视频需要首帧。请点击已添加的图片，将其设为首帧。",
     "framesWithOthers": "图生视频只发送首尾帧。请移除变暗的 {count, plural, other {# 个附件}}，或取消帧标记，改为全部作为参考素材发送。",
-    "referenceRequired": "{mode, select, r2v {参考生视频需要至少一个参考图或参考视频。} other {参考生图需要至少一张参考图。}}"
+    "referenceRequired": "{mode, select, r2v {参考生视频需要至少一个参考图或参考视频。} other {参考生图需要至少一张参考图。}}",
+    "contactKind": "请选择类型。",
+    "contactEmpty": "请先填写内容。",
+    "contactTooLong": "内容最多 {max} 个字符。",
+    "contactUnavailable": "联系邮件尚未配置。请直接联系管理员。",
+    "contactNotSent": "邮件未能发送。请稍后重试。"
   },
   "generation": {
     "noPrompt": "（无提示词）",
@@ -725,5 +730,21 @@
     "empty": "没有符合条件的记录。",
     "more": "加载更多",
     "seconds": "{seconds} 秒"
+  },
+  "contact": {
+    "open": "联系",
+    "title": "联系我们",
+    "kindLabel": "类型",
+    "kind": "{kind, select, bug {问题反馈} question {咨询} other {其他}}",
+    "messageLabel": "内容",
+    "placeholder": "{kind, select, bug {请写下你在做什么时遇到了什么问题。同时写出预期结果和实际发生的情况，能帮助我们更快修复} question {请写下你想了解的问题} other {请写下你想说的话}}",
+    "attached": "{generation, select, yes {将一并发送：你的名字、当前页面、浏览器和屏幕尺寸，以及这条生成记录（模型、状态、错误）} other {将一并发送：你的名字、当前页面、浏览器和屏幕尺寸}}",
+    "cancel": "取消",
+    "send": "发送",
+    "sending": "正在发送…",
+    "sent": "已发送，已通过邮件转交给运营者。",
+    "close": "关闭",
+    "report": "反馈问题",
+    "reportLabel": "就这条生成记录反馈问题"
   }
 }
