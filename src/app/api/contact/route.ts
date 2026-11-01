@@ -6,13 +6,13 @@ import { contactEmail, parseContact, type ContactEmail, type GenerationFacts } f
 import { appError, type AppError } from "@/lib/errors";
 import { isGenerationId } from "@/lib/generations";
 
-/** Where every contact message goes: the operator's inbox. */
-const CONTACT_TO = "jeongjun@the-prompt.me";
+/** Where every contact message goes: the operator's inbox unless CONTACT_TO names another. */
+const CONTACT_TO = process.env.CONTACT_TO || "jeongjun@the-prompt.me";
 
 /**
  * POST /api/contact — the signed-in member's message, emailed to the operator. The body is { kind, message, context,
  * generationId }. A generation is described from the caller's own row, and one that is not theirs is left out.
- * 200 once Gmail accepted it, 400 for an empty or overlong message, 503 while SMTP_USER or SMTP_PASS is unset, 502 when
+ * 200 once Gmail accepted it, 400 for an empty or overlong message, 503 while SMTP_PASS is unset, 502 when
  * Gmail refused it or could not be reached.
  */
 export async function POST(req: Request) {
@@ -45,9 +45,12 @@ async function ownGeneration(userId: number, id: string): Promise<GenerationFact
 
 type SendResult = { ok: true } | { ok: false; status: 503 | 502; reason: AppError };
 
-/** Sends from the operator's Gmail to its own inbox over SMTP, signed in with a Google app password (SMTP_USER, SMTP_PASS). */
+/**
+ * Sends over Gmail SMTP, signed in with a Google app password (SMTP_PASS) for SMTP_USER, which defaults to the recipient,
+ * so the operator's own Gmail sends to its own inbox.
+ */
 async function sendContactEmail(email: ContactEmail): Promise<SendResult> {
-  const user = process.env.SMTP_USER;
+  const user = process.env.SMTP_USER || CONTACT_TO;
   const pass = process.env.SMTP_PASS;
   if (!user || !pass) return { ok: false, status: 503, reason: appError("contactUnavailable") };
   const transport = nodemailer.createTransport({ host: "smtp.gmail.com", port: 465, secure: true, auth: { user, pass }, connectionTimeout: 10_000, greetingTimeout: 10_000, socketTimeout: 15_000 });
