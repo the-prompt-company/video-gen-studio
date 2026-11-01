@@ -192,7 +192,10 @@
     "referenceRequired": "{mode, select, r2v {레퍼런스→영상에는 이미지나 영상 레퍼런스가 하나 이상 필요합니다} other {레퍼런스→이미지에는 이미지 레퍼런스가 한 장 이상 필요합니다}}",
     "contactKind": "문의 종류를 고르세요",
     "contactEmpty": "내용을 적어 주세요",
-    "contactTooLong": "내용은 {max}자까지 보낼 수 있습니다",
+    "contactTooLong": "내용은 {max, plural, other {#자}}까지 보낼 수 있습니다",
+    "contactTooManyFiles": "파일은 {max, plural, other {#개}}까지 첨부할 수 있습니다",
+    "contactFilesTooLarge": "첨부 파일은 합쳐서 {mb}MB까지 보낼 수 있습니다",
+    "contactFileType": "{name} 파일은 첨부할 수 없습니다. 이미지·영상·PDF·텍스트 파일만 됩니다",
     "contactUnavailable": "문의 메일이 아직 설정되지 않았습니다. 관리자에게 직접 연락하세요",
     "contactNotSent": "메일을 보내지 못했습니다. 잠시 뒤 다시 보내세요"
   },
@@ -745,6 +748,12 @@
     "sent": "보냈습니다. 운영자에게 메일로 전달됐습니다",
     "close": "닫기",
     "report": "문제 신고",
-    "reportLabel": "이 생성 기록으로 문제 신고하기"
+    "reportLabel": "이 생성 기록으로 문제 신고하기",
+    "subjectLabel": "제목 (선택)",
+    "subjectPlaceholder": "비워 두면 내용의 첫 줄이 제목이 됩니다",
+    "attach": "파일 첨부",
+    "attachHint": "이미지·영상·PDF·텍스트, {max, plural, other {#개}}까지 합쳐서 {mb}MB. 스크린샷은 내용 칸에 붙여 넣어도 됩니다",
+    "attachmentsLabel": "첨부 파일",
+    "removeFile": "{name} 빼기"
   }
 }

@@ -192,7 +192,10 @@
     "referenceRequired": "{mode, select, r2v {参考生视频需要至少一个参考图或参考视频。} other {参考生图需要至少一张参考图。}}",
     "contactKind": "请选择类型。",
     "contactEmpty": "请先填写内容。",
-    "contactTooLong": "内容最多 {max} 个字符。",
+    "contactTooLong": "内容最多 {max, plural, other {# 个字符}}。",
+    "contactTooManyFiles": "最多可以添加 {max, plural, other {# 个}}附件。",
+    "contactFilesTooLarge": "附件合计不能超过 {mb} MB。",
+    "contactFileType": "无法添加 {name}。只能添加图片、视频、PDF 和文本文件。",
     "contactUnavailable": "联系邮件尚未配置。请直接联系管理员。",
     "contactNotSent": "邮件未能发送。请稍后重试。"
   },
@@ -745,6 +748,12 @@
     "sent": "已发送，已通过邮件转交给运营者。",
     "close": "关闭",
     "report": "反馈问题",
-    "reportLabel": "就这条生成记录反馈问题"
+    "reportLabel": "就这条生成记录反馈问题",
+    "subjectLabel": "标题（可选）",
+    "subjectPlaceholder": "留空则使用内容的第一行作为标题",
+    "attach": "添加附件",
+    "attachHint": "图片、视频、PDF 或文本，最多 {max, plural, other {# 个}}，合计不超过 {mb} MB。也可以直接把截图粘贴到内容里",
+    "attachmentsLabel": "附件",
+    "removeFile": "移除 {name}"
   }
 }

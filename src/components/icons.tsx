@@ -13,6 +13,7 @@ const PATHS = {
   grid: "M4 4h5v5H4zM11 4h5v5h-5zM4 11h5v5H4zM11 11h5v5h-5z",
   chat: "M4 5.5h12v8H9.5L6 16.5v-3H4z",
   flag: "M5.5 16.5v-12M5.5 4.5h8.5l-2 3 2 3H5.5",
+  clip: "M14.5 9.5l-5 5a2.75 2.75 0 0 1-3.9-3.9l5.6-5.6a1.75 1.75 0 0 1 2.5 2.5l-5.4 5.4a.75.75 0 0 1-1.1-1.1l4.9-4.9",
 } as const;
 
 export type IconName = keyof typeof PATHS;
