@@ -491,6 +491,7 @@ export function Composer({
   const firstShape = mode === family.modes.firstFrame && start?.kind === "image" ? start : null;
   const shape = firstShape && shapeOf(firstShape.w, firstShape.h);
   const modeLabel = `${family.name} · ${tMode(mode)}`;
+  const familyNote = tFamilies("note", { family: family.key });
   const framing = open !== null && typeof open === "object" ? images.find((a) => a.id === open.frameOf) : undefined;
   // The image whose frame menu is open went away (its upload failed): the menu closes with it.
   if (open !== null && typeof open === "object" && !framing) setOpen(null);
@@ -639,18 +640,19 @@ export function Composer({
             </button>
           </div>
           <div className="flex items-center justify-between gap-3.5 sm:justify-end">
-            <div className="min-w-0 sm:text-right">
-              <div className="flex items-baseline gap-1.5 text-xs text-muted sm:justify-end">
-                <span>{t("cost.label")}</span>
-                {priced && plan.ready ? (
-                  <span className="font-display text-2xl leading-none text-sand">{usd(format, plan.costUsd)}</span>
-                ) : (
-                  <span className="text-sm font-semibold text-foreground">{priced ? "—" : t("cost.unset")}</span>
-                )}
-              </div>
-              <div className="max-w-[16rem] truncate text-[11px] tabular-nums text-subtle sm:max-w-[13rem]">
-                {priced ? [...facts, t("cost.rate", { rate: rate(offer) })].join(" · ") : t("cost.unpriced", { facts: facts.join(" · ") })}
-              </div>
+            <div className="flex min-w-0 items-baseline gap-1.5 text-xs text-muted">
+              {facts.length > 0 && (
+                <>
+                  <span className="truncate text-[11px] tabular-nums text-subtle">{facts.join(" · ")}</span>
+                  <span aria-hidden className="text-subtle">·</span>
+                </>
+              )}
+              <span className="shrink-0">{t("cost.label")}</span>
+              {priced && plan.ready ? (
+                <span className="shrink-0 font-display text-2xl leading-none text-sand">{usd(format, plan.costUsd)}</span>
+              ) : (
+                <span className="shrink-0 text-sm font-semibold text-foreground">{priced ? "—" : t("cost.unset")}</span>
+              )}
             </div>
             <Button onClick={generate} disabled={!canGenerate} title={t("shortcut")} className="h-11 shrink-0 sm:h-10">
               {submitting ? t("submitting") : upload ? t("uploading") : t("generate")}
@@ -729,7 +731,7 @@ export function Composer({
                 />
               ))}
           </div>
-          <p className="text-xs leading-relaxed text-subtle">{tFamilies(`${family.key}.note`)}</p>
+          {familyNote && <p className="text-xs leading-relaxed text-subtle">{familyNote}</p>}
         </Popover>
       )}
 
@@ -767,7 +769,7 @@ export function Composer({
               <ParamControl key={p.key} spec={p} value={state.params[p.key]} onChange={(value) => dispatch({ type: "param", key: p.key, value })} />
             ),
           )}
-          <p className="text-xs leading-relaxed text-subtle">{tFamilies(`${family.key}.note`)}</p>
+          {familyNote && <p className="text-xs leading-relaxed text-subtle">{familyNote}</p>}
         </Popover>
       )}
 

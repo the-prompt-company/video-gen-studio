@@ -356,9 +356,7 @@
     },
     "cost": {
       "label": "预计",
-      "unset": "待定",
-      "rate": "单价 {rate}",
-      "unpriced": "管理员设置单价后，将按 {facts} 计算"
+      "unset": "待定"
     },
     "fact": {
       "seconds": "{seconds} 秒",
@@ -450,15 +448,7 @@
     "background": "{value, select, auto {自动} opaque {不透明} transparent {透明（PNG 或 WebP）} other {{value}}}"
   },
   "families": {
-    "seedance": {
-      "note": "费用与分辨率和时长成正比。试做建议用 480p，正式交付建议用 720p 及以上。"
-    },
-    "h3": {
-      "note": "输出固定为 2K，即使添加了附件也需要提示词。"
-    },
-    "gptImage2": {
-      "note": "有参考素材时会使用 OpenAI 编辑。通常需要几十秒到 2 分钟，费用按 OpenAI 报告的 token 用量确定。"
-    }
+    "note": "{family, select, h3 {输出固定为 2K，即使添加了附件也需要提示词。} gptImage2 {有参考素材时会使用 OpenAI 编辑。通常需要几十秒到 2 分钟，费用按 OpenAI 报告的 token 用量确定。} other {}}"
   },
   "prices": {
     "basis": {

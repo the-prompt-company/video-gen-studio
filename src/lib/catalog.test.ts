@@ -417,12 +417,22 @@ test("quality, output format and background name every option a model offers, in
   }
 });
 
-test("every model has a note, a price basis and an example, and every published price a label, in all three languages", () => {
+test("every model has a price basis and an example, and every published price a label, in all three languages", () => {
   for (const { locale, tree } of MESSAGES) {
     for (const f of FAMILY_IDS.map((id) => FAMILIES[id])) {
-      for (const key of [`families.${f.key}.note`, `prices.basis.${f.key}`, `prices.example.${f.key}`]) assert.ok(message(tree, key), `${locale} ${key}`);
+      for (const key of [`prices.basis.${f.key}`, `prices.example.${f.key}`]) assert.ok(message(tree, key), `${locale} ${key}`);
       for (const p of f.rate.published) assert.ok(message(tree, `prices.preset.${p.preset}`), `${locale} prices.preset.${p.preset}`);
     }
+  }
+});
+
+test("the model note is one select on the model that names only real models, so a model can go without one", () => {
+  const keys = new Set<string>(FAMILY_IDS.map((id) => FAMILIES[id].key));
+  for (const { locale, tree } of MESSAGES) {
+    const [select, ...rest] = parse(message(tree, "families.note") ?? "");
+    assert.ok(select?.type === TYPE.select && select.value === "family" && rest.length === 0, `${locale} families.note is one select on family`);
+    for (const option of Object.keys(select.options)) assert.ok(option === "other" || keys.has(option), `${locale} families.note names ${option}`);
+    assert.ok(!("seedance" in select.options), `${locale} families.note says nothing for Seedance`);
   }
 });
 
