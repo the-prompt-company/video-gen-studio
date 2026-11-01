@@ -140,7 +140,7 @@ export type Family = {
   /** The admin's one number per `unit`. What it prices is `prices.basis.<key>` ("480p·16:9", "2K", image output). */
   rate: {
     unit: RateUnit;
-    /** The rate while no admin has saved one. */
+    /** The rate while no admin has saved one above 0: a published price, so no generation is recorded at a cost of 0. */
     defaultUsd: number;
     /** The provider's published figures in that unit. */
     published: readonly PricePreset[];
@@ -170,6 +170,12 @@ function seedanceUnits(b: CostBasis): number {
   const weight = (b.params.resolution === "4k" ? 0.008 / 0.014 : 1) * (b.inputVideoS > 0 ? 0.6 : 1);
   return (tokens * weight) / SEEDANCE_UNIT_TOKENS;
 }
+
+/**
+ * Higgsfield's API price per second (open.higgsfield.ai/pricing, as of 2026-09-16): Seedance 2.0 at 480p 16:9, 30% under
+ * fal's list, and H3 at 2K, 50% under. The default rate of each, so a model nobody priced still records its cost.
+ */
+const HIGGSFIELD_USD = { seedance: 0.0985, h3: 0.065 } as const;
 
 /** H3 reference-to-video bills $0.08 for each image past this many, so the app takes no more. */
 const H3_IMAGES_WITHOUT_SURCHARGE = 5;
@@ -274,9 +280,9 @@ export const FAMILIES: Record<FamilyId, Family> = {
     facts: videoFacts,
     rate: {
       unit: "second",
-      defaultUsd: 0,
+      defaultUsd: HIGGSFIELD_USD.seedance,
       published: [
-        { preset: "higgsfieldTable", discount: 30, usd: 0.0985 },
+        { preset: "higgsfieldTable", discount: 30, usd: HIGGSFIELD_USD.seedance },
         { preset: "list", usd: 0.1406 },
       ],
       example: { family: "bytedance/seedance-2.0", mode: "t2v", params: { duration: 5, resolution: "720p", aspect_ratio: "16:9" }, inputVideoS: 0 },
@@ -304,9 +310,9 @@ export const FAMILIES: Record<FamilyId, Family> = {
     facts: videoFacts,
     rate: {
       unit: "second",
-      defaultUsd: 0,
+      defaultUsd: HIGGSFIELD_USD.h3,
       published: [
-        { preset: "higgsfieldTable", discount: 50, usd: 0.065 },
+        { preset: "higgsfieldTable", discount: 50, usd: HIGGSFIELD_USD.h3 },
         { preset: "list", usd: 0.13 },
       ],
       example: { family: "minimax/h3", mode: "t2v", params: { duration: 10 }, inputVideoS: 0 },

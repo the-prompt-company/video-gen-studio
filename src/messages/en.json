@@ -692,7 +692,7 @@
   },
   "models": {
     "title": "Model rates",
-    "lead": "Higgsfield's responses carry no cost, so for a video the app works out the cost when it sends the request, from this rate and Higgsfield's pricing rules (resolution, aspect ratio, duration, video reference length), and records it. For GPT Image 2 it multiplies the token counts OpenAI reports in its response by this rate (per 1M image output tokens) and OpenAI's input price ratios (text 5/30, image 8/30), and records the estimated cost when no token counts come back. A new rate applies from the next request. Actual charges follow each provider's invoice.",
+    "lead": "Higgsfield's responses carry no cost, so for a video the app works out the cost when it sends the request, from this rate and Higgsfield's pricing rules (resolution, aspect ratio, duration, video reference length), and records it. For GPT Image 2 it multiplies the token counts OpenAI reports in its response by this rate (per 1M image output tokens) and OpenAI's input price ratios (text 5/30, image 8/30), and records the estimated cost when no token counts come back. A new rate applies from the next request. Actual charges follow each provider's invoice. With no rate or a rate of 0, the published rate applies (the Higgsfield table for Seedance and H3, OpenAI's list price for GPT Image 2).",
     "list": "Models",
     "unit": "USD {per} ({basis})",
     "rateLabel": "{model} rate",

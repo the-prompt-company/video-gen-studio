@@ -692,7 +692,7 @@
   },
   "models": {
     "title": "模型单价",
-    "lead": "Higgsfield 的响应不含费用，因此视频在发起生成请求时，会按此单价和 Higgsfield 的计费规则（分辨率、画面比例、时长、参考视频时长）计算费用并记录。GPT Image 2 则将 OpenAI 在响应中返回的 token 数乘以此单价（每百万图片输出 token）和 OpenAI 的输入单价比例（文本 5/30，图片 8/30）后记录；如果没有返回 token 数，则记录预计费用。修改单价后从下一次请求开始生效，实际扣费金额以各服务商的发票为准。",
+    "lead": "Higgsfield 的响应不含费用，因此视频在发起生成请求时，会按此单价和 Higgsfield 的计费规则（分辨率、画面比例、时长、参考视频时长）计算费用并记录。GPT Image 2 则将 OpenAI 在响应中返回的 token 数乘以此单价（每百万图片输出 token）和 OpenAI 的输入单价比例（文本 5/30，图片 8/30）后记录；如果没有返回 token 数，则记录预计费用。修改单价后从下一次请求开始生效，实际扣费金额以各服务商的发票为准。未设置单价或单价为 0 时，使用公开单价（Seedance 和 H3 为 Higgsfield 价目表，GPT Image 2 为 OpenAI 标价）。",
     "list": "模型",
     "unit": "{per}（USD，{basis}）",
     "rateLabel": "{model} 单价",
