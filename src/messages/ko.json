@@ -277,10 +277,8 @@
     "outputs": "만들 것",
     "output": "{output, select, video {영상} other {이미지}}",
     "model": "모델",
-    "takes": "이미지 최대 {images, plural, other {#장}}{videos, plural, =0 {} other { · 영상 최대 #개}}{frames, select, both { · 시작·끝 프레임} start { · 시작 프레임} other {}}",
+    "takes": "이미지 최대 {images, plural, other {#장}}{videos, plural, =0 {} other { · 영상 최대 #개}}",
     "unavailable": "사용 불가",
-    "rateHint": "{basis} 기준 {rate}",
-    "rateUnset": "단가 미설정",
     "settings": {
       "title": "설정",
       "open": "설정 바꾸기 · {summary}"
@@ -446,9 +444,6 @@
     "quality": "{value, select, low {낮음 · low} medium {중간 · medium} high {높음 · high} other {{value}}}",
     "output_format": "{value, select, png {PNG} jpeg {JPEG} webp {WebP} other {{value}}}",
     "background": "{value, select, auto {자동} opaque {불투명} transparent {투명 (PNG·WebP)} other {{value}}}"
-  },
-  "families": {
-    "note": "{family, select, h3 {출력은 2K로 고정이고, 첨부가 있어도 프롬프트가 필요합니다.} other {}}"
   },
   "prices": {
     "basis": {

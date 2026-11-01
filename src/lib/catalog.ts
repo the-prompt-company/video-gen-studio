@@ -53,7 +53,7 @@ const SLUG: Record<Mode, string> = {
 
 export type FamilyId = "bytedance/seedance-2.0" | "minimax/h3" | "openai/gpt-image-2";
 export const FAMILY_IDS: readonly FamilyId[] = ["bytedance/seedance-2.0", "minimax/h3", "openai/gpt-image-2"];
-/** A family's name in the message files (`families.<key>`, `prices.basis.<key>`). Message keys cannot hold the "." of an id. */
+/** A family's name in the message files (`prices.basis.<key>`). Message keys cannot hold the "." of an id. */
 export type FamilyKey = "seedance" | "h3" | "gptImage2";
 
 /** What a rate is per: a second of video, or a million image output tokens. */

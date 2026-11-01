@@ -277,10 +277,8 @@
     "outputs": "Output",
     "output": "{output, select, video {Video} other {Image}}",
     "model": "Model",
-    "takes": "Up to {images, plural, one {# image} other {# images}}{videos, plural, =0 {} one { · # video} other { · # videos}}{frames, select, both { · start and end frames} start { · start frame} other {}}",
+    "takes": "Up to {images, plural, one {# image} other {# images}}{videos, plural, =0 {} one { · # video} other { · # videos}}",
     "unavailable": "Unavailable",
-    "rateHint": "{rate} ({basis})",
-    "rateUnset": "No rate set",
     "settings": {
       "title": "Settings",
       "open": "Change settings · {summary}"
@@ -446,9 +444,6 @@
     "quality": "{value, select, low {Low} medium {Medium} high {High} other {{value}}}",
     "output_format": "{value, select, png {PNG} jpeg {JPEG} webp {WebP} other {{value}}}",
     "background": "{value, select, auto {Auto} opaque {Opaque} transparent {Transparent (PNG or WebP)} other {{value}}}"
-  },
-  "families": {
-    "note": "{family, select, h3 {Output is fixed at 2K, and a prompt is required even with attachments.} other {}}"
   },
   "prices": {
     "basis": {
@@ -662,7 +657,7 @@
       "first": "Choose an Excel file",
       "another": "Choose another file"
     },
-    "working": "{doing, select, reading {Reading <name>{file}</name>…} checking {Checking <name>{file}</name>…} creating {Creating members from <name>{file}</name>…} other {}}",
+    "working": "{doing, select, reading {Reading <name>{file}</name>…} checking {Checking <name>{file}</name>…} creating {Creating members from <name>{file}</name>…} other {Working on <name>{file}</name>…}}",
     "failure": {
       "notXlsx": "Only Excel workbooks (.xlsx) can be read. In Excel, use Save As → Excel Workbook (.xlsx), then choose the file again.",
       "unreadable": "Couldn't read the file. Check that it opens in Excel. If it's password-protected, remove the password and save it again as .xlsx, then choose it again.",
