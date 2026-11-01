@@ -6,8 +6,8 @@ export const CONTACT_MESSAGE_MAX = 5000;
 
 /** What the browser knows about where the member was when they wrote. */
 export type ContactContext = { page: string; locale: string; userAgent: string; viewport: string };
-/** `key` names one dialog's send, so a retried POST sends one email. `generationId` is the turn the member reported from. */
-export type ContactReport = { kind: ContactKind; message: string; context: ContactContext; key: string | null; generationId: string | null };
+/** `generationId` is the turn the member reported from. */
+export type ContactReport = { kind: ContactKind; message: string; context: ContactContext; generationId: string | null };
 
 /** The reported generation as the database has it, so the email never repeats what the browser claimed about it. */
 export type GenerationFacts = {
@@ -24,7 +24,6 @@ export type ContactSender = { username: string; nickname: string | null; role: s
 export type ContactEmail = { subject: string; text: string; replyTo: string | null };
 
 const KIND_LABEL: Record<ContactKind, string> = { bug: "Bug report", question: "Question", other: "Other" };
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const FIELD_MAX = 500;
 
@@ -44,7 +43,6 @@ export function parseContact(body: unknown): { ok: true; report: ContactReport }
       kind: b.kind as ContactKind,
       message,
       context: { page: text(c.page, 2000), locale: text(c.locale, 20), userAgent: text(c.userAgent), viewport: text(c.viewport, 40) },
-      key: typeof b.key === "string" && UUID.test(b.key) ? b.key : null,
       generationId: typeof b.generationId === "string" && b.generationId ? b.generationId : null,
     },
   };

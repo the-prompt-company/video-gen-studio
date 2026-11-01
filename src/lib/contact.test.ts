@@ -2,28 +2,26 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { CONTACT_MESSAGE_MAX, contactEmail, parseContact, type ContactReport } from "./contact";
 
-const KEY = "0b6f1a2c-3d4e-4f50-8a6b-7c8d9e0f1a2b";
 const context = { page: "https://video-gen-studio-sigma.vercel.app/playground?thread=earlier", locale: "ko", userAgent: "Mozilla/5.0 Chrome/141", viewport: "1440×900" };
 
 test("a report needs a known kind and a message, and keeps the message as written apart from its outer blank lines", () => {
-  assert.deepEqual(parseContact({ kind: "praise", message: "hi", key: KEY }), { ok: false, reason: { code: "contactKind" } });
-  assert.deepEqual(parseContact({ kind: "bug", message: "  \n ", key: KEY }), { ok: false, reason: { code: "contactEmpty" } });
+  assert.deepEqual(parseContact({ kind: "praise", message: "hi" }), { ok: false, reason: { code: "contactKind" } });
+  assert.deepEqual(parseContact({ kind: "bug", message: "  \n " }), { ok: false, reason: { code: "contactEmpty" } });
   assert.deepEqual(parseContact({ kind: "bug", message: "x".repeat(CONTACT_MESSAGE_MAX + 1) }), { ok: false, reason: { code: "contactTooLong", params: { max: CONTACT_MESSAGE_MAX } } });
   assert.deepEqual(parseContact(null), { ok: false, reason: { code: "contactKind" } });
-  const ok = parseContact({ kind: "bug", message: "\n생성하기가 안 눌려요\n  두 번째 줄\n", key: KEY, generationId: "g1", context });
+  const ok = parseContact({ kind: "bug", message: "\n생성하기가 안 눌려요\n  두 번째 줄\n", generationId: "g1", context });
   assert.ok(ok.ok);
-  assert.deepEqual(ok.report, { kind: "bug", message: "생성하기가 안 눌려요\n  두 번째 줄", key: KEY, generationId: "g1", context });
+  assert.deepEqual(ok.report, { kind: "bug", message: "생성하기가 안 눌려요\n  두 번째 줄", generationId: "g1", context });
 });
 
-test("context the browser sends is cut to length rather than refused, and a missing or malformed key just turns idempotency off", () => {
-  const r = parseContact({ kind: "other", message: "m", key: "not-a-uuid", context: { page: 42, userAgent: "u".repeat(900), viewport: "1×1" } });
+test("context the browser sends is cut to length rather than refused", () => {
+  const r = parseContact({ kind: "other", message: "m", context: { page: 42, userAgent: "u".repeat(900), viewport: "1×1" } });
   assert.ok(r.ok);
   assert.deepEqual(r.report.context, { page: "", locale: "", userAgent: "u".repeat(500), viewport: "1×1" });
-  assert.equal(r.report.key, null);
   assert.equal(r.report.generationId, null);
 });
 
-const report: ContactReport = { kind: "bug", message: "영상이 실패로 끝났어요\n다시 해도 같아요", context, key: KEY, generationId: "g1" };
+const report: ContactReport = { kind: "bug", message: "영상이 실패로 끝났어요\n다시 해도 같아요", context, generationId: "g1" };
 const sentAt = new Date("2026-11-01T08:30:00Z");
 
 test("the email leads with the member's words and labels everything the operator needs, generation facts included", () => {

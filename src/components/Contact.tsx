@@ -51,7 +51,6 @@ function ContactDialog({ opening, onClose }: { opening: Opening; onClose: () => 
   const errorText = useErrorText();
   const [kind, setKind] = useState(opening.kind);
   const [message, setMessage] = useState("");
-  const [key] = useState(() => crypto.randomUUID());
   const [phase, setPhase] = useState<"writing" | "sending" | "sent">("writing");
   const [error, setError] = useState<Reason | null>(null);
 
@@ -66,7 +65,6 @@ function ContactDialog({ opening, onClose }: { opening: Opening; onClose: () => 
         body: JSON.stringify({
           kind,
           message,
-          key,
           generationId: opening.generationId,
           context: { page: location.href, locale: document.documentElement.lang, userAgent: navigator.userAgent, viewport: `${innerWidth}×${innerHeight}` },
         }),
