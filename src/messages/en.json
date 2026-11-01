@@ -192,7 +192,10 @@
     "referenceRequired": "{mode, select, r2v {Reference to video needs at least one image or video reference.} other {Reference to image needs at least one image reference.}}",
     "contactKind": "Choose a type.",
     "contactEmpty": "Write a message first.",
-    "contactTooLong": "Messages can be up to {max} characters.",
+    "contactTooLong": "Messages can be up to {max, plural, one {# character} other {# characters}}.",
+    "contactTooManyFiles": "You can attach up to {max, plural, one {# file} other {# files}}.",
+    "contactFilesTooLarge": "Attachments can be up to {mb} MB in total.",
+    "contactFileType": "{name} can't be attached. Only images, videos, PDF and text files can.",
     "contactUnavailable": "Contact email isn't set up yet. Contact an admin directly.",
     "contactNotSent": "The email couldn't be sent. Try again in a moment."
   },
@@ -745,6 +748,12 @@
     "sent": "Sent. It's on its way to the operator by email.",
     "close": "Close",
     "report": "Report a problem",
-    "reportLabel": "Report a problem with this generation"
+    "reportLabel": "Report a problem with this generation",
+    "subjectLabel": "Subject (optional)",
+    "subjectPlaceholder": "Leave blank to use the first line of your message",
+    "attach": "Attach files",
+    "attachHint": "Images, videos, PDF or text, up to {max, plural, one {# file} other {# files}} and {mb} MB in total. You can also paste a screenshot into the message",
+    "attachmentsLabel": "Attachments",
+    "removeFile": "Remove {name}"
   }
 }
