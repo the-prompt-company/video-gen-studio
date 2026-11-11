@@ -342,7 +342,8 @@
       "noMatch": "No results match “{query}”",
       "kind": "{kind, select, image {Image} other {Video, {seconds}s}}",
       "attached": "Added",
-      "hidden": "{model} doesn't take videos, so video results are hidden"
+      "hidden": "{model} doesn't take videos, so video results are hidden",
+      "insert": "Insert {token} mention"
     },
     "dropHere": "Drop to add as references",
     "uploading": "Uploading…",

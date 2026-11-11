@@ -150,7 +150,7 @@ const Turn = memo(function Turn({ g, n, offset, onCancel, onReuse, onAttach }: T
               </button>
             )}
             {media && (
-              <a href={media.downloadUrl} download target="_blank" rel="noreferrer" className={ACTION}>
+              <a href={`/api/generations/${g.id}/download`} download className={ACTION}>
                 <Icon name="down" />
                 {tGeneration("download")}
                 <span className="font-display text-sm leading-none text-sand">{g.image ? g.image.format.toUpperCase() : "MP4"}</span>

@@ -27,6 +27,7 @@ import { threadTitle } from "@/lib/threads";
 import { Button, ErrorText } from "@/components/ui";
 import { Icon } from "@/components/icons";
 import { Popover } from "@/components/Popover";
+import { attachmentMentions, orderedAttachments, remapMentions } from "@/lib/attachment-mentions";
 import { ResultList, useResultPicker } from "@/components/ResultPicker";
 import { shapeOf, useAspectText, useSettingsSummary } from "@/components/settings-summary";
 import { useErrorText, useParamLabel, type KeyTranslator } from "@/i18n/errors";
@@ -300,6 +301,12 @@ export function Composer({
     latest.current = state;
   }, [state]);
   const [prompt, setPrompt] = useState("");
+  const mentionOrder = orderedAttachments(state.items, state.frames);
+  const [mentionItems, setMentionItems] = useState(state.items);
+  if (mentionItems.map((a) => a.id).join(",") !== mentionOrder.map((a) => a.id).join(",")) {
+    setMentionItems(mentionOrder);
+    setPrompt((text) => remapMentions(text, mentionItems, mentionOrder));
+  }
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<Reason | null>(null);
   const [errorThread, setErrorThread] = useState(threadKey);
@@ -325,7 +332,7 @@ export function Composer({
   const left = new Set(unsent(state).map((a) => a.id));
   const images = all.filter((a) => a.kind === "image");
   const videos = all.filter((a) => a.kind === "video");
-  const tagOf = (a: Attachment) => (a.kind === "image" ? String(images.indexOf(a) + 1) : `V${videos.indexOf(a) + 1}`);
+  const tagOf = (a: Attachment) => attachmentMentions(mentionOrder).find((ref) => ref.id === a.id)!.token;
   const { draft, plan } = planOf(state, prompt, offer.rateUsd);
   const upload = isUploading(state);
   const canGenerate = !offer.unavailable && plan.ready && !submitting && !upload;
@@ -394,6 +401,7 @@ export function Composer({
     const temporary = (url: string) => largeUploadPrefix !== null && URL.canParse(url) && new URL(url).pathname.includes(`/${largeUploadPrefix}`);
     const action = reuseOf(g, offers.map((o) => o.family), latest.current.family, temporary);
     dispatch(action);
+    setMentionItems([]);
     setPrompt(g.prompt ?? "");
     setError(null);
     setOpen(null);
@@ -403,7 +411,7 @@ export function Composer({
 
   useImperativeHandle(ref, () => ({ reuse, attachResult: (g) => void attachResult(g) }));
 
-  const picker = useResultPicker({ prompt, setPrompt, input: promptRef, threadRows, takes: takes(state), onPick: (g) => void attachResult(g) });
+  const picker = useResultPicker({ prompt, setPrompt, input: promptRef, threadRows, attachments: mentionOrder, takes: takes(state), onPick: (g) => void attachResult(g) });
 
   async function attach(files: File[]) {
     const current = FAMILIES[latest.current.family];
@@ -542,6 +550,9 @@ export function Composer({
                       removeLabel={t("refs.removeLabel", { kind: a.kind, tag, name: a.name })}
                       onRemove={() => dispatch({ type: "remove", id: a.id })}
                     />
+                    <button type="button" disabled={!a.url || left.has(a.id)} aria-label={t("picker.insert", { token: tag })}
+                      onMouseDown={(e) => e.preventDefault()} onClick={() => picker.insert(tag)}
+                      className="mt-1 max-w-24 truncate rounded px-1 py-1 text-xs text-accent-soft hover:bg-white/10 disabled:opacity-40">{tag}</button>
                   </li>
                 );
               })}

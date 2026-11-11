@@ -342,7 +342,8 @@
       "noMatch": "没有与“{query}”匹配的结果",
       "kind": "{kind, select, image {图片} other {视频 {seconds} 秒}}",
       "attached": "已添加",
-      "hidden": "{model} 不支持视频，已隐藏视频结果"
+      "hidden": "{model} 不支持视频，已隐藏视频结果",
+      "insert": "插入 {token} 提及"
     },
     "dropHere": "松开即可添加为参考素材",
     "uploading": "正在上传…",

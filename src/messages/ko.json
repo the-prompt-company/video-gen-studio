@@ -342,7 +342,8 @@
       "noMatch": "맞는 결과가 없습니다: “{query}”",
       "kind": "{kind, select, image {이미지} other {영상 {seconds}초}}",
       "attached": "넣음",
-      "hidden": "{model} 모델은 영상을 받지 않아 영상 결과는 뺐습니다"
+      "hidden": "{model} 모델은 영상을 받지 않아 영상 결과는 뺐습니다",
+      "insert": "{token} 멘션 삽입"
     },
     "dropHere": "여기에 놓으면 레퍼런스로 들어갑니다",
     "uploading": "업로드 중…",

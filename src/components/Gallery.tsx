@@ -269,7 +269,7 @@ function Detail({ g, now, onClose }: { g: GalleryItem; now: number; onClose: () 
           </div>
           <div className="flex gap-2 md:flex-col">
             {(g.image ?? g.video) && (
-              <a href={(g.image ?? g.video)?.downloadUrl} download target="_blank" rel="noreferrer" className="inline-flex h-10 flex-1 items-center justify-center rounded-full bg-accent px-5 text-sm font-medium text-background transition hover:bg-accent-hover md:flex-none">
+              <a href={`/api/generations/${g.id}/download`} download className="inline-flex h-10 flex-1 items-center justify-center rounded-full bg-accent px-5 text-sm font-medium text-background transition hover:bg-accent-hover md:flex-none">
                 {tGen("download")}
               </a>
             )}
