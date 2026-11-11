@@ -123,6 +123,7 @@
     "refsNotList": "{kind, select, image {Images} other {Videos}}: must be a list.",
     "tooManyRefs": "{kind, select, image {Images} other {Videos}}: at most {max, plural, one {# item} other {# items}}.",
     "refNotYours": "{kind, select, image {Image} other {Video}} references can only be files you uploaded or your own results. Remove that reference and generate again.",
+    "downloadUnavailable": "Can't download this file. The stored file or original video may have been deleted or may be temporarily unreachable. Please try again shortly.",
     "resultGone": "A result you added as a reference is no longer available. Results kept only on Higgsfield are deleted 7 days after they finish. Remove it and add another result.",
     "refMismatch": "A result you added as a reference doesn't match the stored result's type or length. Remove it and add it again.",
     "unknownModel": "Unknown model. Reload the page.",
@@ -342,7 +343,8 @@
       "noMatch": "No results match “{query}”",
       "kind": "{kind, select, image {Image} other {Video, {seconds}s}}",
       "attached": "Added",
-      "hidden": "{model} doesn't take videos, so video results are hidden"
+      "hidden": "{model} doesn't take videos, so video results are hidden",
+      "insert": "Insert {token} mention"
     },
     "dropHere": "Drop to add as references",
     "uploading": "Uploading…",

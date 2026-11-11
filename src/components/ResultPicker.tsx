@@ -4,6 +4,8 @@ import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent
 import { useFormatter, useNow, useTranslations } from "next-intl";
 import { describeModel } from "@/lib/catalog";
 import type { PublicGeneration } from "@/lib/generations";
+import type { Attachment } from "@/lib/composer";
+import { attachmentMentions, insertMention } from "@/lib/attachment-mentions";
 import type { Reference } from "@/lib/references";
 import { mentionQuery, pickable, typedMention, withoutMention } from "@/lib/result-picker";
 import { Icon } from "@/components/icons";
@@ -22,7 +24,9 @@ export function useResultPicker({
   threadRows,
   takes,
   onPick,
+  attachments,
 }: {
+  attachments: readonly Attachment[];
   prompt: string;
   setPrompt: (text: string) => void;
   input: RefObject<HTMLTextAreaElement | null>;
@@ -45,9 +49,10 @@ export function useResultPicker({
 
   const recentRows = recent.state === "loaded" ? recent.rows : [];
   const lists = mention ? pickable(threadRows, recentRows, takes, mention.query) : { thread: [], recent: [] };
-  const options = [...lists.thread, ...lists.recent];
+  const references = attachmentMentions(attachments).filter((a) => a.url !== null && takes.includes(a.kind) && (!mention?.query || `${a.token} ${a.name}`.toLowerCase().includes(mention.query.toLowerCase())));
+  const options = [...references, ...lists.thread, ...lists.recent];
   const current = Math.min(active, options.length - 1);
-  const optionId = (g: PublicGeneration) => `${id}-${g.id}`;
+  const optionId = (g: { id: string }) => `${id}-${g.id}`;
 
   function open(start: number) {
     request.current?.abort();
@@ -70,16 +75,25 @@ export function useResultPicker({
     setMention(null);
   }
 
-  function pick(g: PublicGeneration) {
+  function pick(g: PublicGeneration | (typeof references)[number]) {
     if (!mention) return;
-    const next = withoutMention(prompt, mention.start, input.current?.selectionStart ?? prompt.length);
+    const caret = input.current?.selectionStart ?? prompt.length;
+    const next = "token" in g ? insertMention(prompt, mention.start, caret, g.token) : withoutMention(prompt, mention.start, caret);
     caretTo.current = next.caret;
     setPrompt(next.text);
     close();
-    onPick(g);
+    if (!("token" in g)) onPick(g);
   }
 
   return {
+    insert(token: string) {
+      const el = input.current;
+      const next = insertMention(prompt, el?.selectionStart ?? prompt.length, el?.selectionEnd ?? prompt.length, token);
+      caretTo.current = next.caret;
+      setPrompt(next.text);
+      close();
+      el?.focus();
+    },
     /** The textarea's onChange. */
     edited(text: string, caret: number) {
       const typed = typedMention(text, caret);
@@ -124,7 +138,7 @@ export function useResultPicker({
       "aria-controls": mention ? id : undefined,
       "aria-activedescendant": mention && options[current] ? optionId(options[current]) : undefined,
     },
-    list: mention && { id, lists, recent: recent.state, active: options[current]?.id ?? null, optionId, query: mention.query, pick, hover: (g: PublicGeneration) => setActive(options.indexOf(g)) },
+    list: mention && { id, lists, references, recent: recent.state, active: options[current]?.id ?? null, optionId, query: mention.query, pick, hover: (g: (typeof options)[number]) => setActive(options.indexOf(g)) },
     videosHidden: !takes.includes("video") && [...threadRows, ...recentRows].some((g) => g.ref?.kind === "video"),
   };
 }
@@ -135,12 +149,12 @@ type ListProps = NonNullable<ReturnType<typeof useResultPicker>["list"]> & {
   note: string | null;
 };
 
-export function ResultList({ id, lists, recent, active, optionId, query, pick, hover, attached, note }: ListProps) {
+export function ResultList({ id, lists, references, recent, active, optionId, query, pick, hover, attached, note }: ListProps) {
   const t = useTranslations("playground");
   const tGeneration = useTranslations("generation");
   const format = useFormatter();
   const openedAt = useNow();
-  const total = lists.thread.length + lists.recent.length;
+  const total = references.length + lists.thread.length + lists.recent.length;
   const groups = [
     { key: "thread", label: t("picker.thread"), rows: lists.thread },
     { key: "recent", label: t("picker.recent"), rows: lists.recent },
@@ -161,6 +175,19 @@ export function ResultList({ id, lists, recent, active, optionId, query, pick, h
         </span>
       </div>
       <div role="listbox" id={id} aria-labelledby={`${id}-label`} aria-busy={recent === "loading" || undefined} className="grid min-h-0 flex-1 content-start gap-2 overflow-y-auto overscroll-contain px-1.5 pb-1.5">
+        {references.length > 0 && <div role="group" aria-label={t("refs.attached")} className="grid gap-0.5">
+          <div className="px-2 py-1 text-xs text-subtle">{t("refs.attached")}</div>
+          {references.map((a) => <div key={a.id} id={optionId(a)} role="option" aria-selected={a.id === active}
+            onPointerDown={(e) => e.preventDefault()} onMouseDown={(e) => e.preventDefault()}
+            onPointerMove={() => hover(a)} onClick={() => pick(a)}
+            className="flex min-h-14 cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 aria-selected:bg-white/10">
+            {a.kind === "image" ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={a.preview} alt="" className="h-9 w-16 rounded-md object-cover" />
+            ) : <video src={a.preview} muted playsInline preload="metadata" className="h-9 w-16 rounded-md object-cover" />}
+            <span className="min-w-0"><span className="block text-sm">{a.token}</span><span className="block truncate text-xs text-muted">{a.name}</span></span>
+          </div>)}
+        </div>}
         {groups.map((group) => (
           <div key={group.key} role="group" aria-labelledby={`${id}-${group.key}`} className="grid gap-0.5">
             <div role="presentation" id={`${id}-${group.key}`} className="px-2 pb-0.5 pt-1 text-[11px] font-medium text-subtle">

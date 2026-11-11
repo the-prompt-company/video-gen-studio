@@ -1,5 +1,8 @@
 "use client";
 
+import { ResultDownload } from "@/components/ResultDownload";
+import { ResultVideo } from "@/components/ResultVideo";
+
 import { memo, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type ReactNode, type Ref, type RefObject } from "react";
 import { useFormatter, useTranslations } from "next-intl";
 import { describeModel, modelLine, type Mode } from "@/lib/catalog";
@@ -115,7 +118,7 @@ const Turn = memo(function Turn({ g, n, offset, onCancel, onReuse, onAttach }: T
       <div className="grid gap-2">
         <div className="relative overflow-hidden rounded-md bg-surface" style={{ aspectRatio: `${w} / ${h}`, width: `min(100%, 720px, calc(${MEDIA_MAX_H} * ${w / h}))` }}>
           {g.video ? (
-            <video src={g.video.url} controls playsInline preload="metadata" aria-label={tGeneration("video")} className="h-full w-full object-contain" />
+            <ResultVideo generationId={g.id} src={g.video.url} controls playsInline preload="metadata" aria-label={tGeneration("video")} className="h-full w-full object-contain" />
           ) : g.image ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={g.image.url} alt={tGeneration("image")} loading="lazy" className="h-full w-full object-contain" />
@@ -150,11 +153,11 @@ const Turn = memo(function Turn({ g, n, offset, onCancel, onReuse, onAttach }: T
               </button>
             )}
             {media && (
-              <a href={media.downloadUrl} download target="_blank" rel="noreferrer" className={ACTION}>
+              <ResultDownload id={g.id} className={ACTION}>
                 <Icon name="down" />
                 {tGeneration("download")}
                 <span className="font-display text-sm leading-none text-sand">{g.image ? g.image.format.toUpperCase() : "MP4"}</span>
-              </a>
+              </ResultDownload>
             )}
             {g.ref && (
               <button type="button" title={t("actions.attachLabel")} onClick={() => onAttach(g)} className={ACTION}>

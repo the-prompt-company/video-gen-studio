@@ -15,7 +15,7 @@ export function typedMention(text: string, caret: number): number | null {
 export function mentionQuery(text: string, start: number, caret: number): string | null {
   if (text[start] !== "@" || caret <= start) return null;
   const query = text.slice(start + 1, caret);
-  return /\s/u.test(query) ? null : query;
+  return /\s/u.test(query) && !/^(image|video) [0-9]*$/i.test(query) ? null : query;
 }
 
 /**
