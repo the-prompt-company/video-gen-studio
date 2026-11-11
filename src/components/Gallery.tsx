@@ -1,5 +1,8 @@
 "use client";
 
+import { ResultDownload } from "@/components/ResultDownload";
+import { ResultVideo } from "@/components/ResultVideo";
+
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useFormatter, useTranslations } from "next-intl";
@@ -114,7 +117,7 @@ function Tile({ g, now, onOpen }: { g: GalleryItem; now: number; onOpen: () => v
           // eslint-disable-next-line @next/next/no-img-element
           <img src={near ? g.image.url : undefined} alt="" className="aspect-video w-full bg-background object-contain" />
         ) : (
-          <video
+          <ResultVideo generationId={g.id}
             ref={ref}
             src={near ? g.video?.url : undefined}
             muted
@@ -186,7 +189,7 @@ function Detail({ g, now, onClose }: { g: GalleryItem; now: number; onClose: () 
               onLoad={(e) => setImageSize({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
             />
           ) : (
-            <video
+            <ResultVideo generationId={g.id}
               ref={ref}
               src={g.video?.url}
               controls
@@ -269,9 +272,9 @@ function Detail({ g, now, onClose }: { g: GalleryItem; now: number; onClose: () 
           </div>
           <div className="flex gap-2 md:flex-col">
             {(g.image ?? g.video) && (
-              <a href={`/api/generations/${g.id}/download`} download className="inline-flex h-10 flex-1 items-center justify-center rounded-full bg-accent px-5 text-sm font-medium text-background transition hover:bg-accent-hover md:flex-none">
+              <ResultDownload id={g.id} className="inline-flex h-10 flex-1 items-center justify-center rounded-full bg-accent px-5 text-sm font-medium text-background transition hover:bg-accent-hover md:flex-none">
                 {tGen("download")}
-              </a>
+              </ResultDownload>
             )}
             <Button variant="outline" onClick={onClose} className="flex-1 md:flex-none">
               {tCommon("close")}

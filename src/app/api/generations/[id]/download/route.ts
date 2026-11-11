@@ -19,9 +19,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     const result = publicGeneration(access.row);
     const media = result.image ?? result.video;
     if (!media) throw new HttpError(404, "resultGone");
-    if (result.video?.kind === "provider" && result.video.expiresAt && new Date(result.video.expiresAt).getTime() <= Date.now()) throw new HttpError(410, "resultGone");
     // Only the authorized row's server-recorded result can be downloaded; never accept a URL from the caller.
-    return await streamDownload(new URL(media.url, req.url), id, result.image?.format, req.signal);
+    return await streamDownload(new URL(media.url, req.url), id, result.image?.format, req.signal, {
+      fallback: result.video && access.row.resultUrl ? new URL(access.row.resultUrl, req.url) : undefined,
+      inline: new URL(req.url).searchParams.get("inline") === "1",
+      range: req.headers.get("range"),
+    });
   } catch (error) {
     return errorResponse(error);
   }
