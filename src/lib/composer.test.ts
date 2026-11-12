@@ -6,7 +6,7 @@ import { composerReducer, fit, modeOf, newComposer, pastedFiles, planOf, reuseOf
 
 const SEEDANCE: FamilyId = "bytedance/seedance-2.0";
 const H3: FamilyId = "minimax/h3";
-const GPT: FamilyId = "openai/gpt-image-2";
+const GPT: FamilyId = "openai/gpt-image-2.6-flare";
 
 let n = 0;
 const image = (url: string | null = `https://cdn.test/i${++n}.jpg`, refUpload = false): Attachment => ({ id: `img-${++n}`, kind: "image", name: "a.jpg", preview: `blob:${n}`, url, refUpload, w: 1280, h: 720 });
@@ -26,7 +26,7 @@ function sends(c: Composer, prompt = "비 오는 밤 다리"): { endpoint: strin
 test("with nothing attached the prompt goes alone to the text endpoint", () => {
   assert.deepEqual(sends(newComposer(SEEDANCE)), { endpoint: "bytedance/seedance-2.0/text-to-video", body: { ...defaultParams(SEEDANCE), prompt: "비 오는 밤 다리" } });
   const gpt = sends(newComposer(GPT));
-  assert.ok("endpoint" in gpt && gpt.endpoint === "openai/gpt-image-2/generations" && !("images" in gpt.body), JSON.stringify(gpt));
+  assert.ok("endpoint" in gpt && gpt.endpoint === "openai/gpt-image-2.6-flare/generations" && !("images" in gpt.body), JSON.stringify(gpt));
 });
 
 test("attached files land as references with no frame mark, and go out as image_urls and video_urls", () => {
@@ -40,7 +40,7 @@ test("attached files land as references with no frame mark, and go out as image_
 
   const gpt = sends(run(newComposer(GPT), { type: "add", items: [a, b] }), "우산을 든 사람");
   assert.ok("body" in gpt, JSON.stringify(gpt));
-  assert.deepEqual([gpt.endpoint, gpt.body.images], ["openai/gpt-image-2/edits", [{ image_url: a.url }, { image_url: b.url }]]);
+  assert.deepEqual([gpt.endpoint, gpt.body.images], ["openai/gpt-image-2.6-flare/edits", [{ image_url: a.url }, { image_url: b.url }]]);
 });
 
 test("marking an image 시작 and another 끝 sends image to video with exactly those two", () => {
@@ -104,7 +104,7 @@ test("a model without frames takes the marks off and says so; a model with frame
   assert.deepEqual([h3.params, modeOf(h3), h3.frames, h3.note], [defaultParams(H3), "i2v", frames.frames, null]);
   const gpt = run(frames, { type: "family", family: GPT });
   assert.deepEqual([modeOf(gpt), ids(gpt), gpt.frames, gpt.note], ["r2i", [a.id, b.id], { start: null, end: null }, { kind: "unmarked", family: GPT }]);
-  assert.equal(run(gpt, mark("start", a)), gpt, "GPT Image 2 offers no frame to mark");
+  assert.equal(run(gpt, mark("start", a)), gpt, "GPT Image 2.6 Flare offers no frame to mark");
   const plain = run(run(newComposer(SEEDANCE), { type: "add", items: [a] }), { type: "family", family: GPT });
   assert.equal(plain.note, null, "nothing was marked, so there is nothing to say");
 });
@@ -165,7 +165,7 @@ test("다시 on a text or reference turn brings back the settings only, and says
   assert.deepEqual([text.family, modeOf(text), text.note], [H3, "t2v", { kind: "reused", refs: "none" }]);
   const refs = reuse(newComposer(SEEDANCE), turn("bytedance/seedance-2.0/reference-to-video", ["https://hf.test/a.jpg"], ["https://hf.test/v.mp4"])).loaded;
   assert.deepEqual([refs.items, refs.note], [[], { kind: "reused", refs: "missing" }]);
-  const edit = reuse(newComposer(SEEDANCE), turn("openai/gpt-image-2/edits", ["https://blob.test/refs/1/a.png"])).loaded;
+  const edit = reuse(newComposer(SEEDANCE), turn("openai/gpt-image-2.6-flare/edits", ["https://blob.test/refs/1/a.png"])).loaded;
   assert.deepEqual([edit.family, edit.items, edit.note], [GPT, [], { kind: "reused", refs: "missing" }]);
 });
 

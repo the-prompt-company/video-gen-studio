@@ -51,7 +51,7 @@ const KEYS: Record<ImageOp, readonly string[]> = {
   generations: SHARED_KEYS,
   edits: [...SHARED_KEYS, "images", "mask", "input_fidelity"],
 };
-const MODELS = ["gpt-image-2", "gpt-image-2-2026-04-21"];
+const MODELS = ["gpt-image-2.6-flare", "gpt-image-2", "gpt-image-2-2026-04-21"];
 
 function sizeError(v: unknown): string | null {
   if (v === "auto") return null;

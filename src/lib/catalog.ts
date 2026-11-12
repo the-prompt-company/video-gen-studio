@@ -21,21 +21,14 @@
  * Seedance output sizes per resolution and aspect: runware.ai's Seedance 2.0 docs (480p and 720p agree with fal.ai).
  * Higgsfield's invoice is the truth; these estimates are what the app records.
  *
- * OpenAI (image). Verified 2026-10-29 against the official openai npm 7.45.1 (resources/images.d.ts) and
- * developers.openai.com: models/gpt-image-2, pricing, guides/image-generation, reference images generate and edit:
- *   openai/gpt-image-2/generations   POST /v1/images/generations, JSON: model, prompt (<= 32,000 chars), size (any
- *                                    WxH with both sides divisible by 16, ratio 1:3-3:1, 655,360-8,294,400 px, edge
- *                                    <= 3840; 1024x1024, 1536x1024, 1024x1536 standard), quality low|medium|high|auto,
- *                                    output_format png|jpeg|webp, background auto|opaque|transparent (transparent is a
- *                                    preview for gpt-image-2 and needs png or webp), moderation, n 1-10, safety_identifier
- *   openai/gpt-image-2/edits         POST /v1/images/edits, the same plus images: 1-16 of { image_url } (a URL OpenAI
- *                                    fetches); input_fidelity must be omitted for gpt-image-2 (inputs are always read
- *                                    at high fidelity)
- * The answer is base64 in data[0].b64_json, with usage { input_tokens_details { text_tokens, image_tokens },
- * output_tokens } that the reference labels "gpt-image-1 only", so a missing usage falls back to the estimate.
- * Prices per 1M tokens (Standard): text input $5, image input $8, image output $30. Per image for GPT Image 2 (guide,
- * Calculating costs): low $0.006 / $0.005 / $0.005, medium $0.053 / $0.041 / $0.041, high $0.211 / $0.165 / $0.165 at
- * 1024x1024 / 1024x1536 / 1536x1024. gpt-image-2's input-image tokenization is not published.
+ * OpenAI image model: GPT Image 2.6 Flare, verified 2026-11-12:
+ * https://developers.openai.com/api/docs/models/gpt-image-2.6-flare
+ * https://developers.openai.com/api/docs/guides/image-generation
+ * Uses /v1/images/generations and /v1/images/edits (images: [{ image_url }]).
+ * Existing raster formats, dimensions and low/medium/high quality remain supported.
+ * Token rates: text input $5, image input $8, image output $30 per million.
+ * Pre-generation estimates retain the historical Image 2 heuristic, not a published
+ * Image 2.6 per-image price. Actual response usage replaces the estimate when available.
  */
 
 import { appError, type AppError } from "./errors";
@@ -51,8 +44,8 @@ const SLUG: Record<Mode, string> = {
   r2i: "edits",
 };
 
-export type FamilyId = "bytedance/seedance-2.0" | "minimax/h3" | "openai/gpt-image-2";
-export const FAMILY_IDS: readonly FamilyId[] = ["bytedance/seedance-2.0", "minimax/h3", "openai/gpt-image-2"];
+export type FamilyId = "bytedance/seedance-2.0" | "minimax/h3" | "openai/gpt-image-2.6-flare";
+export const FAMILY_IDS: readonly FamilyId[] = ["bytedance/seedance-2.0", "minimax/h3", "openai/gpt-image-2.6-flare"];
 /** A family's name in the message files (`prices.basis.<key>`). Message keys cannot hold the "." of an id. */
 export type FamilyKey = "seedance" | "h3" | "gptImage2";
 
@@ -203,7 +196,7 @@ function videoFacts(b: CostBasis): Fact[] {
   return facts;
 }
 
-const GPT_IMAGE_2 = "gpt-image-2";
+const GPT_IMAGE_2 = "gpt-image-2.6-flare";
 const OPENAI_PROMPT_MAX = 32_000;
 type ImageQuality = "low" | "medium" | "high";
 type PricedSize = "1024x1024" | "1024x1536" | "1536x1024";
@@ -244,7 +237,7 @@ function gptImage2Units(b: CostBasis): number {
   return (t.outputTokens + (t.inputTextTokens * textIn) / out + (t.inputImageTokens * imageIn) / out) / 1e6;
 }
 
-/** No input_fidelity ("omit for gpt-image-2") and no n: a row holds one result. */
+/** Preserve the raster request contract; one row holds one result. */
 function gptImage2Body({ mode, params, prompt, images }: BodyInput): Record<string, unknown> {
   return {
     model: GPT_IMAGE_2,
@@ -319,12 +312,12 @@ export const FAMILIES: Record<FamilyId, Family> = {
       units: (b) => Number(b.params.duration),
     },
   },
-  "openai/gpt-image-2": {
-    id: "openai/gpt-image-2",
+  "openai/gpt-image-2.6-flare": {
+    id: "openai/gpt-image-2.6-flare",
     key: "gptImage2",
     provider: "openai",
     modes: { output: "image", text: "t2i", firstFrame: null, reference: "r2i", endFrame: false },
-    name: "GPT Image 2",
+    name: "GPT Image 2.6 Flare",
     vendor: "OpenAI",
     refImages: { types: ["image/png", "image/jpeg", "image/webp"], maxBytes: 50 * 1024 * 1024 },
     params: [
@@ -352,7 +345,7 @@ export const FAMILIES: Record<FamilyId, Family> = {
       unit: "mTokens",
       defaultUsd: GPT_IMAGE_2_USD_PER_M.out,
       published: [{ preset: "openaiList", usd: GPT_IMAGE_2_USD_PER_M.out }],
-      example: { family: "openai/gpt-image-2", mode: "t2i", params: { aspect_ratio: "1:1", quality: "medium" }, inputVideoS: 0 },
+      example: { family: "openai/gpt-image-2.6-flare", mode: "t2i", params: { aspect_ratio: "1:1", quality: "medium" }, inputVideoS: 0 },
       units: gptImage2Units,
     },
   },
@@ -376,9 +369,11 @@ export function endpointsOf(family: FamilyId): string[] {
   return modesOf(family).map((m) => endpointOf(family, m));
 }
 
-/** Every stored endpoint id a provider serves. */
+const LEGACY_IMAGE_ENDPOINTS = ["openai/gpt-image-2/generations", "openai/gpt-image-2/edits"];
+
+/** Include historical endpoints so pending image jobs remain discoverable. */
 export function endpointsOfProvider(provider: Provider): string[] {
-  return FAMILY_IDS.filter((f) => FAMILIES[f].provider === provider).flatMap(endpointsOf);
+  return [...FAMILY_IDS.filter((f) => FAMILIES[f].provider === provider).flatMap(endpointsOf), ...(provider === "openai" ? LEGACY_IMAGE_ENDPOINTS : [])];
 }
 
 export function paramsFor(family: FamilyId, mode: Mode): readonly ParamSpec[] {
@@ -534,6 +529,10 @@ export type ModelLabel = {
 };
 
 export function describeModel(modelId: string): ModelLabel {
+  if (LEGACY_IMAGE_ENDPOINTS.includes(modelId)) {
+    return { group: "openai/gpt-image-2", name: "GPT Image 2", family: null,
+      mode: modelId.endsWith("/edits") ? "r2i" : "t2i", provider: "openai", output: "image" };
+  }
   for (const family of FAMILY_IDS) {
     const mode = modesOf(family).find((m) => endpointOf(family, m) === modelId);
     if (!mode) continue;

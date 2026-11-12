@@ -33,7 +33,7 @@
  * sweep settles every due row in the database, so each sweep check first refuses to run while any row this run did
  * not create could be due.
  *
- * The image checks (--images runs only those) drive GPT Image 2 rows against the same fake's OpenAI endpoints
+ * The image checks (--images runs only those) drive GPT Image 2.6 Flare rows against the same fake's OpenAI endpoints
  * (OPENAI_BASE_URL is set to <fake>/openai/v1 and refused when it points anywhere else, with a fake OPENAI_API_KEY):
  * one request per row, the stored image and its cost from usage, a refusal sent again, rejections at cost 0, a call
  * that never answers while polls add nothing, and rows a dead runner left, ended from the row and Blob alone.
@@ -1497,7 +1497,7 @@ async function submitChecks(owner: Owner, admin: User, upstream: string, proxy: 
  * webhook gets 503 until the lease runs out, then a redelivery sends the row again with the same key and body, gets
  * the original request_id, and completes it.
  */
-const GPT: FamilyId = "openai/gpt-image-2";
+const GPT: FamilyId = "openai/gpt-image-2.6-flare";
 const FAKE_OPENAI_KEY = "sk-lifecycle-fake-0000";
 const OPENAI_DEFAULTS = { delayMs: 0, refuseFirstN: 0, overloadedFirstN: 0, retryAfterS: 1, fail: null, usage: true };
 

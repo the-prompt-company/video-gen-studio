@@ -1,4 +1,4 @@
-import { eq, inArray } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { FAMILIES, FAMILY_IDS, type FamilyId } from "@/lib/catalog";
 
@@ -11,18 +11,21 @@ export function rateOf(family: FamilyId, saved: string | null | undefined): numb
 }
 
 export async function loadModelSettings(): Promise<Record<FamilyId, ModelSetting>> {
-  const rows = await getDb().select().from(schema.models).where(inArray(schema.models.modelId, [...FAMILY_IDS]));
+  const rows = await getDb().select().from(schema.models).where(inArray(schema.models.modelId, [...FAMILY_IDS, "openai/gpt-image-2"]));
   const byId = new Map(rows.map((r) => [r.modelId, r]));
   return Object.fromEntries(
     FAMILY_IDS.map((family) => {
-      const r = byId.get(family);
+      const r = byId.get(family) ?? (family === "openai/gpt-image-2.6-flare" ? byId.get("openai/gpt-image-2") : undefined);
       return [family, { family, rateUsd: rateOf(family, r?.pricePerSecUsd), enabled: r ? r.enabled : true, note: r?.note ?? null }];
     }),
   ) as Record<FamilyId, ModelSetting>;
 }
 
 export async function loadModelSetting(family: FamilyId): Promise<ModelSetting> {
-  const [r] = await getDb().select().from(schema.models).where(eq(schema.models.modelId, family)).limit(1);
+  const ids = family === "openai/gpt-image-2.6-flare" ? [family, "openai/gpt-image-2"] : [family];
+  const rows = await getDb().select().from(schema.models).where(inArray(schema.models.modelId, ids));
+  // Preserve the previous admin toggle/rate until settings for the replacement are saved.
+  const r = rows.find((row) => row.modelId === family) ?? rows[0];
   return { family, rateUsd: rateOf(family, r?.pricePerSecUsd), enabled: r ? r.enabled : true, note: r?.note ?? null };
 }
 
