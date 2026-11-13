@@ -11,6 +11,7 @@ import {
   describeModel,
   costUsd,
   endpointsOf,
+  endpointsOfProvider,
   FAMILIES,
   FAMILY_IDS,
   legacyBody,
@@ -32,7 +33,7 @@ const IMG2 = "https://cdn.test/b.jpg";
 const VID = "https://cdn.test/c.mp4";
 const SEEDANCE: FamilyId = "bytedance/seedance-2.0";
 const H3: FamilyId = "minimax/h3";
-const GPT: FamilyId = "openai/gpt-image-2";
+const GPT: FamilyId = "openai/gpt-image-2.6-flare";
 const VIDEO_FAMILIES = FAMILY_IDS.filter((f) => FAMILIES[f].provider === "higgsfield");
 
 function draft(over: Partial<Draft> = {}): Draft {
@@ -269,27 +270,27 @@ test("a stored row's line is its model and the page's name for its mode, or the 
   const modeName = (m: Mode) => `<${m}>`;
   assert.equal(modelLine("bytedance/seedance-2.0/text-to-video", modeName), "Seedance 2.0 · <t2v>");
   assert.equal(modelLine("minimax/hailuo-2.3/standard/image-to-video", modeName), "Hailuo 2.3 Standard · <i2v>");
-  assert.equal(modelLine("openai/gpt-image-2/edits", modeName), "GPT Image 2 · <r2i>");
+  assert.equal(modelLine("openai/gpt-image-2.6-flare/edits", modeName), "GPT Image 2.6 Flare · <r2i>");
   assert.equal(modelLine("alibaba/wan-3.0/reference-to-video", modeName), "alibaba/wan-3.0");
 });
 
-test("GPT Image 2: text goes to generations, references to edits, and a video reference or a frame is refused", () => {
+test("GPT Image 2.6 Flare: text goes to generations, references to edits, and a video reference or a frame is refused", () => {
   assert.deepEqual(modesOf(GPT), ["t2i", "r2i"]);
-  assert.deepEqual(endpointsOf(GPT), ["openai/gpt-image-2/generations", "openai/gpt-image-2/edits"]);
+  assert.deepEqual(endpointsOf(GPT), ["openai/gpt-image-2.6-flare/generations", "openai/gpt-image-2.6-flare/edits"]);
   const t2i = ready(planGeneration(draft({ family: GPT, mode: "t2i" }), 0));
-  assert.deepEqual([t2i.endpoint, t2i.mode, t2i.durationS], ["openai/gpt-image-2/generations", "t2i", 0]);
+  assert.deepEqual([t2i.endpoint, t2i.mode, t2i.durationS], ["openai/gpt-image-2.6-flare/generations", "t2i", 0]);
   const r2i = ready(planGeneration(draft({ family: GPT, mode: "r2i", images: [IMG] }), 0));
-  assert.deepEqual([r2i.endpoint, r2i.mode], ["openai/gpt-image-2/edits", "r2i"]);
-  assert.deepEqual(blocked(planGeneration(draft({ family: GPT, mode: "r2i", videos: [{ url: VID, seconds: 3 }] }), 0)), { code: "noVideoRefs", params: { model: "GPT Image 2" } });
+  assert.deepEqual([r2i.endpoint, r2i.mode], ["openai/gpt-image-2.6-flare/edits", "r2i"]);
+  assert.deepEqual(blocked(planGeneration(draft({ family: GPT, mode: "r2i", videos: [{ url: VID, seconds: 3 }] }), 0)), { code: "noVideoRefs", params: { model: "GPT Image 2.6 Flare" } });
   assert.deepEqual(blocked(planGeneration(draft({ family: GPT, mode: "t2v" }), 0)), { code: "modeMismatch", params: { mode: "t2v" } }, "a video mode for an image model is refused");
   assert.deepEqual(blocked(planGeneration(draft({ family: GPT, mode: "i2v", images: [IMG] }), 0)), { code: "modeMismatch", params: { mode: "i2v" } }, "an image model has no first-frame mode");
   assert.deepEqual(blocked(planGeneration(draft({ family: GPT, mode: "r2i", images: [IMG], endImage: IMG2 }), 0)), { code: "modeMismatch", params: { mode: "r2i" } });
 });
 
-test("GPT Image 2 bodies carry the documented parameters in a fixed order, and edits add the references as image_url", () => {
+test("GPT Image 2.6 Flare bodies carry the documented parameters in a fixed order, and edits add the references as image_url", () => {
   const t2i = planGeneration(draft({ family: GPT, mode: "t2i" }), 0);
   assert.ok(t2i.ready);
-  assert.equal(t2i.body, `{"model":"gpt-image-2","prompt":"비 오는 밤거리","size":"1024x1024","quality":"medium","output_format":"png","background":"auto"}`);
+  assert.equal(t2i.body, `{"model":"gpt-image-2.6-flare","prompt":"비 오는 밤거리","size":"1024x1024","quality":"medium","output_format":"png","background":"auto"}`);
   const r2i = planGeneration(
     draft({ family: GPT, mode: "r2i", images: [IMG, IMG2], prompt: " 이 제품을 대리석 위에 ", params: { aspect_ratio: "16:9", quality: "high", output_format: "webp", background: "transparent" } }),
     0,
@@ -297,7 +298,7 @@ test("GPT Image 2 bodies carry the documented parameters in a fixed order, and e
   assert.ok(r2i.ready);
   assert.equal(
     r2i.body,
-    `{"model":"gpt-image-2","prompt":"이 제품을 대리석 위에","size":"1536x864","quality":"high","output_format":"webp","background":"transparent","images":[{"image_url":"${IMG}"},{"image_url":"${IMG2}"}]}`,
+    `{"model":"gpt-image-2.6-flare","prompt":"이 제품을 대리석 위에","size":"1536x864","quality":"high","output_format":"webp","background":"transparent","images":[{"image_url":"${IMG}"},{"image_url":"${IMG2}"}]}`,
   );
 
   const aspect = FAMILIES[GPT].params.find((p) => p.key === "aspect_ratio");
@@ -312,18 +313,18 @@ test("GPT Image 2 bodies carry the documented parameters in a fixed order, and e
     for (const [mode, images] of [["t2i", []], ["r2i", [IMG]], ["r2i", sixteen]] as const) {
       const plan = ready(planGeneration(draft({ family: GPT, mode, images, params }), 0));
       const op = mode === "t2i" ? "generations" : "edits";
-      assert.equal(plan.endpoint, `openai/gpt-image-2/${op}`);
+      assert.equal(plan.endpoint, `openai/gpt-image-2.6-flare/${op}`);
       assert.equal(invalidImageRequest(op, plan.body), null, `${plan.endpoint} ${JSON.stringify(plan.body)}`);
       assert.equal("input_fidelity" in plan.body, false, "gpt-image-2 takes no input_fidelity");
     }
   }
 });
 
-test("GPT Image 2 blockers: a prompt in both modes, at most 16 images and 32,000 characters, transparency only in PNG or WebP", () => {
-  assert.deepEqual(blocked(planGeneration(draft({ family: GPT, mode: "t2i", prompt: " " }), 0)), { code: "promptRequired", params: { model: "GPT Image 2", mode: "t2i" } });
-  assert.deepEqual(blocked(planGeneration(draft({ family: GPT, mode: "r2i", prompt: "", images: [IMG] }), 0)), { code: "promptRequired", params: { model: "GPT Image 2", mode: "r2i" } });
+test("GPT Image 2.6 Flare blockers: a prompt in both modes, at most 16 images and 32,000 characters, transparency only in PNG or WebP", () => {
+  assert.deepEqual(blocked(planGeneration(draft({ family: GPT, mode: "t2i", prompt: " " }), 0)), { code: "promptRequired", params: { model: "GPT Image 2.6 Flare", mode: "t2i" } });
+  assert.deepEqual(blocked(planGeneration(draft({ family: GPT, mode: "r2i", prompt: "", images: [IMG] }), 0)), { code: "promptRequired", params: { model: "GPT Image 2.6 Flare", mode: "r2i" } });
   const seventeen = Array.from({ length: 17 }, (_, i) => `https://cdn.test/${i}.png`);
-  assert.deepEqual(blocked(planGeneration(draft({ family: GPT, mode: "r2i", images: seventeen }), 0)), { code: "tooManyImages", params: { model: "GPT Image 2", max: 16 } });
+  assert.deepEqual(blocked(planGeneration(draft({ family: GPT, mode: "r2i", images: seventeen }), 0)), { code: "tooManyImages", params: { model: "GPT Image 2.6 Flare", max: 16 } });
   ready(planGeneration(draft({ family: GPT, mode: "t2i", prompt: "가".repeat(32_000) }), 0));
   assert.deepEqual(blocked(planGeneration(draft({ family: GPT, mode: "t2i", prompt: "가".repeat(32_001) }), 0)), { code: "promptTooLong", params: { max: 32_000 } });
   assert.deepEqual(blocked(planGeneration(draft({ family: GPT, mode: "t2i", params: { background: "transparent", output_format: "jpeg" } }), 0)), { code: "transparentNeedsAlpha" });
@@ -335,7 +336,7 @@ function gpt(params: Record<string, unknown>, extra: { promptChars?: number; inp
   return { family: GPT, mode: (extra.inputImages ? "r2i" : "t2i") as Mode, params: { ...defaultParams(GPT), ...params }, inputVideoS: 0, ...extra };
 }
 
-test("cost: at $30 per 1M output tokens, GPT Image 2's estimate is OpenAI's published price per image", () => {
+test("cost: at $30 per 1M output tokens, Image 2.6 retains the historical Image 2 pre-generation estimate heuristic", () => {
   const published: [string, string, number][] = [
     ["low", "1:1", 0.006], ["low", "3:2", 0.005], ["low", "2:3", 0.005],
     ["medium", "1:1", 0.053], ["medium", "3:2", 0.041], ["medium", "2:3", 0.041],
@@ -350,7 +351,7 @@ test("cost: at $30 per 1M output tokens, GPT Image 2's estimate is OpenAI's publ
   assert.equal(costUsd(FAMILIES[GPT].rate.example, FAMILIES[GPT].rate.defaultUsd), 0.053, "the admin page's example at the default rate");
 });
 
-test("cost: with usage, GPT Image 2 is priced from OpenAI's token counts at text $5, image input $8 and output $30 per 1M", () => {
+test("cost: with usage, GPT Image 2.6 Flare is priced from OpenAI's token counts at text $5, image input $8 and output $30 per 1M", () => {
   const usage: TokenUsage = { inputTextTokens: 200, inputImageTokens: 8_800, outputTokens: 1_800 };
   assert.equal(costUsd(gpt({ quality: "medium" }, { promptChars: 200, inputImages: 2, usage }), 30), 0.1254, "1,800 × $30 + 8,800 × $8 + 200 × $5, per 1M");
   assert.equal(costUsd(gpt({ quality: "high" }, { usage }), 15), 0.0627);
@@ -381,10 +382,10 @@ test("the plan keeps what it priced and at which rate, so the server can price O
   assert.deepEqual(h3.facts, [{ kind: "seconds", seconds: 10 }], "H3 bills no input seconds and has one resolution, so neither is a fact");
 });
 
-test("stored image endpoints read as GPT Image 2, an image model of OpenAI", () => {
-  for (const [id, mode] of [["openai/gpt-image-2/generations", "t2i"], ["openai/gpt-image-2/edits", "r2i"]] as const) {
+test("stored image endpoints read as GPT Image 2.6 Flare, an image model of OpenAI", () => {
+  for (const [id, mode] of [["openai/gpt-image-2.6-flare/generations", "t2i"], ["openai/gpt-image-2.6-flare/edits", "r2i"]] as const) {
     const m = describeModel(id);
-    assert.deepEqual([m.name, m.group, m.family, m.mode, m.provider, m.output], ["GPT Image 2", GPT, GPT, mode, "openai", "image"]);
+    assert.deepEqual([m.name, m.group, m.family, m.mode, m.provider, m.output], ["GPT Image 2.6 Flare", GPT, GPT, mode, "openai", "image"]);
   }
   const seedance = describeModel("bytedance/seedance-2.0/text-to-video");
   assert.deepEqual([seedance.provider, seedance.output], ["higgsfield", "video"]);
@@ -427,11 +428,22 @@ test("every model has a price basis and an example, and every published price a 
 });
 
 test("every format an image result is stored in is one each model takes as an image reference, so reusing a result needs no type check", () => {
-  const spec = FAMILIES["openai/gpt-image-2"].params.find((p) => p.key === "output_format");
+  const spec = FAMILIES["openai/gpt-image-2.6-flare"].params.find((p) => p.key === "output_format");
   assert.ok(spec?.type === "enum");
   for (const f of FAMILY_IDS) for (const format of spec.options) assert.ok(FAMILIES[f].refImages.types.includes(`image/${format}`), `${f} takes image/${format}`);
 });
 
 test("every mode has a name in all three languages", () => {
   for (const { locale, tree } of MESSAGES) for (const m of MODES) assert.ok(message(tree, `mode.${m}`), `${locale} mode.${m}`);
+});
+
+test("historical Image 2 results remain images with their original name", () => {
+  for (const op of ["generations", "edits"]) {
+    const label = describeModel(`openai/gpt-image-2/${op}`);
+    assert.equal(label.name, "GPT Image 2");
+    assert.equal(label.output, "image");
+    assert.equal(label.provider, "openai");
+    assert.equal(label.mode, op === "edits" ? "r2i" : "t2i");
+    assert.ok(endpointsOfProvider("openai").includes(`openai/gpt-image-2/${op}`));
+  }
 });

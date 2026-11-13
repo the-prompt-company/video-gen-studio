@@ -29,12 +29,12 @@ const BLOB = "vercel_blob_rw_store_secret";
 
 test("the image model needs the server's OPENAI_API_KEY and Blob, never the member's Higgsfield key", () =>
   withEnv({ BLOB_READ_WRITE_TOKEN: BLOB }, () => {
-    const noKey = unavailableFor("openai/gpt-image-2", keyed);
+    const noKey = unavailableFor("openai/gpt-image-2.6-flare", keyed);
     assert.deepEqual(noKey, { status: 503, error: { code: "noOpenAiKey" } });
     process.env.OPENAI_API_KEY = "sk-test";
-    assert.equal(unavailableFor("openai/gpt-image-2", member), null, "a member without a Higgsfield key can make images");
+    assert.equal(unavailableFor("openai/gpt-image-2.6-flare", member), null, "a member without a Higgsfield key can make images");
     delete process.env.BLOB_READ_WRITE_TOKEN;
-    const noBlob = unavailableFor("openai/gpt-image-2", member);
+    const noBlob = unavailableFor("openai/gpt-image-2.6-flare", member);
     assert.deepEqual(noBlob, { status: 503, error: { code: "noImageStore" } });
   }));
 
@@ -47,7 +47,7 @@ test("video models keep their rule: the member's own Higgsfield key, whatever th
 
 test("submitting an image without OPENAI_API_KEY answers 503 before anything is written", () =>
   withEnv({ BLOB_READ_WRITE_TOKEN: BLOB }, async () => {
-    const plan = planGeneration({ family: "openai/gpt-image-2", mode: "t2i", prompt: "등대", params: {}, images: [], videos: [], endImage: null }, 30);
+    const plan = planGeneration({ family: "openai/gpt-image-2.6-flare", mode: "t2i", prompt: "등대", params: {}, images: [], videos: [], endImage: null }, 30);
     assert.ok(plan.ready);
     let scheduled = 0;
     await assert.rejects(
